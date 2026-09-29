@@ -164,7 +164,11 @@ async function main() {
   const ctxB = await browser.newContext();
   const pageA = await ctxA.newPage();
   const pageB = await ctxB.newPage();
-  pageA.on('console', (m) => { if (m.type() === 'error') console.log('  [A console.error]', m.text().slice(0, 150)); });
+  pageA.on('console', (m) => {
+    if (process.env.NEXDROP_E2E_VERBOSE || m.type() === 'error') {
+      console.log('  [A console]', m.type(), m.text().slice(0, 200));
+    }
+  });
   pageB.on('console', (m) => { if (m.type() === 'error') console.log('  [B console.error]', m.text().slice(0, 150)); });
 
   const url = `http://localhost:${PORT}/nexdrop/`;
@@ -246,10 +250,21 @@ async function main() {
   check(true, 'both devices show CONNECTED (real DataChannels open)');
 
   // SAS verification codes must be identical — derived from the real handshake
-  const sasA: string = await pageA.evaluate(() => document.body.innerHTML.match(/>(\d{3} \d{3})</)?.[1] || '');
-  const sasB: string = await pageB.evaluate(() => document.body.innerHTML.match(/>(\d{3} \d{3})</)?.[1] || '');
-  check(/^\d{3} \d{3}$/.test(sasA), 'A displays a real 6-digit SAS code', sasA);
-  check(sasA === sasB, 'both devices independently derived the SAME SAS code', `${sasA} vs ${sasB}`);
+  const getSas = (page: any) =>
+    page.evaluate(() => {
+      const el = [...document.querySelectorAll('span.font-mono')].find((sp) =>
+        /^\d{3} \d{3}$/.test(sp.textContent?.trim() || '')
+      );
+      return el?.textContent?.trim() || '';
+    });
+  for (const p of [pageA, pageB]) {
+    await p.getByRole('button', { name: 'Details' }).click();
+    await p.waitForSelector('text=Verification Code', { timeout: 5000 });
+  }
+  const sasA: string = await getSas(pageA);
+  const sasB: string = await getSas(pageB);
+  check(/^\d{3} \d{3}$/.test(sasA) && /^\d{3} \d{3}$/.test(sasB), 'both devices display real 6-digit SAS codes', `${sasA} / ${sasB}`);
+  check(sasA !== '' && sasA === sasB, 'both devices independently derived the SAME SAS code', `${sasA} vs ${sasB}`);
 
   // ---------------------------------------------------------------------
   // Real text message over the text DataChannel
@@ -276,7 +291,15 @@ async function main() {
     mimeType: 'application/octet-stream',
     buffer: fileBuffer,
   });
-  await pageB.waitForSelector('text=Completed', { timeout: 120000 });
+  try {
+    await pageB.waitForSelector('text=Completed', { timeout: 120000 });
+  } catch {
+    const dumpA = await pageA.evaluate(() => document.body.innerText.slice(0, 900));
+    const dumpB = await pageB.evaluate(() => document.body.innerText.slice(0, 900));
+    console.log('  [A transfer dump]', JSON.stringify(dumpA));
+    console.log('  [B transfer dump]', JSON.stringify(dumpB));
+    throw new Error('file transfer never completed on the receiver');
+  }
   check((await pageB.locator('text=e2e-test.bin').count()) > 0, 'B shows the received file entry');
 
   // Wait for the receiver's integrity verdict
