@@ -56,6 +56,20 @@ export function useTransferEngine(
 
   const activeSenderRef = useRef<SenderEngine | null>(null);
   const receiverEngineRef = useRef<ReceiverEngine | null>(null);
+
+  // The consumer (app/page.tsx) passes onTransferComplete / onTransferVerified
+  // as inline arrows, so their identity changes on every render. Referencing
+  // them in effect dependency arrays recreated the RECEIVER ENGINE (and
+  // rebuilt the send-queue callback) on every re-render — mid-transfer the
+  // new engine had no transferId, so every incoming chunk was silently
+  // dropped and the transfer stalled at 0 bytes forever. Keep the latest
+  // callbacks in refs instead so effects depend only on stable values.
+  const onTransferCompleteRef = useRef(onTransferComplete);
+  const onTransferVerifiedRef = useRef(onTransferVerified);
+  useEffect(() => {
+    onTransferCompleteRef.current = onTransferComplete;
+    onTransferVerifiedRef.current = onTransferVerified;
+  }, [onTransferComplete, onTransferVerified]);
   const isTransferringRef = useRef<boolean>(false);
   const peerManagerRef = useRef<PeerConnectionManager | null>(null);
 
@@ -123,7 +137,7 @@ export function useTransferEngine(
               : item
           )
         );
-        onTransferComplete?.({
+        onTransferCompleteRef.current?.({
           transferId: p.transferId,
           name: p.name,
           size: p.size,
@@ -146,7 +160,7 @@ export function useTransferEngine(
     return () => {
       receiverEngineRef.current = null;
     };
-  }, [peerManager, cipherRef, onTransferComplete]);
+  }, [peerManager, cipherRef]);
 
   // -----------------------------------------------------------------------
   // Incoming WebRTC events
@@ -315,7 +329,7 @@ export function useTransferEngine(
             )
           );
 
-          onTransferComplete?.({
+          onTransferCompleteRef.current?.({
             transferId,
             name: targetItem.name,
             size: targetItem.size,
@@ -348,7 +362,7 @@ export function useTransferEngine(
         idx === nextIndex ? { ...item, status: 'transferring' } : item
       );
     });
-  }, [peerManager, isPeerConnected, cipherRef, onTransferComplete]);
+  }, [peerManager, isPeerConnected, cipherRef]);
 
   useEffect(() => {
     processNextQueueItemRef.current = processNextQueueItem;
