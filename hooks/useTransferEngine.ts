@@ -374,6 +374,53 @@ export function useTransferEngine(
     }
   }, [sendQueue, isPeerConnected, processNextQueueItem]);
 
+  // The peer connection dropped (disconnect/failure): abort the in-flight
+  // transfer immediately instead of letting the sender keep pushing the
+  // remaining file into a dead channel's send buffer. With manual QR pairing
+  // there is no ICE restart, so the transfer is genuinely stopped — the UI
+  // must say Failed, never Completed.
+  const wasConnectedRef = useRef(false);
+  useEffect(() => {
+    if (isPeerConnected) {
+      wasConnectedRef.current = true;
+      return;
+    }
+    if (!wasConnectedRef.current) return;
+    wasConnectedRef.current = false;
+
+    const sender = activeSenderRef.current;
+    const receiver = receiverEngineRef.current;
+    if (!sender && !receiver) return;
+
+    activeSenderRef.current = null;
+    isTransferringRef.current = false;
+
+    if (sender) {
+      void sender.cancel('Connection lost');
+    }
+    if (receiver) {
+      void receiver.cancel('Connection lost');
+    }
+
+    // sender.cancel()/receiver.cancel() emit a 'cancelled' progress event
+    // synchronously; override it with the truthful failure status after.
+    setSendQueue((q) =>
+      q.map((item) =>
+        item.status === 'transferring' || item.status === 'cancelled'
+          ? { ...item, status: 'failed', error: 'Connection lost during transfer' }
+          : item
+      )
+    );
+    setIncomingFiles((q) =>
+      q.map((item) =>
+        item.status === 'transferring' || item.status === 'cancelled'
+          ? { ...item, status: 'failed' }
+          : item
+      )
+    );
+    setActiveTransfer((prev) => (prev ? { ...prev, status: 'failed' } : prev));
+  }, [isPeerConnected]);
+
   // -----------------------------------------------------------------------
   // Public queue operations
   // -----------------------------------------------------------------------

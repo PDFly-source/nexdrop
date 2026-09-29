@@ -284,68 +284,194 @@ async function main() {
   await pageB.waitForSelector('text=Hello from device A over real WebRTC!', { timeout: 15000 });
   check(true, 'B received the text message end-to-end over the text channel');
 
+  console.log('[two-device e2e] B → A: real text message (reverse direction)');
+  await pageB.locator('textarea').first().fill('Hello from device B over real WebRTC!');
+  await pageB.getByRole('button', { name: /send/i }).last().click();
+  await pageA.waitForSelector('text=Hello from device B over real WebRTC!', { timeout: 15000 });
+  check(true, 'A received the reverse-direction text message over the text channel');
+
   // ---------------------------------------------------------------------
-  // Real file transfer (2 MiB pseudo-random binary → hash verification)
+  // File transfer SIZE MATRIX (1 KB -> 100 MB), SHA-256 verified per file
   // ---------------------------------------------------------------------
-  console.log('[two-device e2e] A → B: real file transfer with SHA-256 verification');
-  await pageA.getByRole('button', { name: /transfer/i }).first().click();
-  await pageB.getByRole('button', { name: /transfer/i }).first().click();
-  const fileBuffer = Buffer.alloc(2 * 1024 * 1024);
-  for (let i = 0; i < fileBuffer.length; i += 4096) fileBuffer.fill(i % 251, i, i + 4096);
-  await pageA.setInputFiles('input[type="file"]', {
-    name: 'e2e-test.bin',
-    mimeType: 'application/octet-stream',
-    buffer: fileBuffer,
-  });
-  try {
-    await pageB.waitForSelector('text=Completed', { timeout: 120000 });
-  } catch {
+  console.log('[two-device e2e] A → B: file transfer size matrix with SHA-256 verification');
+  const patternBuffer = (bytes: number) => {
+    const buf = Buffer.alloc(bytes);
+    for (let i = 0; i < bytes; i += 4096) buf.fill((i / 4096) % 251, i, Math.min(i + 4096, bytes));
+    return buf;
+  };
+
+  /** Wait until `name` followed by `status` appears in the page body text. */
+  async function waitForNameStatus(page: any, name: string, status: string, timeoutMs: number) {
+    await page.waitForFunction(
+      ([fname, stat]: [string, string]) => {
+        const esc = fname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(esc + '[\\s\\S]{0,600}' + stat).test(document.body.innerText);
+      },
+      [name, status],
+      { timeout: timeoutMs, polling: 250 }
+    );
+  }
+
+  /** Current sender-side progress % for `name`, or -1 when not visible. */
+  async function senderProgress(page: any, name: string): Promise<number> {
+    return await page.evaluate((fname: string) => {
+      const esc = fname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const m = document.body.innerText.match(new RegExp(esc + '[\\s\\S]{0,400}?(\\d+)%'));
+      return m ? parseInt(m[1], 10) : -1;
+    }, name);
+  }
+
+  async function dumpFailure(label: string) {
     const dumpA = await pageA.evaluate(() => document.body.innerText.slice(0, 900));
     const dumpB = await pageB.evaluate(() => document.body.innerText.slice(0, 900));
-    console.log('  [A transfer dump]', JSON.stringify(dumpA));
-    console.log('  [B transfer dump]', JSON.stringify(dumpB));
-    throw new Error('file transfer never completed on the receiver');
+    console.log('  [A dump @ ' + label + ']', JSON.stringify(dumpA));
+    console.log('  [B dump @ ' + label + ']', JSON.stringify(dumpB));
   }
-  check((await pageB.locator('text=e2e-test.bin').count()) > 0, 'B shows the received file entry');
 
-  // Wait for the receiver's integrity verdict
-  await pageB.waitForFunction(
-    () => document.body.innerText.includes('Verified') || document.body.innerText.includes('failed'),
-    { timeout: 30000 }
-  );
-  const bodyB = await pageB.evaluate(() => document.body.innerText);
-  check(/verified/i.test(bodyB) && !/integrity.*failed/i.test(bodyB),
-    'receiver verified SHA-256 integrity of the received file');
+  const matrix: Array<[string, number, number]> = [
+    ['e2e-size-1kb.bin', 1 * 1024, 45000],
+    ['e2e-size-100kb.bin', 100 * 1024, 45000],
+    ['e2e-size-1mb.bin', 1024 * 1024, 60000],
+    ['e2e-size-2mb.bin', 2 * 1024 * 1024, 60000],
+    ['e2e-size-10mb.bin', 10 * 1024 * 1024, 120000],
+    ['e2e-size-100mb.bin', 100 * 1024 * 1024, 420000],
+  ];
 
-  // Download the received file from B and compare bytes
-  const downloadB = pageB.waitForEvent('download', { timeout: 15000 }).catch(() => null);
-  await pageB.locator('button:has(svg.lucide-download), [aria-label*="Download"], button:has-text("Download")').first().click().catch(() => {});
-  const recvDl = await downloadB;
-  if (recvDl) {
-    const recvPath = '/tmp/nexdrop-e2e-received.bin';
+  const buffer10mb = patternBuffer(10 * 1024 * 1024);
+  for (const [name, size, timeoutMs] of matrix) {
+    const buf = size === 10 * 1024 * 1024 ? buffer10mb : patternBuffer(size);
+    await pageA.setInputFiles('input[type="file"]', { name, mimeType: 'application/octet-stream', buffer: buf });
+    try {
+      await waitForNameStatus(pageA, name, 'Completed', timeoutMs);
+      await waitForNameStatus(pageB, name, 'Completed', timeoutMs);
+      await waitForNameStatus(pageB, name, 'Verified', 30000);
+      check(true, `${name} (${size} bytes): sent, received, SHA-256 verified end-to-end`);
+    } catch {
+      await dumpFailure(name);
+      check(false, `${name} (${size} bytes) did not complete + verify within ${timeoutMs}ms`);
+    }
+  }
+
+  // Byte-identity proof on the 10 MiB file: save it on B, compare to source
+  const saved = await pageB.evaluate(() => {
+    const ps = [...document.querySelectorAll('p')].filter(
+      (p) => p.textContent?.trim() === 'e2e-size-10mb.bin'
+    );
+    for (const p of ps) {
+      let el = p.parentElement;
+      while (el) {
+        const btn = el.querySelector?.('button[title="Save to local device"]');
+        if (btn) { (btn as HTMLElement).click(); return true; }
+        el = el.parentElement;
+      }
+    }
+    return false;
+  });
+  if (saved) {
+    const recvDl = await pageB.waitForEvent('download', { timeout: 20000 });
+    const recvPath = '/tmp/nexdrop-e2e-received-10mb.bin';
     await recvDl.saveAs(recvPath);
     const recv = fs.readFileSync(recvPath);
-    check(recv.equals(fileBuffer), 'downloaded file bytes are byte-identical to the source');
+    check(recv.equals(buffer10mb), '10 MiB received file is byte-identical to the source');
   } else {
-    skip('downloaded-bytes comparison', 'download button not found in DOM');
+    skip('byte-identity download', 'Save button not found for the 10 MiB item');
   }
 
   // ---------------------------------------------------------------------
-  // Cancel: queue a second file, then cancel the active/queued transfer
+  // Pause / Resume on a live 250 MiB transfer
   // ---------------------------------------------------------------------
-  console.log('[two-device e2e] A: cancel a queued transfer');
+  console.log('[two-device e2e] A → B: pause + resume of a live 250 MiB transfer');
+  const bigBuffer = patternBuffer(250 * 1024 * 1024);
   await pageA.setInputFiles('input[type="file"]', {
-    name: 'e2e-cancel-me.bin',
-    mimeType: 'application/octet-stream',
-    buffer: Buffer.alloc(64 * 1024),
+    name: 'e2e-pause-resume.bin', mimeType: 'application/octet-stream', buffer: bigBuffer,
   });
-  await pageA.waitForTimeout(300);
-  const cancelBtn = pageA.locator('button:has-text("Cancel")').first();
-  if (await cancelBtn.count()) {
-    await cancelBtn.click({ timeout: 3000 }).catch(() => {});
-    check(true, 'cancel invoked on the sender side');
-  } else {
-    skip('cancel click', 'transfer finished before cancel could be pressed');
+  try {
+    await pageA.waitForFunction(
+      () => {
+        const t = document.body.innerText;
+        return t.includes('e2e-pause-resume.bin') && /\d+%/.test(t);
+      },
+      { timeout: 60000, polling: 200 }
+    );
+    await pageA.getByRole('button', { name: 'Pause', exact: true }).click();
+    await pageA.waitForSelector('text=Paused', { timeout: 15000 });
+    const pct1 = await senderProgress(pageA, 'e2e-pause-resume.bin');
+    await pageA.waitForTimeout(2000);
+    const pct2 = await senderProgress(pageA, 'e2e-pause-resume.bin');
+    check(pct2 - pct1 <= 2, `pause freezes the live transfer (${pct1}% → ${pct2}%)`);
+    await pageA.getByRole('button', { name: 'Resume', exact: true }).click();
+    await waitForNameStatus(pageA, 'e2e-pause-resume.bin', 'Completed', 420000);
+    await waitForNameStatus(pageB, 'e2e-pause-resume.bin', 'Completed', 60000);
+    await waitForNameStatus(pageB, 'e2e-pause-resume.bin', 'Verified', 30000);
+    check(true, 'resume completes the 250 MiB transfer with SHA-256 verified');
+  } catch {
+    await dumpFailure('pause-resume');
+    check(false, 'pause/resume of a live 250 MiB transfer failed');
+  }
+
+  // ---------------------------------------------------------------------
+  // Cancel a LIVE transfer mid-stream (the old test could only cancel a
+  // queued item because loopback transfers finished instantly)
+  // ---------------------------------------------------------------------
+  console.log('[two-device e2e] A → B: cancel a live mid-stream transfer');
+  try {
+    await pageA.setInputFiles('input[type="file"]', {
+      name: 'e2e-cancel-live.bin', mimeType: 'application/octet-stream', buffer: bigBuffer,
+    });
+    await pageA.waitForFunction(
+      () => {
+        const t = document.body.innerText;
+        return t.includes('e2e-cancel-live.bin') && /\d+%/.test(t);
+      },
+      { timeout: 60000, polling: 200 }
+    );
+    await pageA.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await waitForNameStatus(pageA, 'e2e-cancel-live.bin', 'Cancelled', 15000);
+    check(true, 'sender: live transfer cancelled immediately on request');
+    await waitForNameStatus(pageB, 'e2e-cancel-live.bin', 'Cancelled', 15000);
+    check(true, 'receiver: informed of the cancellation (no silent stall)');
+    await pageA.waitForTimeout(3000);
+    const bText = await pageB.evaluate(() => document.body.innerText);
+    const fake = bText.match(/e2e-cancel-live\.bin[\s\S]{0,600}?Completed/);
+    check(!fake, 'no fake completion after cancellation');
+
+    // Sender must be fully reusable right after a cancel
+    await pageA.setInputFiles('input[type="file"]', {
+      name: 'e2e-after-cancel.bin', mimeType: 'application/octet-stream', buffer: patternBuffer(100 * 1024),
+    });
+    await waitForNameStatus(pageB, 'e2e-after-cancel.bin', 'Completed', 45000);
+    check(true, 'sender resources cleaned up: next transfer works immediately');
+  } catch {
+    await dumpFailure('cancel-live');
+    check(false, 'live cancel sequence failed');
+  }
+
+  // ---------------------------------------------------------------------
+  // Disconnect DURING a live transfer: real failure detection, no fake
+  // completion, resources released
+  // ---------------------------------------------------------------------
+  console.log('[two-device e2e] peer disconnect during a live transfer');
+  try {
+    await pageA.setInputFiles('input[type="file"]', {
+      name: 'e2e-disconnect.bin', mimeType: 'application/octet-stream', buffer: bigBuffer,
+    });
+    await pageA.waitForFunction(
+      () => {
+        const t = document.body.innerText;
+        return t.includes('e2e-disconnect.bin') && /\d+%/.test(t);
+      },
+      { timeout: 60000, polling: 200 }
+    );
+    console.log('[two-device e2e] closing device B mid-transfer');
+    await ctxB.close();
+    await waitForNameStatus(pageA, 'e2e-disconnect.bin', 'Failed', 90000);
+    check(true, 'sender detects the dead peer and marks the transfer Failed');
+    const aText = await pageA.evaluate(() => document.body.innerText);
+    const fake = aText.match(/e2e-disconnect\.bin[\s\S]{0,600}?Completed/);
+    check(!fake, 'no fake completion after peer disconnect');
+  } catch {
+    await dumpFailure('disconnect');
+    check(false, 'disconnect-during-transfer was not detected on the sender');
   }
 
   console.log(`\n[two-device e2e] ${passed} passed, ${failed} failed, ${skipped} skipped`);
