@@ -66,6 +66,15 @@ export class ReceiverEngine {
   private isCompleted = false;
   private callbacks: ReceiverCallbacks;
 
+  // Chunks (and FILE_END) that arrive while the storage writer is still
+  // initializing. startTransfer() creates the writer asynchronously (OPFS /
+  // file handles), and on a fast link the whole file can land before that
+  // promise resolves. Dropping those chunks would silently corrupt the
+  // transfer, so they are buffered and flushed in arrival order once the
+  // writer exists.
+  private pendingChunks: ArrayBuffer[] = [];
+  private pendingFinish: FileEndMessage | null = null;
+
   constructor(callbacks: ReceiverCallbacks) {
     this.callbacks = callbacks;
   }
@@ -105,14 +114,49 @@ export class ReceiverEngine {
     try {
       this.writer = await createOptimalStorageWriter(this.name, this.mime, this.size, false);
     } catch (err: any) {
+      this.pendingChunks = [];
+      this.pendingFinish = null;
       this.callbacks.onError(this.transferId, `Failed to initialize file storage: ${err?.message || err}`);
       return;
     }
 
+    // Flush anything that arrived while the writer was being created.
+    if (this.pendingChunks.length > 0) {
+      const queued = this.pendingChunks;
+      this.pendingChunks = [];
+      for (const chunk of queued) {
+        if (this.isCancelled || this.isCompleted) return;
+        await this.processChunk(chunk);
+      }
+    }
+
     this.emitProgress('transferring', 0, 0);
+
+    // FILE_END can arrive before the writer exists (control and file
+    // channels have no cross-channel ordering) — finish now if it did.
+    if (this.pendingFinish) {
+      const endMsg = this.pendingFinish;
+      this.pendingFinish = null;
+      await this.finishTransfer(endMsg);
+    }
   }
 
   public async handleChunk(packetBuffer: ArrayBuffer): Promise<void> {
+    if (this.isCancelled || this.isCompleted) return;
+
+    // Writer still initializing: buffer the chunk — never drop in-flight
+    // data (dropping it would corrupt the transfer and stall the sender,
+    // which paces itself on our per-chunk ACKs).
+    if (!this.writer) {
+      if (!this.transferId) return; // no active transfer
+      this.pendingChunks.push(packetBuffer);
+      return;
+    }
+
+    await this.processChunk(packetBuffer);
+  }
+
+  private async processChunk(packetBuffer: ArrayBuffer): Promise<void> {
     if (this.isCancelled || this.isCompleted || !this.writer) return;
 
     const decoded = decodeBinaryChunk(packetBuffer);
@@ -217,7 +261,15 @@ export class ReceiverEngine {
   }
 
   public async finishTransfer(endMsg: FileEndMessage): Promise<void> {
-    if (this.isCompleted || !this.writer) return;
+    if (this.isCompleted || this.isCancelled) return;
+
+    // FILE_END raced ahead of the writer init (or of buffered chunks):
+    // stash it and finish once startTransfer() has flushed everything.
+    if (!this.writer || (this.pendingChunks.length > 0 && endMsg.transferId === this.transferId)) {
+      if (!this.transferId) return;
+      this.pendingFinish = endMsg;
+      return;
+    }
     this.isCompleted = true;
 
     try {
@@ -264,6 +316,8 @@ export class ReceiverEngine {
   }
 
   public async cancel(reason: string = 'Cancelled'): Promise<void> {
+    this.pendingChunks = [];
+    this.pendingFinish = null;
     if (this.isCompleted) return;
     this.isCancelled = true;
     if (this.writer) {
