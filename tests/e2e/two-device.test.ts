@@ -28,6 +28,7 @@ import { chromium } from 'playwright';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 const PORT = 3999;
 const OUT_DIR = path.join(process.cwd(), 'out');
@@ -304,6 +305,22 @@ async function main() {
     return buf;
   };
 
+  /** Upload a file to the hidden input. Playwright refuses in-memory buffers
+   *  larger than 50MB, so big payloads are written to a temp file (named
+   *  exactly like the intended upload) and passed by path. */
+  const uploadFile = async (page: any, name: string, buffer: Buffer) => {
+    if (buffer.length > 40 * 1024 * 1024) {
+      const tmp = path.join(os.tmpdir(), name);
+      fs.writeFileSync(tmp, buffer);
+      await page.setInputFiles('input[type="file"]', tmp);
+      fs.rmSync(tmp, { force: true });
+      return;
+    }
+    await page.setInputFiles('input[type="file"]', {
+      name, mimeType: 'application/octet-stream', buffer,
+    });
+  };
+
   /** Wait until `name` followed by `status` appears in the page body text. */
   async function waitForNameStatus(page: any, name: string, status: string, timeoutMs: number) {
     await page.waitForFunction(
@@ -348,7 +365,7 @@ async function main() {
   const buffer10mb = patternBuffer(10 * 1024 * 1024);
   for (const [name, size, timeoutMs] of matrix) {
     const buf = size === 10 * 1024 * 1024 ? buffer10mb : patternBuffer(size);
-    await pageA.setInputFiles('input[type="file"]', { name, mimeType: 'application/octet-stream', buffer: buf });
+    await uploadFile(pageA, name, buf);
     try {
       await waitForNameStatus(pageA, name, 'Completed', timeoutMs);
       await waitForNameStatus(pageB, name, 'Completed', timeoutMs);
@@ -390,9 +407,7 @@ async function main() {
   // ---------------------------------------------------------------------
   console.log('[two-device e2e] A → B: pause + resume of a live 250 MiB transfer');
   const bigBuffer = patternBuffer(250 * 1024 * 1024);
-  await pageA.setInputFiles('input[type="file"]', {
-    name: 'e2e-pause-resume.bin', mimeType: 'application/octet-stream', buffer: bigBuffer,
-  });
+  await uploadFile(pageA, 'e2e-pause-resume.bin', bigBuffer);
   try {
     await pageA.waitForFunction(
       () => {
@@ -423,9 +438,7 @@ async function main() {
   // ---------------------------------------------------------------------
   console.log('[two-device e2e] A → B: cancel a live mid-stream transfer');
   try {
-    await pageA.setInputFiles('input[type="file"]', {
-      name: 'e2e-cancel-live.bin', mimeType: 'application/octet-stream', buffer: bigBuffer,
-    });
+    await uploadFile(pageA, 'e2e-cancel-live.bin', bigBuffer);
     await pageA.waitForFunction(
       () => {
         const t = document.body.innerText;
@@ -460,9 +473,7 @@ async function main() {
   // ---------------------------------------------------------------------
   console.log('[two-device e2e] peer disconnect during a live transfer');
   try {
-    await pageA.setInputFiles('input[type="file"]', {
-      name: 'e2e-disconnect.bin', mimeType: 'application/octet-stream', buffer: bigBuffer,
-    });
+    await uploadFile(pageA, 'e2e-disconnect.bin', bigBuffer);
     await pageA.waitForFunction(
       () => {
         const t = document.body.innerText;
