@@ -1,0 +1,119 @@
+'use client';
+
+import React from 'react';
+import Link from 'next/link';
+import { ArrowLeft, Sparkles, Layers, Cpu, Globe } from 'lucide-react';
+
+export default function AboutPage() {
+  return (
+    <div className="min-h-screen bg-[#0B0D0F] text-[#F5F7F8] selection:bg-[#19C37D]/20 selection:text-[#3DD6A0]">
+      {/* Top Header */}
+      <header className="border-b border-white/[0.08] bg-[#0B0D0F]/90 backdrop-blur-md sticky top-0 z-20">
+        <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 sm:px-6">
+          <Link
+            href="/"
+            className="flex items-center gap-2 text-xs font-medium text-[#9AA3AD] hover:text-[#F5F7F8] transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to NexDrop</span>
+          </Link>
+          <span className="text-xs font-semibold text-[#19C37D]">About NexDrop</span>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 text-left">
+        <div className="max-w-2xl">
+          <div className="flex items-center gap-2 text-xs text-[#19C37D] font-medium mb-3">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>AppMintly Ecosystem</span>
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#F5F7F8]">
+            About NexDrop
+          </h1>
+          <p className="mt-3 text-sm text-[#9AA3AD] leading-relaxed">
+            Private. Direct. Fast. Browser-to-browser file and text sharing without accounts or cloud storage intermediaries.
+          </p>
+        </div>
+
+        <div className="mt-10 space-y-8 text-xs sm:text-sm text-[#9AA3AD] leading-relaxed">
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-[#F5F7F8]">What is NexDrop?</h2>
+            <p>
+              NexDrop is a modern PWA (Progressive Web Application) designed to bridge personal devices—phones, laptops, desktops, tablets, and workstations—over pure peer-to-peer WebRTC connections. Whether sharing high-resolution RAW photos, 4K video clips, code snippets, or clipboard text, data travels directly between devices on the same local network or across the internet.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-[#F5F7F8]">How Large-File Streaming Works</h2>
+            <p>
+              Traditional web applications crash when loading gigabyte-sized files into memory. NexDrop solves this with high-performance 64 KiB chunk streaming:
+            </p>
+            <ul className="list-disc pl-5 space-y-1.5 text-xs text-[#9AA3AD]">
+              <li><strong className="text-white">File.slice() Engine:</strong> Reads small 64 KiB slices from the source disk on demand without loading the full file into heap RAM.</li>
+              <li><strong className="text-white">Backpressure & Flow Control:</strong> Automatically throttles chunk delivery when RTCDataChannel buffer limits are reached.</li>
+              <li><strong className="text-white">Direct Disk Streaming:</strong> On modern Chromium browsers, the File System Access API streams incoming chunks directly to disk through a file handle.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-[#F5F7F8]">Browser Compatibility</h2>
+            <div className="overflow-x-auto rounded-lg border border-white/[0.08] bg-[#15191E] p-4 text-xs">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-white/[0.06] text-[#9AA3AD]">
+                    <th className="pb-2">Browser / Platform</th>
+                    <th className="pb-2">P2P WebRTC</th>
+                    <th className="pb-2">Storage Pipeline</th>
+                    <th className="pb-2">Max Recommended Size</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.04]">
+                  <tr>
+                    <td className="py-2.5 font-medium text-white">Chrome / Edge Desktop</td>
+                    <td className="py-2.5 text-[#22C55E]">Full Support</td>
+                    <td className="py-2.5 text-[#3DD6A0]">File System Access API (Direct to Disk)</td>
+                    <td className="py-2.5 font-mono text-white">50+ GB</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 font-medium text-white">Chrome Android</td>
+                    <td className="py-2.5 text-[#22C55E]">Full Support</td>
+                    <td className="py-2.5 text-[#3DD6A0]">OPFS / Blob Assembly</td>
+                    <td className="py-2.5 font-mono text-white">10 GB</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 font-medium text-white">Safari (macOS & iOS)</td>
+                    <td className="py-2.5 text-[#22C55E]">Full Support</td>
+                    <td className="py-2.5 text-amber-400">Sandboxed Blob Stream</td>
+                    <td className="py-2.5 font-mono text-white">2 GB</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 font-medium text-white">Firefox Desktop</td>
+                    <td className="py-2.5 text-[#22C55E]">Full Support</td>
+                    <td className="py-2.5 text-[#3DD6A0]">OPFS / Blob Assembly</td>
+                    <td className="py-2.5 font-mono text-white">5 GB</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold text-[#F5F7F8]">The AppMintly Brand Ecosystem</h2>
+            <p>
+              NexDrop is crafted as part of the AppMintly suite of sovereign, privacy-respecting developer and consumer utilities. No accounts, no subscriptions, and no privacy compromises.
+            </p>
+          </section>
+        </div>
+
+        <div className="mt-12 pt-8 border-t border-white/[0.08] text-center">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#19C37D] px-6 py-2.5 text-xs font-semibold text-[#0B0D0F] hover:bg-[#3DD6A0] transition-colors"
+          >
+            Launch NexDrop
+          </Link>
+        </div>
+      </main>
+    </div>
+  );
+}

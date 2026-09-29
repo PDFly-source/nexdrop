@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B0D0F"/>
+      <stop offset="50%" stop-color="#111418"/>
+      <stop offset="100%" stop-color="#15191E"/>
+    </linearGradient>
+    <linearGradient id="dropGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3DD6A0"/>
+      <stop offset="100%" stop-color="#19C37D"/>
+    </linearGradient>
+    <linearGradient id="nodeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F5F7F8" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#9AA3AD" stop-opacity="0.5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background base rounded squircle -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+  <rect width="510" height="510" x="1" y="1" rx="127" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+
+  <!-- Left Device Node -->
+  <g transform="translate(110, 180)">
+    <rect width="72" height="120" rx="16" fill="#1B2026" stroke="rgba(255,255,255,0.15)" stroke-width="2.5"/>
+    <rect width="56" height="88" x="8" y="12" rx="8" fill="#111418"/>
+    <circle cx="36" cy="108" r="4" fill="#9AA3AD"/>
+  </g>
+
+  <!-- Right Device Node -->
+  <g transform="translate(330, 212)">
+    <rect width="72" height="120" rx="16" fill="#1B2026" stroke="rgba(255,255,255,0.15)" stroke-width="2.5"/>
+    <rect width="56" height="88" x="8" y="12" rx="8" fill="#111418"/>
+    <circle cx="36" cy="108" r="4" fill="#19C37D"/>
+  </g>
+
+  <!-- Forward Drop/Flow Arrow (Left to Right) -->
+  <path d="M 195 210 Q 256 185 315 230" fill="none" stroke="url(#dropGrad)" stroke-width="6" stroke-linecap="round"/>
+  <polygon points="322,232 308,222 312,238" fill="#19C37D"/>
+  <circle cx="215" cy="206" r="4.5" fill="#3DD6A0"/>
+
+  <!-- Return Drop/Flow Arrow (Right to Left) -->
+  <path d="M 315 290 Q 256 325 195 280" fill="none" stroke="url(#nodeGrad)" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="6 4"/>
+  <polygon points="188,278 202,288 198,272" fill="#F5F7F8"/>
+  <circle cx="295" cy="302" r="3.5" fill="#9AA3AD"/>
+
+  <!-- Center Security Lock Ring dot -->
+  <circle cx="256" cy="256" r="16" fill="#15191E" stroke="#19C37D" stroke-width="2.5"/>
+  <circle cx="256" cy="256" r="5" fill="#3DD6A0"/>
+</svg>
