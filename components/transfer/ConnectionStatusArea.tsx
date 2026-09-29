@@ -22,6 +22,7 @@ import {
   ArrowRight,
   LogIn,
   TriangleAlert,
+  Download,
 } from 'lucide-react';
 import { SessionState, PeerInfo, PairingError } from '@/types/session';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -160,6 +161,32 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
     if (ok) {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+  /** Download the pairing QR as PNG image(s) — one file per segment. */
+  const handleDownloadQr = async () => {
+    const segs = activeSegments;
+    if (!segs.length) return;
+    for (let i = 0; i < segs.length; i++) {
+      try {
+        const url = await QRCode.toDataURL(segs[i].text, {
+          errorCorrectionLevel: 'L',
+          margin: 1,
+          color: { dark: '#F5F7F8', light: '#111418' },
+        });
+        const a = document.createElement('a');
+        a.href = url;
+        a.download =
+          segs.length > 1
+            ? `nexdrop-qr-${i + 1}-of-${segs.length}.png`
+            : 'nexdrop-qr.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch {
+        // best-effort download; copy/paste fallbacks remain available
+      }
     }
   };
 
@@ -333,6 +360,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
             <h3 className="text-base font-semibold text-[#F5F7F8] mt-0.5">Pairing offer ready</h3>
             <p className="text-xs text-[#9AA3AD] mt-0.5">
               On the other device, choose <strong className="text-[#F5F7F8]">Join pairing</strong> and scan this code.
+              Session <span className="font-mono text-[#F5F7F8]">{offerQr?.sessionId}</span>
             </p>
           </div>
           <span className="text-[11px] font-mono text-[#9AA3AD] shrink-0" aria-live="polite">
@@ -398,6 +426,13 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                 <span>{copiedCode ? 'Code copied' : 'Copy pairing code'}</span>
               </button>
               <button
+                onClick={handleDownloadQr}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/[0.1] bg-[#1B2026] text-xs font-medium text-[#F5F7F8] hover:bg-white/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+              >
+                <Download className="w-3.5 h-3.5 text-[#9AA3AD]" aria-hidden="true" />
+                <span>{activeSegments.length > 1 ? 'Download QR codes' : 'Download QR'}</span>
+              </button>
+              <button
                 onClick={handleCopyLink}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/[0.1] bg-[#1B2026] text-xs font-medium text-[#F5F7F8] hover:bg-white/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
               >
@@ -459,6 +494,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
             <h3 className="text-base font-semibold text-[#F5F7F8] mt-0.5">Show this answer QR</h3>
             <p className="text-xs text-[#9AA3AD] mt-0.5">
               On the first device, tap <strong className="text-[#F5F7F8]">Scan answer QR</strong> and scan this code.
+              Session <span className="font-mono text-[#F5F7F8]">{answerQr?.sessionId}</span>
             </p>
           </div>
           <span className="text-[11px] font-mono text-[#9AA3AD] shrink-0" aria-live="polite">
@@ -516,6 +552,13 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
               >
                 {copiedCode ? <Check className="w-3.5 h-3.5 text-[#19C37D]" aria-hidden="true" /> : <Copy className="w-3.5 h-3.5 text-[#9AA3AD]" aria-hidden="true" />}
                 <span>{copiedCode ? 'Code copied' : 'Copy answer code'}</span>
+              </button>
+              <button
+                onClick={handleDownloadQr}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/[0.1] bg-[#1B2026] text-xs font-medium text-[#F5F7F8] hover:bg-white/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+              >
+                <Download className="w-3.5 h-3.5 text-[#9AA3AD]" aria-hidden="true" />
+                <span>{activeSegments.length > 1 ? 'Download QR codes' : 'Download QR'}</span>
               </button>
             </div>
 

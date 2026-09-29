@@ -7,3 +7,4 @@ coverage/
 !.env.example
 # Next.js static export output (built by CI, not committed)
 out/
+tsconfig.tsbuildinfo

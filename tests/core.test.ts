@@ -258,6 +258,73 @@ async function testSegmentation() {
   assert(dup.error === undefined || dup.error === 'wrong-session', 'duplicate segment tolerated');
 }
 
+/**
+ * Binary chunk protocol: header round-trip, transferId binding,
+ * duplicate/gap detection semantics.
+ */
+async function testProtocol() {
+  console.log('\n[chunk protocol]');
+  const { encodeBinaryChunk, decodeBinaryChunk, simpleStringHash } = await import('../lib/transfer/protocol');
+
+  const payload = stringToBytes('chunk-data-here');
+  const transferId = 'tx_abc123';
+  const packet = encodeBinaryChunk(7, 20, transferId, payload.buffer as ArrayBuffer);
+
+  const decoded = decodeBinaryChunk(packet)!;
+  assert(decoded !== null, 'chunk decodes');
+  assert(decoded.chunkIndex === 7 && decoded.totalChunks === 20, 'chunk indices round trip');
+  assert(decoded.transferIdHash === simpleStringHash(transferId), 'transferId hash round trip');
+  assert(new TextDecoder().decode(decoded.payload) === 'chunk-data-here', 'payload round trip');
+  assert(packet.byteLength === 16 + payload.byteLength, 'header size is 16 bytes');
+
+  // A different transferId must produce a different checksum — the receiver
+  // uses this to reject chunks from unknown transfers.
+  assert(simpleStringHash('tx_other') !== simpleStringHash(transferId), 'transferId checksums differ per transfer');
+
+  assert(decodeBinaryChunk(new ArrayBuffer(8)) === null, 'undersized packet rejected');
+}
+
+/**
+ * SDP trimming must keep security material, and MUST emit CRLF line
+ * terminators on every line — bare-LF SDP is rejected by setRemoteDescription.
+ */
+async function testSdpTrimming() {
+  console.log('\n[sdp trimming]');
+  const { __testTrimSdp } = await import('../lib/pairing/payload');
+
+  const sampleSdp = [
+    'v=0',
+    'o=- 46117 2 IN IP4 127.0.0.1',
+    's=-',
+    't=0 0',
+    'a=group:BUNDLE 0',
+    'm=application 9 UDP/DTLS/SCTP webrtc-datachannel',
+    'c=IN IP4 0.0.0.0',
+    'a=ice-ufrag:AbCd',
+    'a=ice-pwd:EfGh1234',
+    'a=ice-options:trickle',
+    'a=fingerprint:sha-256 AA:BB:CC',
+    'a=setup:actpass',
+    'a=mid:0',
+    'a=sctp-port:5000',
+    'a=max-message-size:262144',
+    'a=extmap:1 urn:x',       // must be dropped
+    'a=rtpmap:0 fake',        // must be dropped
+    'a=candidate:1 1 UDP 1 192.168.1.5 5000 typ host',
+    'a=end-of-candidates',
+  ].join('\r\n');
+
+  const trimmed = __testTrimSdp(sampleSdp);
+  assert(trimmed.includes('a=fingerprint:sha-256 AA:BB:CC'), 'security fingerprint kept');
+  assert(trimmed.includes('a=max-message-size:262144'), 'max-message-size kept');
+  assert(trimmed.includes('a=candidate:1 1 UDP'), 'ICE candidates kept');
+  assert(trimmed.endsWith('\r\n'), 'SDP ends with CRLF terminator');
+  // every line must end with CR LF
+  const lines = trimmed.slice(0, -2).split('\r\n');
+  assert(lines.every((l) => !l.includes('\n') && !l.endsWith('\r')), 'no stray LF-only lines');
+  assert(!trimmed.split('\r\n').some((l) => l.startsWith('a=extmap') || l.startsWith('a=rtpmap')), 'media-only lines dropped');
+}
+
 async function main() {
   await testEncoding();
   await testEcdh();
@@ -265,6 +332,10 @@ async function main() {
   await testIncrementalHash();
   await testPairingPayload();
   await testSegmentation();
+  await testProtocol();
+
+  await testSdpTrimming();
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 }

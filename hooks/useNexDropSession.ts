@@ -66,6 +66,8 @@ export type { LocalHistoryItem };
 export interface PairingQr {
   /** Full pairing code (used for copy/paste fallback and invite links). */
   code: string;
+  /** Short human-readable session ID shown on both pairing screens. */
+  sessionId: string;
   /** Segments to render as QR codes (1 for most cases). */
   segments: { index: number; total: number; text: string }[];
 }
@@ -355,6 +357,7 @@ export function useNexDropSession() {
       const segId = randomId().slice(0, 8);
       setOfferQr({
         code,
+        sessionId: segId.toUpperCase(),
         segments: segmentPairingCode(code, segId),
       });
       setSessionState('hosting-offer');
@@ -451,7 +454,12 @@ export function useNexDropSession() {
 
         await establishSessionKeys(parsed.peerPublicKey);
 
-        setAnswerQr({ code, segments: segmentPairingCode(code, randomId().slice(0, 8)) });
+        const answerSegId = randomId().slice(0, 8);
+        setAnswerQr({
+          code,
+          sessionId: answerSegId.toUpperCase(),
+          segments: segmentPairingCode(code, answerSegId),
+        });
         setSessionState('joiner-answer');
         schedulePairingExpiry();
         return true;

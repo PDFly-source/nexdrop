@@ -2,7 +2,7 @@
   "name": "nexdrop",
   "version": "1.0.0",
   "private": true,
-  "description": "NexDrop \u2014 Private, Direct, Fast P2P file & text sharing. 100% client-side, no server, no accounts.",
+  "description": "NexDrop — Private, Direct, Fast P2P file & text sharing. 100% client-side, no server, no accounts.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -28,6 +28,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9.4.1",
     "eslint-config-next": "^16.0.8",
+    "playwright": "^1.63.0",
     "tailwindcss": "^4.1.17",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"

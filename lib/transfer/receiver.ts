@@ -13,7 +13,7 @@ import {
   FileStartMessage,
 } from '@/types/transfer';
 import { createOptimalStorageWriter, StorageWriter } from './writer';
-import { decodeBinaryChunk } from './protocol';
+import { decodeBinaryChunk, simpleStringHash } from './protocol';
 import { ChunkCipher, decryptChunk, IncrementalSha256 } from '@/lib/crypto';
 
 export interface ReceiverProgress {
@@ -52,6 +52,8 @@ export class ReceiverEngine {
   private writer: StorageWriter | null = null;
   private hasher: IncrementalSha256 | null = null;
   private receivedChunksCount = 0;
+  private expectedTransferIdHash = 0;
+  private nextExpectedChunkIndex = 0;
   private bytesReceived = 0;
   private startTime = 0;
   private lastProgressEmit = 0;
@@ -89,6 +91,8 @@ export class ReceiverEngine {
 
     this.bytesReceived = 0;
     this.receivedChunksCount = 0;
+    this.expectedTransferIdHash = simpleStringHash(this.transferId);
+    this.nextExpectedChunkIndex = 0;
     this.isPaused = false;
     this.isCancelled = false;
     this.isCompleted = false;
@@ -109,10 +113,48 @@ export class ReceiverEngine {
   }
 
   public async handleChunk(packetBuffer: ArrayBuffer): Promise<void> {
-    if (this.isCancelled || this.isCompleted || !this.writer || this.isPaused) return;
+    if (this.isCancelled || this.isCompleted || !this.writer) return;
 
     const decoded = decodeBinaryChunk(packetBuffer);
-    if (!decoded) return;
+    if (!decoded) {
+      this.callbacks.onError(this.transferId, 'Received a malformed data chunk');
+      return;
+    }
+
+    // Chunk belongs to a different/unknown transfer — reject it.
+    if (decoded.transferIdHash !== this.expectedTransferIdHash) {
+      this.callbacks.onError(this.transferId, 'Received data for an unknown transfer');
+      void this.cancel('Protocol error: unknown transfer');
+      return;
+    }
+
+    // Duplicate chunk (e.g. a re-scanned/re-delivered frame): ACK and ignore.
+    if (decoded.chunkIndex < this.nextExpectedChunkIndex) {
+      this.callbacks.sendControlMessage({
+        type: 'ACK',
+        transferId: this.transferId,
+        index: decoded.chunkIndex,
+      });
+      return;
+    }
+
+    // The file channel is ordered+reliable, so a gap means real data loss.
+    if (decoded.chunkIndex !== this.nextExpectedChunkIndex) {
+      this.callbacks.onError(
+        this.transferId,
+        `Missing chunk data (expected #${this.nextExpectedChunkIndex}, got #${decoded.chunkIndex})`
+      );
+      void this.cancel('Protocol error: chunk gap detected');
+      return;
+    }
+    this.nextExpectedChunkIndex = decoded.chunkIndex + 1;
+
+    // NOTE: chunks are still processed while paused. PAUSE/RESUME travel on
+    // the control channel, which has NO cross-channel ordering with the file
+    // channel — chunks already in flight can legitimately arrive after the
+    // PAUSE message, and dropping them would silently corrupt the file.
+    // Pause only stops the sender's pump; the receiver accepts whatever was
+    // already in flight so the stream stays gap-free.
 
     try {
       // Decrypt to plaintext before writing / hashing

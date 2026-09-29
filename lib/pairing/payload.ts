@@ -44,6 +44,11 @@ const SDP_DROP_PREFIXES = [
   'a=setup:', // handled below — kept
 ];
 
+/** Exposed for unit tests only. */
+export function __testTrimSdp(sdp: string): string {
+  return trimSdp(sdp);
+}
+
 function trimSdp(sdp: string): string {
   return sdp
     .split(/\r?\n/)
@@ -71,7 +76,10 @@ function trimSdp(sdp: string): string {
       }
       return !SDP_DROP_PREFIXES.some((p) => line.startsWith(p));
     })
-    .join('\n');
+    .join('\r\n') + '\r\n';
+  // SDP (RFC 8866) requires CRLF line terminators on EVERY line including
+  // the last one — bare-LF SDP is rejected by strict parsers (Chromium
+  // fails setRemoteDescription on the final unterminated line).
 }
 
 // ---------------------------------------------------------------------------
