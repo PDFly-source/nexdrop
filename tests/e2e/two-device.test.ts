@@ -191,7 +191,7 @@ async function main() {
   await pageA.getByRole('button', { name: /create pairing/i }).first().click();
   await pageA.waitForSelector('img[alt*="QR code"]', { timeout: 20000 });
   const offerSegments = await decodeAllQrSegments(pageA);
-  check(offerSegments.every((s) => s.startsWith('NDQS.') || s.startsWith('NDP1.')),
+  check(offerSegments.every((s) => s.startsWith('NDQS2.') || s.startsWith('NDQS.') || s.startsWith('NDP1.')),
     'A rendered real pairing QR image(s) decodable by jsQR',
     JSON.stringify(offerSegments.map((s) => s.slice(0, 12)))
   );
@@ -222,7 +222,7 @@ async function main() {
   console.log('[two-device e2e] B: real answer generated');
   await pageB.waitForSelector('text=Show this answer QR', { timeout: 30000 });
   const answerSegments = await decodeAllQrSegments(pageB);
-  check(answerSegments.every((s) => s.startsWith('NDQS.') || s.startsWith('NDP1.')),
+  check(answerSegments.every((s) => s.startsWith('NDQS2.') || s.startsWith('NDQS.') || s.startsWith('NDP1.')),
     'B rendered real answer QR image(s) decodable by jsQR');
 
   // ---------------------------------------------------------------------
@@ -296,8 +296,8 @@ async function main() {
   console.log('[two-device e2e] A → B: file transfer size matrix with SHA-256 verification');
   await pageA.getByRole('button', { name: /transfer/i }).first().click();
   await pageB.getByRole('button', { name: /transfer/i }).first().click();
-  await pageA.waitForSelector('input[type="file"]', { timeout: 10000 });
-  await pageB.waitForSelector('input[type="file"]', { timeout: 10000 });
+  await pageA.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });
+  await pageB.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });
   const patternBuffer = (bytes: number) => {
     const buf = Buffer.alloc(bytes);
     for (let i = 0; i < bytes; i += 4096) buf.fill((i / 4096) % 251, i, Math.min(i + 4096, bytes));

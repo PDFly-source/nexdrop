@@ -8,7 +8,7 @@
     "build": "next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx tests/core.test.ts"
+    "test": "tsx tests/core.test.ts && tsx tests/qr-pairing.test.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

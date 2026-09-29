@@ -29,6 +29,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameIdRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastDecodeAtRef = useRef<number>(0);
   const assemblerRef = useRef<QrSegmentAssembler>(new QrSegmentAssembler());
   const onScanCompleteRef = useRef(onScanComplete);
 
@@ -37,6 +38,8 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
   }, [onScanComplete, onScanCompleteRef]);
 
   const [error, setError] = useState<string | null>(null);
+  /** Transient, non-blocking notice shown over the live camera. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [segmentProgress, setSegmentProgress] = useState<{ received: number; total: number } | null>(null);
   const [pasteText, setPasteText] = useState<string>('');
@@ -59,25 +62,50 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
   const handleScannedText = useCallback((raw: string) => {
     const result = assemblerRef.current.feed(raw);
     if (result.error) {
+      if (result.error === 'wrong-session' || result.error === 'timeout') {
+        // Fatal for this assembly: start over.
+        setError(
+          result.error === 'wrong-session'
+            ? 'That QR belongs to a different pairing. Start the scan again.'
+            : 'Scan timed out. Please start again.'
+        );
+        assemblerRef.current.reset();
+        setSegmentProgress(null);
+        setNotice(null);
+        return;
+      }
+      // Misread fragment or a foreign QR: if we are mid-assembly, KEEP the
+      // fragments already collected and let the user re-scan — a phone
+      // camera misreads an occasional frame, and silently discarding
+      // progress would force a full restart.
+      if (result.received > 0) {
+        setNotice(
+          result.error === 'corrupt-segment'
+            ? 'That fragment did not read cleanly — scan it again.'
+            : 'Keep scanning the NexDrop pairing QRs.'
+        );
+        return;
+      }
       setError(
-        result.error === 'wrong-session'
-          ? 'That QR belongs to a different pairing. Start the scan again.'
-          : result.error === 'timeout'
-            ? 'Scan timed out. Please start again.'
-            : 'That is not a NexDrop pairing QR code.'
+        result.error === 'corrupt-segment'
+          ? 'That QR did not read cleanly. Hold the camera steady over the code, or use the image / paste fallback below.'
+          : 'That is not a NexDrop pairing QR code.'
       );
       assemblerRef.current.reset();
       setSegmentProgress(null);
+      setNotice(null);
       return;
     }
     if (result.code) {
       setSegmentProgress(null);
+      setNotice(null);
       assemblerRef.current.reset();
       stopCamera();
       onScanCompleteRef.current(result.code);
       return;
     }
     // Multi-QR in progress
+    setNotice(null);
     setSegmentProgress({ received: result.received, total: result.total });
   }, [stopCamera]);
 
@@ -94,15 +122,24 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
       canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: 'dontInvert',
-      });
+      // Decode at most ~8 times per second: jsQR over a full video frame is
+      // expensive, and unthrottled rAF decoding overheats phones without
+      // making detection any more reliable.
+      const now = performance.now();
+      if (now - lastDecodeAtRef.current >= 120) {
+        lastDecodeAtRef.current = now;
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        // attemptBoth: our QRs are standard dark-on-light, but tolerate
+        // inverted captures (e.g. photographed off a reflection) too.
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'attemptBoth',
+        });
 
-      if (code && code.data) {
-        handleScannedText(code.data);
-        if (code.data.startsWith('NDP1.')) return; // complete single QR — stop
-        // multi-segment: keep the camera running for the next segment
+        if (code && code.data) {
+          handleScannedText(code.data);
+          if (code.data.startsWith('NDP1.')) return; // complete single QR — stop
+          // multi-segment: keep the camera running for the next segment
+        }
       }
     }
 
@@ -122,7 +159,14 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
       return;
     }
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: 'environment' } })
+      .getUserMedia({
+        video: {
+          facingMode: 'environment',
+          // Ask for a decent resolution: dense pairing QRs need the pixels.
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      })
       .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) {
@@ -257,6 +301,12 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
               <div className="pointer-events-none absolute inset-8 border-2 border-dashed border-[#19C37D]/60 rounded-xl flex items-center justify-center">
                 <div className="w-full h-0.5 bg-[#19C37D]/80 animate-pulse" />
               </div>
+
+              {notice && (
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[90%] rounded-lg bg-black/75 px-3 py-1.5 text-xs text-[#F5F7F8] text-center" role="status">
+                  {notice}
+                </div>
+              )}
 
               {isDecodingImage && (
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center">

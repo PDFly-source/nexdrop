@@ -55,6 +55,7 @@ export interface ParsedPairingPayload {
 
 export type PairingError =
   | 'invalid-format'
+  | 'corrupt-segment'
   | 'expired'
   | 'not-offer'
   | 'not-answer'

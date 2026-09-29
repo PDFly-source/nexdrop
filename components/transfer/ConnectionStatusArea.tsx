@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
+import { QR_RENDER_OPTIONS } from '@/lib/pairing/qrOptions';
 import {
   Wifi,
   WifiOff,
@@ -51,6 +52,8 @@ function pairingErrorMessage(err: PairingError | string | null): string {
   switch (err) {
     case 'invalid-format':
       return 'That pairing code is not valid. Ask the other device to create a new one.';
+    case 'corrupt-segment':
+      return 'A pairing QR fragment did not read correctly. Scan that fragment again.';
     case 'expired':
       return 'That pairing code has expired. Create a new pairing on the other device.';
     case 'not-offer':
@@ -126,11 +129,9 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
   useEffect(() => {
     if (!activeQrText) return;
     let isMounted = true;
-    QRCode.toDataURL(activeQrText, {
-      errorCorrectionLevel: 'L', // maximize data capacity per QR
-      margin: 1,
-      color: { dark: '#F5F7F8', light: '#111418' },
-    })
+    // Canonical options: standard polarity + quiet zone. An inverted
+    // light-on-dark QR is NOT reliably decodable by phone cameras.
+    QRCode.toDataURL(activeQrText, QR_RENDER_OPTIONS)
       .then((url) => {
         if (isMounted) setQrDataUrl(url);
       })
@@ -170,11 +171,8 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
     if (!segs.length) return;
     for (let i = 0; i < segs.length; i++) {
       try {
-        const url = await QRCode.toDataURL(segs[i].text, {
-          errorCorrectionLevel: 'L',
-          margin: 1,
-          color: { dark: '#F5F7F8', light: '#111418' },
-        });
+        // Download uses the exact same canonical options as the live QR.
+        const url = await QRCode.toDataURL(segs[i].text, QR_RENDER_OPTIONS);
         const a = document.createElement('a');
         a.href = url;
         a.download =

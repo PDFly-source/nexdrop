@@ -20,9 +20,25 @@ import { PairingError, ParsedPairingPayload } from '@/types/session';
 
 export const PAIRING_TTL_MS = 10 * 60 * 1000; // pairing payloads expire after 10 minutes
 const ENVELOPE_PREFIX = 'NDP1.'; // NexDrop Pairing v1
-const SEGMENT_PREFIX = 'NDQS.'; // NexDrop QR Segment
-const SINGLE_QR_MAX_CHARS = 1700; // keep single QRs comfortably scannable
-const SEGMENT_DATA_CHARS = 850; // per-segment payload size for multi-QR
+const SEGMENT_PREFIX = 'NDQS2.'; // NexDrop QR Segment v2 (checksummed)
+const SEGMENT_PREFIX_V1 = 'NDQS.'; // NexDrop QR Segment v1 (legacy, still parseable)
+// QR density budget: with EC level M, a byte-mode QR holding these payloads
+// stays at version <= 15 (77 modules / side). Displayed at ~300px on a phone,
+// that keeps each module >= ~3.9 CSS px so a normal phone camera resolves it.
+// Bigger payloads are split instead of producing a maximum-density QR that
+// cameras misread (error correction then "repairs" into plausible garbage).
+const SINGLE_QR_MAX_CHARS = 580; // max chars in a single QR pairing code
+const SEGMENT_DATA_CHARS = 550; // per-segment payload chars for multi-QR
+
+/** 16-bit FNV-1a as 4 hex chars — detects camera misreads of one fragment. */
+function fnv1a16(str: string): string {
+  let hash = 0x811c;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = (hash * 0x0193) & 0xffff;
+  }
+  return hash.toString(16).padStart(4, '0');
+}
 export const SEGMENT_REASSEMBLY_TIMEOUT_MS = 3 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
@@ -238,6 +254,7 @@ export async function parsePairingCode(code: string): Promise<ParsedPairingPaylo
 
 const VALID_PAIRING_ERRORS: PairingError[] = [
   'invalid-format',
+  'corrupt-segment',
   'expired',
   'not-offer',
   'not-answer',
@@ -277,7 +294,11 @@ export function segmentPairingCode(code: string, sessionId: string): QrSegment[]
     segments.push({
       index: i + 1,
       total,
-      text: `${SEGMENT_PREFIX}${sessionId}.${i + 1}.${total}.${data}`,
+      // NDQS2.{session}.{index}.{total}.{checksum}.{data} — the per-fragment
+      // checksum lets the scanner reject a misread fragment instantly instead
+      // of assembling garbage and failing much later at parse time. v1 (NDQS.)
+      // fragments from older builds are still accepted by the assembler.
+      text: `${SEGMENT_PREFIX}${sessionId}.${i + 1}.${total}.${fnv1a16(data)}.${data}`,
     });
   }
   return segments;
@@ -300,23 +321,32 @@ export class QrSegmentAssembler {
       return { error: 'timeout', received: this.parts.size, total: this.total };
     }
 
-    if (!scanned.startsWith(SEGMENT_PREFIX)) {
+    if (scanned.startsWith(ENVELOPE_PREFIX)) {
       // A complete single-QR code scanned directly
-      if (scanned.startsWith(ENVELOPE_PREFIX)) {
-        return { code: scanned, received: 1, total: 1 };
-      }
+      return { code: scanned, received: 1, total: 1 };
+    }
+
+    const isV2 = scanned.startsWith(SEGMENT_PREFIX);
+    const isV1 = !isV2 && scanned.startsWith(SEGMENT_PREFIX_V1);
+    if (!isV2 && !isV1) {
       return { error: 'invalid-format', received: this.parts.size, total: this.total };
     }
 
-    const rest = scanned.slice(SEGMENT_PREFIX.length);
-    const parts = rest.split('.');
-    if (parts.length < 4) {
+    const prefix = isV2 ? SEGMENT_PREFIX : SEGMENT_PREFIX_V1;
+    const parts = scanned.slice(prefix.length).split('.');
+    // v1: {session}.{index}.{total}.{data}   (integrity enforced at parse time)
+    // v2: {session}.{index}.{total}.{checksum}.{data}
+    const minParts = isV2 ? 5 : 4;
+    if (parts.length < minParts) {
       return { error: 'invalid-format', received: this.parts.size, total: this.total };
     }
     const sessionId = parts[0];
     const index = parseInt(parts[1], 10);
     const total = parseInt(parts[2], 10);
-    const data = parts.slice(3).join('.');
+    const data = isV2 ? parts.slice(4).join('.') : parts.slice(3).join('.');
+    if (isV2 && fnv1a16(data) !== parts[3]) {
+      return { error: 'corrupt-segment', received: this.parts.size, total: this.total };
+    }
 
     if (!Number.isFinite(index) || !Number.isFinite(total) || index < 1 || total < 1 || index > total) {
       return { error: 'invalid-format', received: this.parts.size, total: this.total };
@@ -335,8 +365,9 @@ export class QrSegmentAssembler {
       for (let i = 1; i <= this.total; i++) {
         full += this.parts.get(i) ?? '';
       }
+      const total = this.total;
       this.reset();
-      return { code: full, received: this.total, total: this.total };
+      return { code: full, received: total, total };
     }
 
     return { received: this.parts.size, total: this.total };
