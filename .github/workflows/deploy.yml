@@ -83,7 +83,7 @@ jobs:
         run: npm run build
 
       - name: Run two-device end-to-end test
-        run: npx tsx tests/e2e/two-device.test.ts
+        run: NEXDROP_E2E_VERBOSE=1 npx tsx tests/e2e/two-device.test.ts
 
   deploy:
     environment:

@@ -45,6 +45,7 @@ export class PeerConnectionManager {
   private connectedOnce = false;
   private disconnectGraceTimer: ReturnType<typeof setTimeout> | null = null;
   private lastPongAt = 0;
+  private fileChunksReceived = 0;
 
   constructor(callbacks: PeerCallbacks) {
     this.callbacks = callbacks;
@@ -146,7 +147,13 @@ export class PeerConnectionManager {
     switch (channelName) {
       case 'file':
         if (data instanceof ArrayBuffer) {
+          this.fileChunksReceived++;
+          if (this.fileChunksReceived <= 2 || this.fileChunksReceived % 32 === 0) {
+            console.debug('[nexdrop] file chunk arrived:', this.fileChunksReceived);
+          }
           this.callbacks.onFileChunk(data);
+        } else {
+          console.warn('[nexdrop] file channel dropped non-ArrayBuffer payload:', Object.prototype.toString.call(data));
         }
         break;
       case 'control':

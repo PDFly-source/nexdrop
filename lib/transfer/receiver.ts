@@ -121,6 +121,7 @@ export class ReceiverEngine {
     }
 
     // Flush anything that arrived while the writer was being created.
+    console.debug('[nexdrop] writer ready:', this.writer.getType(), 'pending chunks:', this.pendingChunks.length);
     if (this.pendingChunks.length > 0) {
       const queued = this.pendingChunks;
       this.pendingChunks = [];
@@ -134,6 +135,7 @@ export class ReceiverEngine {
 
     // FILE_END can arrive before the writer exists (control and file
     // channels have no cross-channel ordering) — finish now if it did.
+    console.debug('[nexdrop] flush complete, pendingFinish:', !!this.pendingFinish);
     if (this.pendingFinish) {
       const endMsg = this.pendingFinish;
       this.pendingFinish = null;
@@ -150,6 +152,9 @@ export class ReceiverEngine {
     if (!this.writer) {
       if (!this.transferId) return; // no active transfer
       this.pendingChunks.push(packetBuffer);
+      if (this.pendingChunks.length === 1 || this.pendingChunks.length % 16 === 0) {
+        console.debug('[nexdrop] receiver buffering chunk before writer ready:', this.pendingChunks.length);
+      }
       return;
     }
 

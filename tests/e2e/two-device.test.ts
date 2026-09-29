@@ -165,11 +165,17 @@ async function main() {
   const pageA = await ctxA.newPage();
   const pageB = await ctxB.newPage();
   pageA.on('console', (m) => {
-    if (process.env.NEXDROP_E2E_VERBOSE || m.type() === 'error') {
+    if (process.env.NEXDROP_E2E_VERBOSE || m.type() === 'error' || m.text().includes('[nexdrop]')) {
       console.log('  [A console]', m.type(), m.text().slice(0, 200));
     }
   });
-  pageB.on('console', (m) => { if (m.type() === 'error') console.log('  [B console.error]', m.text().slice(0, 150)); });
+  pageB.on('console', (m) => {
+    if (process.env.NEXDROP_E2E_VERBOSE || m.type() === 'error' || m.text().includes('[nexdrop]')) {
+      console.log('  [B console]', m.type(), m.text().slice(0, 200));
+    }
+  });
+  pageA.on('pageerror', (e) => console.log('  [A pageerror]', String(e).slice(0, 300)));
+  pageB.on('pageerror', (e) => console.log('  [B pageerror]', String(e).slice(0, 300)));
 
   const url = `http://localhost:${PORT}/nexdrop/`;
   await pageA.goto(url, { waitUntil: 'domcontentloaded' });
