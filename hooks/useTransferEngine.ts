@@ -174,6 +174,10 @@ export function useTransferEngine(
     onControlCallbackRef.current = (msg: ControlMessage) => {
       const receiver = receiverEngineRef.current;
       const sender = activeSenderRef.current;
+      console.debug('[nexdrop] control:', (msg as { type?: string }).type,
+        'for', (msg as { transferId?: string }).transferId ?? 'session',
+        '| active sender:', sender?.activeTransferId ?? 'none',
+        '| active receiver:', receiver?.activeTransferId ?? 'none');
 
       switch (msg.type) {
         case 'FILE_START':
@@ -202,6 +206,7 @@ export function useTransferEngine(
           break;
 
         case 'FILE_END':
+          console.debug('[nexdrop] FILE_END received for', (msg as { transferId?: string }).transferId?.slice(0, 8));
           void receiver?.finishTransfer(msg);
           break;
 
@@ -213,20 +218,27 @@ export function useTransferEngine(
           receiver?.handleResume(msg as FileResumeMessage);
           break;
 
-        case 'CANCEL':
-          if (msg.transferId) {
-            sender?.cancel(msg.reason || 'Cancelled by peer');
-            void receiver?.cancel(msg.reason || 'Cancelled by peer');
-          } else {
-            // Session-level cancel
-            sender?.cancel('Session cancelled by peer');
-            void receiver?.cancel('Session cancelled by peer');
+        case 'CANCEL': {
+          // A CANCEL names a transfer (or the whole session). Only cancel the
+          // engine if it is ACTUALLY handling that transfer — a cancel for a
+          // completed/old transfer must never kill a live one.
+          const cancelId = msg.transferId as string | undefined;
+          const r = cancelId
+            ? cancelId === receiver?.activeTransferId
+            : !!receiver?.activeTransferId;
+          const s = cancelId
+            ? cancelId === sender?.activeTransferId
+            : !!sender?.activeTransferId;
+          if (s) sender?.cancel(msg.reason || 'Cancelled by peer');
+          if (r) void receiver?.cancel(msg.reason || 'Cancelled by peer');
+          if (s || r) {
+            isTransferringRef.current = false;
+            setActiveTransfer((prev) =>
+              prev && prev.id === (cancelId ?? prev.id) ? { ...prev, status: 'cancelled' } : prev
+            );
           }
-          isTransferringRef.current = false;
-          setActiveTransfer((prev) =>
-            prev ? { ...prev, status: 'cancelled' } : prev
-          );
           break;
+        }
 
         case 'VERIFY': {
           // Receiver's integrity verdict about OUR outgoing file
@@ -256,23 +268,31 @@ export function useTransferEngine(
   // -----------------------------------------------------------------------
 
   const processNextQueueItemRef = useRef<() => void>(() => {});
+  // Mirror of sendQueue for imperative reads — state updaters must stay pure,
+  // so the sender is created/started OUTSIDE the setSendQueue updater.
+  const sendQueueRef = useRef<FileItem[]>([]);
+  useEffect(() => {
+    sendQueueRef.current = sendQueue;
+  }, [sendQueue]);
 
   const processNextQueueItem = useCallback(() => {
     if (isTransferringRef.current || !peerManager || !isPeerConnected) return;
 
-    setSendQueue((currentQueue) => {
+    {
+      const currentQueue = sendQueueRef.current;
       const nextIndex = currentQueue.findIndex((item) => item.status === 'queued');
-      if (nextIndex === -1) return currentQueue;
+      if (nextIndex === -1) return;
 
       const targetItem = currentQueue[nextIndex];
-      if (!targetItem.file) return currentQueue;
+      if (!targetItem.file) return;
 
       const fileChannel = peerManager.getChannel('file');
       if (!fileChannel || fileChannel.readyState !== 'open') {
-        return currentQueue;
+        return;
       }
 
       isTransferringRef.current = true;
+      console.debug('[nexdrop] queue: starting transfer', targetItem.id, targetItem.name);
 
       const sender = new SenderEngine({
         file: targetItem.file,
@@ -281,6 +301,7 @@ export function useTransferEngine(
         sendControlMessage: (msg: any) => peerManager.sendControl(msg),
         cipher: cipherRef.current,
         onProgress: (p: SenderProgress) => {
+          console.debug('[nexdrop] sender progress:', p.transferId.slice(0, 8), p.status, p.percentage + '%');
           setActiveTransfer({
             id: p.transferId,
             name: targetItem.name,
@@ -308,6 +329,7 @@ export function useTransferEngine(
           );
         },
         onCompleted: (transferId: string, hash: string) => {
+          console.debug('[nexdrop] sender completed:', transferId.slice(0, 8));
           sounds.playComplete();
           isTransferringRef.current = false;
           activeSenderRef.current = null;
@@ -342,6 +364,7 @@ export function useTransferEngine(
           }, 200);
         },
         onError: (transferId: string, err: string) => {
+          console.debug('[nexdrop] sender ERROR:', transferId.slice(0, 8), err);
           sounds.playError();
           isTransferringRef.current = false;
           activeSenderRef.current = null;
@@ -358,10 +381,17 @@ export function useTransferEngine(
       activeSenderRef.current = sender;
       void sender.start();
 
-      return currentQueue.map((item, idx) =>
-        idx === nextIndex ? { ...item, status: 'transferring' } : item
+      // Mark the item in state (pure update) and in the ref mirror so a
+      // second processNextQueueItem call in the same tick cannot double-start.
+      setSendQueue((q) =>
+        q.map((item, idx) =>
+          idx === nextIndex && item.id === targetItem.id ? { ...item, status: 'transferring' } : item
+        )
       );
-    });
+      sendQueueRef.current = sendQueueRef.current.map((item, idx) =>
+        idx === nextIndex && item.id === targetItem.id ? { ...item, status: 'transferring' } : item
+      );
+    }
   }, [peerManager, isPeerConnected, cipherRef]);
 
   useEffect(() => {
@@ -390,6 +420,8 @@ export function useTransferEngine(
 
     const sender = activeSenderRef.current;
     const receiver = receiverEngineRef.current;
+    console.debug('[nexdrop] disconnect effect: sender=', sender?.activeTransferId ?? 'none',
+      'receiver=', receiver?.activeTransferId ?? 'none');
     if (!sender && !receiver) return;
 
     activeSenderRef.current = null;
@@ -406,14 +438,14 @@ export function useTransferEngine(
     // synchronously; override it with the truthful failure status after.
     setSendQueue((q) =>
       q.map((item) =>
-        item.status === 'transferring' || item.status === 'cancelled'
+        item.status === 'transferring' || item.status === 'paused' || item.status === 'cancelled'
           ? { ...item, status: 'failed', error: 'Connection lost during transfer' }
           : item
       )
     );
     setIncomingFiles((q) =>
       q.map((item) =>
-        item.status === 'transferring' || item.status === 'cancelled'
+        item.status === 'transferring' || item.status === 'paused' || item.status === 'cancelled'
           ? { ...item, status: 'failed' }
           : item
       )

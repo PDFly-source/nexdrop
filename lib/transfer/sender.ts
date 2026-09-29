@@ -104,6 +104,11 @@ export class SenderEngine {
     void this.pump();
   }
 
+  /** The transfer this engine instance is bound to (for control-message matching). */
+  public get activeTransferId(): string {
+    return this.transferId;
+  }
+
   public cancel(reason: string = 'Cancelled by sender') {
     if (this.isDone) return;
     this.isCancelled = true;

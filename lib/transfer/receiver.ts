@@ -62,6 +62,8 @@ export class ReceiverEngine {
   private recentSpeeds: number[] = [];
 
   private isPaused = false;
+  /** PAUSE that arrived before this transfer started (applied at start). */
+  private pendingPauseId: string | null = null;
   private isCancelled = false;
   private isCompleted = false;
   private callbacks: ReceiverCallbacks;
@@ -91,6 +93,11 @@ export class ReceiverEngine {
     }
 
     this.transferId = meta.transferId;
+    if (this.pendingPauseId === meta.transferId) {
+      // A PAUSE arrived before this transfer started — honor it now.
+      this.pendingPauseId = null;
+      this.isPaused = true;
+    }
     this.name = meta.name;
     this.size = meta.size;
     this.mime = meta.mime;
@@ -251,13 +258,26 @@ export class ReceiverEngine {
     }
   }
 
+  /** The transfer this engine is currently handling ('' when idle). */
+  public get activeTransferId(): string {
+    return this.transferId;
+  }
+
   public handlePause(msg: FilePauseMessage): void {
-    if (msg.transferId !== this.transferId) return;
+    if (msg.transferId !== this.transferId) {
+      // PAUSE for a transfer that has not started yet (the META/START is
+      // still in flight): remember it and apply when startTransfer lands,
+      // otherwise the pause is silently lost and the receiver keeps
+      // accepting data the sender believes is paused.
+      if (!this.transferId) this.pendingPauseId = msg.transferId;
+      return;
+    }
     this.isPaused = true;
     this.emitProgress('paused', 0, 0);
   }
 
   public handleResume(msg: FileResumeMessage): void {
+    if (msg.transferId === this.pendingPauseId) this.pendingPauseId = null;
     if (msg.transferId !== this.transferId || !this.isPaused) return;
     this.isPaused = false;
     this.lastTime = Date.now();
@@ -315,6 +335,10 @@ export class ReceiverEngine {
       };
 
       this.callbacks.onCompleted(info);
+      // Completed: forget this transfer so late/stray chunks or control
+      // messages can never act on (or be attributed to) a finished transfer.
+      this.transferId = '';
+      this.writer = null;
     } catch (err: any) {
       this.callbacks.onError(this.transferId, `Failed to finalize file: ${err?.message || err}`);
     }
@@ -323,27 +347,33 @@ export class ReceiverEngine {
   public async cancel(reason: string = 'Cancelled'): Promise<void> {
     this.pendingChunks = [];
     this.pendingFinish = null;
+    this.pendingPauseId = null;
     if (this.isCompleted) return;
+    if (!this.transferId) return; // nothing active — never emit or notify
     this.isCancelled = true;
+    const id = this.transferId;
+    this.transferId = '';
     if (this.writer) {
       await this.writer.abort();
+      this.writer = null;
     }
     this.callbacks.sendControlMessage({
       type: 'CANCEL',
-      transferId: this.transferId,
+      transferId: id,
       reason,
     });
-    this.emitProgress('cancelled', 0, 0);
+    this.emitProgress('cancelled', 0, 0, id);
   }
 
   private emitProgress(
     status: 'transferring' | 'paused' | 'completed' | 'cancelled' | 'failed',
     speedBps: number,
-    etaSeconds: number
+    etaSeconds: number,
+    forceId?: string
   ) {
     const percentage = this.size > 0 ? (this.bytesReceived / this.size) * 100 : 100;
     this.callbacks.onProgress({
-      transferId: this.transferId,
+      transferId: forceId ?? this.transferId,
       name: this.name,
       size: this.size,
       mime: this.mime,
