@@ -308,12 +308,16 @@ async function main() {
   /** Upload a file to the hidden input. Playwright refuses in-memory buffers
    *  larger than 50MB, so big payloads are written to a temp file (named
    *  exactly like the intended upload) and passed by path. */
+  const uploadTmpFiles: string[] = [];
   const uploadFile = async (page: any, name: string, buffer: Buffer) => {
     if (buffer.length > 40 * 1024 * 1024) {
-      const tmp = path.join(os.tmpdir(), name);
+      // NOTE: the browser reads the file lazily (on File.slice/arrayBuffer),
+      // so the temp file must exist for the WHOLE test — deleting it after
+      // setInputFiles makes every read fail with "file not found".
+      const tmp = path.join(os.tmpdir(), `nexdrop-e2e-${name}`);
       fs.writeFileSync(tmp, buffer);
+      uploadTmpFiles.push(tmp);
       await page.setInputFiles('input[type="file"]', tmp);
-      fs.rmSync(tmp, { force: true });
       return;
     }
     await page.setInputFiles('input[type="file"]', {
@@ -411,8 +415,9 @@ async function main() {
   try {
     await pageA.waitForFunction(
       () => {
+        // Require the ACTIVE CARD (not the queued item, which also shows 0%)
         const t = document.body.innerText;
-        return t.includes('e2e-pause-resume.bin') && /\d+%/.test(t);
+        return t.includes('SENDING TO PEER') && t.includes('e2e-pause-resume.bin') && /\d+%/.test(t);
       },
       { timeout: 60000, polling: 200 }
     );
@@ -442,7 +447,7 @@ async function main() {
     await pageA.waitForFunction(
       () => {
         const t = document.body.innerText;
-        return t.includes('e2e-cancel-live.bin') && /\d+%/.test(t);
+        return t.includes('SENDING TO PEER') && t.includes('e2e-cancel-live.bin') && /\d+%/.test(t);
       },
       { timeout: 60000, polling: 200 }
     );
@@ -453,7 +458,7 @@ async function main() {
     check(true, 'receiver: informed of the cancellation (no silent stall)');
     await pageA.waitForTimeout(3000);
     const bText = await pageB.evaluate(() => document.body.innerText);
-    const fake = bText.match(/e2e-cancel-live\.bin[\s\S]{0,600}?Completed/);
+    const fake = bText.match(/e2e-cancel-live\.bin[\s\S]{0,40}?Completed/);
     check(!fake, 'no fake completion after cancellation');
 
     // Sender must be fully reusable right after a cancel
@@ -477,7 +482,7 @@ async function main() {
     await pageA.waitForFunction(
       () => {
         const t = document.body.innerText;
-        return t.includes('e2e-disconnect.bin') && /\d+%/.test(t);
+        return t.includes('SENDING TO PEER') && t.includes('e2e-disconnect.bin') && /\d+%/.test(t);
       },
       { timeout: 60000, polling: 200 }
     );
@@ -486,7 +491,7 @@ async function main() {
     await waitForNameStatus(pageA, 'e2e-disconnect.bin', 'Failed', 90000);
     check(true, 'sender detects the dead peer and marks the transfer Failed');
     const aText = await pageA.evaluate(() => document.body.innerText);
-    const fake = aText.match(/e2e-disconnect\.bin[\s\S]{0,600}?Completed/);
+    const fake = aText.match(/e2e-disconnect\.bin[\s\S]{0,40}?Completed/);
     check(!fake, 'no fake completion after peer disconnect');
   } catch {
     await dumpFailure('disconnect');
@@ -496,6 +501,7 @@ async function main() {
   console.log(`\n[two-device e2e] ${passed} passed, ${failed} failed, ${skipped} skipped`);
   await browser.close();
   server.close();
+  for (const tmp of uploadTmpFiles) fs.rmSync(tmp, { force: true });
   if (failed > 0) process.exit(1);
 }
 
