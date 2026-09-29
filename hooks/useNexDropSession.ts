@@ -241,8 +241,19 @@ export function useNexDropSession() {
           case 'connecting':
           case 'new':
           case 'gathering':
+            // NEVER clobber an active pairing screen: the host stays on
+            // hosting-offer (showing the offer QR / scan-answer controls)
+            // and the joiner stays on joiner-answer (showing the answer QR)
+            // while their RTCPeerConnection legitimately cycles through
+            // new/gathering/connecting during ICE. The UI state machine
+            // must not allow impossible states (pairing screen vanished).
             setSessionState((prev) =>
-              prev === 'connected' ? prev : 'connecting'
+              prev === 'connected' ||
+              prev === 'hosting-offer' ||
+              prev === 'joiner-answer' ||
+              prev === 'connecting'
+                ? prev
+                : 'connecting'
             );
             break;
           case 'disconnected':
