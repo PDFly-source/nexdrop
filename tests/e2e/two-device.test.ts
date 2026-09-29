@@ -294,6 +294,10 @@ async function main() {
   // File transfer SIZE MATRIX (1 KB -> 100 MB), SHA-256 verified per file
   // ---------------------------------------------------------------------
   console.log('[two-device e2e] A → B: file transfer size matrix with SHA-256 verification');
+  await pageA.getByRole('button', { name: /transfer/i }).first().click();
+  await pageB.getByRole('button', { name: /transfer/i }).first().click();
+  await pageA.waitForSelector('input[type="file"]', { timeout: 10000 });
+  await pageB.waitForSelector('input[type="file"]', { timeout: 10000 });
   const patternBuffer = (bytes: number) => {
     const buf = Buffer.alloc(bytes);
     for (let i = 0; i < bytes; i += 4096) buf.fill((i / 4096) % 251, i, Math.min(i + 4096, bytes));
@@ -322,10 +326,14 @@ async function main() {
   }
 
   async function dumpFailure(label: string) {
-    const dumpA = await pageA.evaluate(() => document.body.innerText.slice(0, 900));
-    const dumpB = await pageB.evaluate(() => document.body.innerText.slice(0, 900));
-    console.log('  [A dump @ ' + label + ']', JSON.stringify(dumpA));
-    console.log('  [B dump @ ' + label + ']', JSON.stringify(dumpB));
+    try {
+      const dumpA = await pageA.evaluate(() => document.body.innerText.slice(0, 900));
+      console.log('  [A dump @ ' + label + ']', JSON.stringify(dumpA));
+      const dumpB = await pageB.evaluate(() => document.body.innerText.slice(0, 900));
+      console.log('  [B dump @ ' + label + ']', JSON.stringify(dumpB));
+    } catch {
+      console.log('  [dump @ ' + label + '] unavailable (page closed)');
+    }
   }
 
   const matrix: Array<[string, number, number]> = [
