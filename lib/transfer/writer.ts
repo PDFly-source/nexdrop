@@ -143,7 +143,7 @@ export class MemoryBlobWriter implements StorageWriter {
   private totalBytes: number = 0;
   private filename: string = '';
   private mimeType: string = '';
-  private maxAllowedBytes: number = 1.8 * 1024 * 1024 * 1024; // 1.8 GB guard
+  private maxAllowedBytes: number = 1.5 * 1024 * 1024 * 1024; // 1.5 GiB guard against out-of-memory crashes
 
   getType(): 'blob' {
     return 'blob';
@@ -162,8 +162,13 @@ export class MemoryBlobWriter implements StorageWriter {
   }
 
   async writeChunk(chunk: ArrayBuffer): Promise<void> {
-    this.chunks.push(chunk);
     this.totalBytes += chunk.byteLength;
+    if (this.totalBytes > this.maxAllowedBytes) {
+      throw new Error(
+        'File too large for this browser (no disk/OPFS storage available and the in-memory fallback limit was reached). Use a browser with File System Access API or OPFS support for large files.'
+      );
+    }
+    this.chunks.push(chunk);
   }
 
   async finish(): Promise<{ blobUrl?: string; success: boolean }> {

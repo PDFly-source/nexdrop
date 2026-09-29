@@ -38,7 +38,7 @@ export default function PrivacyPage() {
               1. Zero Account & Zero Identity Tracking
             </h2>
             <p className="text-xs sm:text-sm text-[#9AA3AD] leading-relaxed">
-              We do not ask for your email address, phone number, Google account, or name. NexDrop generates random anonymous session identifiers on demand. There are no user profiles, account databases, or persistent tracking IDs.
+              We do not ask for your email address, phone number, or name. There are no user profiles, account databases, or persistent tracking IDs — the app is a static website with no backend of any kind.
             </p>
           </section>
 
@@ -58,7 +58,7 @@ export default function PrivacyPage() {
               3. Ephemeral Sessions with Auto-Destruction
             </h2>
             <p className="text-xs sm:text-sm text-[#9AA3AD] leading-relaxed">
-              Signaling entries used to negotiate the WebRTC handshake exist in temporary memory only and expire automatically after 15 minutes. Once paired, the signaling channel is inactive and direct peer DataChannels take over.
+              Pairing codes (the QR codes or pasted text used to negotiate the WebRTC handshake) exist only in memory on the two pairing devices and expire automatically after 10 minutes. There is no signaling server at all — the codes are exchanged directly between the two screens.
             </p>
           </section>
 

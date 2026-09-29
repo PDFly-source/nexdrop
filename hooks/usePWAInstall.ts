@@ -60,7 +60,9 @@ export function usePWAInstall() {
 
     // Register service worker if supported
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-      navigator.serviceWorker.register('/sw.js').catch((err) => {
+      // Must live under the GitHub Pages basePath (/nexdrop/sw.js) so its
+      // scope covers the whole app.
+      navigator.serviceWorker.register('/nexdrop/sw.js', { scope: '/nexdrop/' }).catch((err) => {
         console.warn('SW registration failed:', err);
       });
     }

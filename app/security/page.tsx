@@ -54,11 +54,11 @@ export default function SecurityPage() {
                 <Key className="w-5 h-5 text-[#3DD6A0]" />
               </div>
               <h2 className="text-base font-semibold text-[#F5F7F8]">
-                2. Ephemeral Pairing & 6-Digit PINs
+                2. Application-Layer E2EE (ECDH + AES-256-GCM)
               </h2>
             </div>
             <p className="mt-3 text-xs sm:text-sm text-[#9AA3AD] leading-relaxed">
-              Pairing sessions use cryptographically generated 6-digit PINs and UUID v4 tokens. Sessions auto-expire after 15 minutes of inactivity. Once two peers successfully negotiate a WebRTC connection, the temporary pairing entry is destroyed.
+              On top of transport encryption, every device generates an ephemeral ECDH (P-256) key pair whose public key travels inside the QR pairing code. Both devices derive the same AES-256-GCM session key via HKDF-SHA256, and every file chunk is individually encrypted with a unique 96-bit IV before it ever touches the DataChannel. Keys are never hardcoded and exist only in memory.
             </p>
           </div>
 
@@ -73,7 +73,7 @@ export default function SecurityPage() {
               </h2>
             </div>
             <p className="mt-3 text-xs sm:text-sm text-[#9AA3AD] leading-relaxed">
-              To protect against Man-in-the-Middle (MITM) attacks during signaling, NexDrop computes an independent 6-digit Short Authentication String (e.g., <code className="font-mono text-[#19C37D]">482 913</code>). Users can visually verify that both screens show matching codes.
+              Because pairing codes are exchanged by QR or copy/paste, they could in theory be tampered with. To catch this, both devices derive a 6-digit Short Authentication String (e.g., <code className="font-mono text-[#19C37D]">482 913</code>) from the actual ECDH shared secret via HKDF. If both screens show the same code, no one altered the handshake. Users confirm this in the Verify dialog.
             </p>
           </div>
 
@@ -103,7 +103,7 @@ export default function SecurityPage() {
               </h2>
             </div>
             <p className="mt-3 text-xs sm:text-sm text-[#9AA3AD] leading-relaxed">
-              The signaling server processes only SDP offers, answers, and ICE candidate network descriptors. File contents, chunk streams, and clipboard data are strictly forbidden from touching any backend server or database.
+              There is no server. NexDrop is a fully static PWA: no signaling relay, no database, no file storage. SDP offers, answers, and ICE candidates travel only between your two devices inside the QR/paste pairing codes, and file contents never leave the direct peer connection.
             </p>
           </div>
         </div>

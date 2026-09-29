@@ -1,1 +1,37 @@
 @import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* Accessibility: visible focus states + reduced motion support        */
+/* ------------------------------------------------------------------ */
+
+:root {
+  color-scheme: dark;
+}
+
+*:focus-visible {
+  outline: 2px solid #19c37d;
+  outline-offset: 2px;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Prevent horizontal overflow / iOS rubber-band weirdness on small screens */
+body {
+  overflow-x: hidden;
+  /* Respect the notch on iOS standalone mode */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

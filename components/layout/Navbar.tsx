@@ -26,9 +26,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onStartPairing,
 }) => {
   const isConnected = sessionState === 'connected';
-  const isConnecting = sessionState === 'connecting' || sessionState === 'signaling';
-  const isReconnecting = sessionState === 'reconnecting';
-  const isPairing = sessionState === 'pairing';
+  const isConnecting = sessionState === 'connecting';
+  const isReconnecting = sessionState === 'disconnected';
+  const isPairing = sessionState === 'hosting-offer' || sessionState === 'joiner-answer';
 
   const handleStatusBadgeClick = () => {
     if (isConnected) {

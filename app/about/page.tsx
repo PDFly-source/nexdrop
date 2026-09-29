@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Sparkles, Layers, Cpu, Globe } from 'lucide-react';
+import { ArrowLeft, Layers, Cpu, Globe } from 'lucide-react';
 
 export default function AboutPage() {
   return (
@@ -24,8 +24,7 @@ export default function AboutPage() {
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 text-left">
         <div className="max-w-2xl">
           <div className="flex items-center gap-2 text-xs text-[#19C37D] font-medium mb-3">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>AppMintly Ecosystem</span>
+            <span>NexDrop</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#F5F7F8]">
             About NexDrop
@@ -39,7 +38,7 @@ export default function AboutPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-[#F5F7F8]">What is NexDrop?</h2>
             <p>
-              NexDrop is a modern PWA (Progressive Web Application) designed to bridge personal devices—phones, laptops, desktops, tablets, and workstations—over pure peer-to-peer WebRTC connections. Whether sharing high-resolution RAW photos, 4K video clips, code snippets, or clipboard text, data travels directly between devices on the same local network or across the internet.
+              NexDrop is a Progressive Web App designed to bridge personal devices — phones, laptops, desktops, and tablets — over pure peer-to-peer WebRTC connections. Whether sharing high-resolution photos, 4K video clips, code snippets, or clipboard text, data travels directly between the two devices. There is no backend: pairing happens by scanning QR codes between the devices themselves.
             </p>
           </section>
 
@@ -98,9 +97,9 @@ export default function AboutPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-[#F5F7F8]">The AppMintly Brand Ecosystem</h2>
+            <h2 className="text-base font-semibold text-[#F5F7F8]">No Server, Period</h2>
             <p>
-              NexDrop is crafted as part of the AppMintly suite of sovereign, privacy-respecting developer and consumer utilities. No accounts, no subscriptions, and no privacy compromises.
+              NexDrop runs entirely in your browser as a static PWA. There are no accounts, no subscriptions, no database, and no signaling server — the two devices exchange pairing codes (QR or copy/paste) directly. Direct connectivity depends on your browser and network; for the most reliable link, keep both devices on the same Wi-Fi.
             </p>
           </section>
         </div>

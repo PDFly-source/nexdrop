@@ -1,6 +1,7 @@
 /**
  * Strict Typed Protocol for NexDrop P2P Transfers.
- * Never load full large files into memory; stream via 64 KiB chunks with backpressure & ACK flow control.
+ * Never load full large files into memory; stream via 64 KiB chunks with
+ * backpressure & ACK flow control.
  */
 
 export const CHUNK_SIZE = 64 * 1024; // 64 KiB chunks
@@ -48,7 +49,10 @@ export interface LocalHistoryItem {
   hashVerified?: boolean;
 }
 
-// Discriminated union protocol messages sent over the "control" DataChannel
+// ---------------------------------------------------------------------------
+// Control channel protocol messages (JSON over the "control" DataChannel)
+// ---------------------------------------------------------------------------
+
 export interface FileStartMessage {
   type: 'FILE_START';
   transferId: string;
@@ -57,8 +61,8 @@ export interface FileStartMessage {
   mime: string;
   chunkSize: number;
   totalChunks: number;
+  /** True when chunks are AES-GCM encrypted with the session E2EE key. */
   e2eeEnabled?: boolean;
-  appMintlyMeta?: AppMintlyMetadata;
 }
 
 export interface ChunkAckMessage {
@@ -70,25 +74,32 @@ export interface ChunkAckMessage {
 export interface FileEndMessage {
   type: 'FILE_END';
   transferId: string;
-  hash?: string;
+  /** Incremental SHA-256 of the plaintext file content, hex. */
+  hash: string;
 }
 
-export interface CancelMessage {
+export interface FileCancelMessage {
   type: 'CANCEL';
   transferId: string;
   reason?: string;
 }
 
-export interface ResumeMessage {
+export interface FilePauseMessage {
+  type: 'PAUSE';
+  transferId: string;
+}
+
+export interface FileResumeMessage {
   type: 'RESUME';
   transferId: string;
   nextChunk: number;
 }
 
-export interface VerifyMessage {
+export interface FileVerifyMessage {
   type: 'VERIFY';
   transferId: string;
-  hash: string;
+  /** Result of comparing sender & receiver hashes. */
+  match: boolean;
 }
 
 export interface SecurityVerifyMessage {
@@ -123,42 +134,27 @@ export interface PeerMetadataMessage {
   version: string;
 }
 
-export interface LiveTextOpMessage {
-  type: 'LIVE_TEXT_OP';
-  revision: number;
-  operation: 'insert' | 'delete' | 'replace';
-  position: number;
-  text?: string;
-  length?: number;
+export interface PingMessage {
+  type: 'PING';
+  timestamp: number;
+}
+
+export interface PongMessage {
+  type: 'PONG';
+  timestamp: number;
 }
 
 export type ControlMessage =
   | FileStartMessage
   | ChunkAckMessage
   | FileEndMessage
-  | CancelMessage
-  | ResumeMessage
-  | VerifyMessage
+  | FileCancelMessage
+  | FilePauseMessage
+  | FileResumeMessage
+  | FileVerifyMessage
   | SecurityVerifyMessage
   | TextTransferMessage
   | ClipboardSyncMessage
   | PeerMetadataMessage
-  | LiveTextOpMessage;
-
-// Metadata for binary chunk header prefix (16 bytes prefix on the "file" DataChannel)
-// Or chunk metadata sent with binary chunk
-export interface BinaryChunkHeader {
-  transferId: string;
-  index: number;
-  byteLength: number;
-  iv?: Uint8Array; // For E2EE AES-256-GCM
-}
-
-export interface AppMintlyMetadata {
-  isApp: boolean;
-  appName?: string;
-  appId?: string;
-  description?: string;
-  icon?: string;
-  version?: string;
-}
+  | PingMessage
+  | PongMessage;

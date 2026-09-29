@@ -1,13 +1,20 @@
 /**
  * NexDrop Receiver Engine.
- * Streams received chunks directly into FileSystemAccess / OPFS / safe fallback writer,
- * sends ACKs back over control channel, tracks progress, and verifies hashes.
+ * Streams received chunks into File System Access / OPFS / memory-blob
+ * writers, ACKs each chunk over the control channel, decrypts when E2EE is
+ * active, computes an INCREMENTAL SHA-256 while writing, and honestly
+ * verifies it against the sender's hash at FILE_END.
  */
 
-import { FileEndMessage, FileStartMessage } from '@/types/transfer';
+import {
+  FileEndMessage,
+  FilePauseMessage,
+  FileResumeMessage,
+  FileStartMessage,
+} from '@/types/transfer';
 import { createOptimalStorageWriter, StorageWriter } from './writer';
 import { decodeBinaryChunk } from './protocol';
-import { computeSha256 } from '@/lib/crypto';
+import { ChunkCipher, decryptChunk, IncrementalSha256 } from '@/lib/crypto';
 
 export interface ReceiverProgress {
   transferId: string;
@@ -18,7 +25,7 @@ export interface ReceiverProgress {
   percentage: number;
   speedBps: number;
   etaSeconds: number;
-  status: 'transferring' | 'completed' | 'cancelled' | 'failed';
+  status: 'transferring' | 'paused' | 'completed' | 'cancelled' | 'failed';
   blobUrl?: string;
   hashVerified?: boolean;
   writerType: 'filesystem' | 'opfs' | 'blob';
@@ -29,27 +36,32 @@ export interface ReceiverCallbacks {
   onCompleted: (info: ReceiverProgress) => void;
   onError: (transferId: string, error: string) => void;
   sendControlMessage: (msg: any) => boolean;
+  /** Lazily fetch the session AES-GCM cipher (established after pairing). */
+  getCipher?: () => ChunkCipher | null;
 }
 
 export class ReceiverEngine {
-  private transferId: string = '';
-  private name: string = '';
-  private size: number = 0;
-  private mime: string = '';
-  private totalChunks: number = 0;
-  private chunkSize: number = 64 * 1024;
+  private transferId = '';
+  private name = '';
+  private size = 0;
+  private mime = '';
+  private totalChunks = 0;
+  private chunkSize = 64 * 1024;
+  private e2eeEnabled = false;
 
   private writer: StorageWriter | null = null;
-  private receivedChunksCount: number = 0;
-  private bytesReceived: number = 0;
-  private startTime: number = 0;
-  private lastProgressEmit: number = 0;
-  private lastBytes: number = 0;
-  private lastTime: number = 0;
+  private hasher: IncrementalSha256 | null = null;
+  private receivedChunksCount = 0;
+  private bytesReceived = 0;
+  private startTime = 0;
+  private lastProgressEmit = 0;
+  private lastBytes = 0;
+  private lastTime = 0;
   private recentSpeeds: number[] = [];
 
-  private isCancelled: boolean = false;
-  private isCompleted: boolean = false;
+  private isPaused = false;
+  private isCancelled = false;
+  private isCompleted = false;
   private callbacks: ReceiverCallbacks;
 
   constructor(callbacks: ReceiverCallbacks) {
@@ -57,26 +69,39 @@ export class ReceiverEngine {
   }
 
   public async startTransfer(meta: FileStartMessage): Promise<void> {
+    if (this.writer && !this.isCompleted && !this.isCancelled) {
+      // A transfer is already active on this engine — refuse a second one.
+      this.callbacks.sendControlMessage({
+        type: 'CANCEL',
+        transferId: meta.transferId,
+        reason: 'Another transfer is already in progress',
+      });
+      return;
+    }
+
     this.transferId = meta.transferId;
     this.name = meta.name;
     this.size = meta.size;
     this.mime = meta.mime;
     this.totalChunks = meta.totalChunks;
     this.chunkSize = meta.chunkSize || 64 * 1024;
+    this.e2eeEnabled = !!meta.e2eeEnabled && !!this.callbacks.getCipher?.();
 
     this.bytesReceived = 0;
     this.receivedChunksCount = 0;
+    this.isPaused = false;
     this.isCancelled = false;
     this.isCompleted = false;
+    this.hasher = new IncrementalSha256();
     this.startTime = Date.now();
     this.lastTime = this.startTime;
     this.lastBytes = 0;
+    this.recentSpeeds = [];
 
-    // Initialize optimal storage writer
     try {
       this.writer = await createOptimalStorageWriter(this.name, this.mime, this.size, false);
     } catch (err: any) {
-      this.callbacks.onError(this.transferId, `Failed to initialize file storage: ${err.message || err}`);
+      this.callbacks.onError(this.transferId, `Failed to initialize file storage: ${err?.message || err}`);
       return;
     }
 
@@ -84,24 +109,32 @@ export class ReceiverEngine {
   }
 
   public async handleChunk(packetBuffer: ArrayBuffer): Promise<void> {
-    if (this.isCancelled || this.isCompleted || !this.writer) return;
+    if (this.isCancelled || this.isCompleted || !this.writer || this.isPaused) return;
 
     const decoded = decodeBinaryChunk(packetBuffer);
     if (!decoded) return;
 
     try {
-      await this.writer.writeChunk(decoded.payload, decoded.chunkIndex);
-      this.bytesReceived += decoded.payloadLength;
+      // Decrypt to plaintext before writing / hashing
+      let payload: ArrayBuffer = decoded.payload;
+      const cipher = this.callbacks.getCipher?.();
+      if (this.e2eeEnabled && cipher) {
+        payload = await decryptChunk(cipher, decoded.chunkIndex, decoded.payload);
+      }
+
+      await this.writer.writeChunk(payload, decoded.chunkIndex);
+
+      this.hasher?.update(new Uint8Array(payload));
+      this.bytesReceived += payload.byteLength;
       this.receivedChunksCount++;
 
-      // Send immediate ACK back to sender over control channel
       this.callbacks.sendControlMessage({
         type: 'ACK',
         transferId: this.transferId,
         index: decoded.chunkIndex,
       });
 
-      // Throttled progress updates (every 100ms)
+      // Real speed & ETA from actual counters, throttled to 100ms
       const now = Date.now();
       if (now - this.lastProgressEmit >= 100 || this.receivedChunksCount === this.totalChunks) {
         const timeDiff = Math.max(0.001, (now - this.lastTime) / 1000);
@@ -110,9 +143,10 @@ export class ReceiverEngine {
 
         this.recentSpeeds.push(currentSpeed);
         if (this.recentSpeeds.length > 5) this.recentSpeeds.shift();
-        const avgSpeed = this.recentSpeeds.reduce((a, b) => a + b, 0) / this.recentSpeeds.length;
+        const avgSpeed =
+          this.recentSpeeds.reduce((a, b) => a + b, 0) / this.recentSpeeds.length;
 
-        const remainingBytes = this.size - this.bytesReceived;
+        const remainingBytes = Math.max(0, this.size - this.bytesReceived);
         const eta = avgSpeed > 0 ? Math.ceil(remainingBytes / avgSpeed) : 0;
 
         this.emitProgress('transferring', avgSpeed, eta);
@@ -121,9 +155,23 @@ export class ReceiverEngine {
         this.lastTime = now;
       }
     } catch (err: any) {
-      console.error('Failed writing chunk:', err);
-      this.callbacks.onError(this.transferId, `Disk write failure: ${err.message || err}`);
+      console.error('Failed processing chunk:', err);
+      this.callbacks.onError(this.transferId, `Failed writing received data: ${err?.message || err}`);
     }
+  }
+
+  public handlePause(msg: FilePauseMessage): void {
+    if (msg.transferId !== this.transferId) return;
+    this.isPaused = true;
+    this.emitProgress('paused', 0, 0);
+  }
+
+  public handleResume(msg: FileResumeMessage): void {
+    if (msg.transferId !== this.transferId || !this.isPaused) return;
+    this.isPaused = false;
+    this.lastTime = Date.now();
+    this.lastBytes = this.bytesReceived;
+    this.emitProgress('transferring', 0, 0);
   }
 
   public async finishTransfer(endMsg: FileEndMessage): Promise<void> {
@@ -132,26 +180,32 @@ export class ReceiverEngine {
 
     try {
       const finishRes = await this.writer.finish();
-      let verified = false;
 
-      // Hash comparison if hash provided and blobUrl available
-      if (endMsg.hash && finishRes.blobUrl) {
+      // Honest integrity verification: compare the sender's hash with the
+      // hash we computed incrementally from the decrypted stream.
+      let verified: boolean | undefined = undefined;
+      if (endMsg.hash && this.hasher) {
         try {
-          const resp = await fetch(finishRes.blobUrl);
-          const buf = await resp.arrayBuffer();
-          const localHash = await computeSha256(buf);
+          const localHash = this.hasher.finalize();
           verified = localHash === endMsg.hash;
-        } catch (e) {}
-      } else if (endMsg.hash) {
-        verified = true; // Streaming writer confirmed byte count match
+          this.hasher = null;
+        } catch {
+          verified = false;
+        }
+        // Tell the sender the verification outcome
+        this.callbacks.sendControlMessage({
+          type: 'VERIFY',
+          transferId: this.transferId,
+          match: !!verified,
+        });
       }
 
       const info: ReceiverProgress = {
         transferId: this.transferId,
         name: this.name,
-        size: this.size,
+        size: this.bytesReceived,
         mime: this.mime,
-        bytesReceived: this.size,
+        bytesReceived: this.bytesReceived,
         percentage: 100,
         speedBps: 0,
         etaSeconds: 0,
@@ -163,11 +217,12 @@ export class ReceiverEngine {
 
       this.callbacks.onCompleted(info);
     } catch (err: any) {
-      this.callbacks.onError(this.transferId, `Failed to finalize file: ${err.message || err}`);
+      this.callbacks.onError(this.transferId, `Failed to finalize file: ${err?.message || err}`);
     }
   }
 
   public async cancel(reason: string = 'Cancelled'): Promise<void> {
+    if (this.isCompleted) return;
     this.isCancelled = true;
     if (this.writer) {
       await this.writer.abort();
@@ -181,7 +236,7 @@ export class ReceiverEngine {
   }
 
   private emitProgress(
-    status: 'transferring' | 'completed' | 'cancelled' | 'failed',
+    status: 'transferring' | 'paused' | 'completed' | 'cancelled' | 'failed',
     speedBps: number,
     etaSeconds: number
   ) {

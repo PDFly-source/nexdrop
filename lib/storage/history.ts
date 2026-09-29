@@ -48,6 +48,25 @@ export function addHistoryRecord(item: LocalHistoryItem): void {
   notify();
 }
 
+/**
+ * Update the verification status of a stored history record
+ * (sent files get their verdict when the receiver's VERIFY message arrives).
+ */
+export function updateHistoryVerification(transferId: string, verified: boolean): void {
+  const current = getHistorySnapshot();
+  memoryHistory = current.map((item) =>
+    item.id === transferId ? { ...item, hashVerified: verified } : item
+  );
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('nexdrop_history', JSON.stringify(memoryHistory));
+    } catch {
+      // Ignore quota errors
+    }
+  }
+  notify();
+}
+
 export function clearHistoryRecords(): void {
   memoryHistory = [];
   if (typeof window !== 'undefined') {

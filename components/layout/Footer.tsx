@@ -12,7 +12,7 @@ export const Footer: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold tracking-tight text-[#F5F7F8]">NexDrop</span>
               <span className="text-white/20">/</span>
-              <span className="text-xs text-[#9AA3AD]">AppMintly Ecosystem</span>
+              <span className="text-xs text-[#9AA3AD]">Local-First Utilities</span>
             </div>
             <p className="mt-1 text-xs text-[#9AA3AD]">
               Private. Direct. Fast. Browser-to-browser P2P file and text sharing.
@@ -45,7 +45,7 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="mt-8 pt-6 border-t border-white/[0.04] flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-[#9AA3AD]/70">
-          <p>© {new Date().getFullYear()} AppMintly. All rights reserved. Zero telemetry, zero tracking.</p>
+          <p>© {new Date().getFullYear()} NexDrop. Zero telemetry, zero tracking.</p>
           <p>Powered by WebRTC & Web Crypto API</p>
         </div>
       </div>

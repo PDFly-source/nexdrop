@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useSyncExternalStore, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { Navbar, WorkspaceTab } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Footer } from '@/components/layout/Footer';
@@ -12,11 +11,10 @@ import { ActiveTransferCard } from '@/components/transfer/ActiveTransferCard';
 import { ClipboardWorkspace } from '@/components/clipboard/ClipboardWorkspace';
 import { HistoryWorkspace } from '@/components/history/HistoryWorkspace';
 import { SettingsWorkspace } from '@/components/settings/SettingsWorkspace';
-import { QrScannerModal } from '@/components/pairing/QrScannerModal';
-import { PinEntryModal } from '@/components/pairing/PinEntryModal';
 import { SecurityVerifyModal } from '@/components/dialogs/SecurityVerifyModal';
 import { MediaPreviewModal } from '@/components/preview/MediaPreviewModal';
 import { useNexDropSession } from '@/hooks/useNexDropSession';
+import { updateHistoryVerification } from '@/lib/storage/history';
 import { useTransferEngine } from '@/hooks/useTransferEngine';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FileItem } from '@/types/transfer';
@@ -37,7 +35,6 @@ import Link from 'next/link';
 const emptySubscribe = () => () => {};
 
 function NexDropMainContent() {
-  const searchParams = useSearchParams();
   const autoJoinAttempted = useRef<boolean>(false);
 
   // Mounted status to guard against any client-server hydration mismatch
@@ -50,8 +47,6 @@ function NexDropMainContent() {
   const [mobileTransferMode, setMobileTransferMode] = useState<'send' | 'receive'>('send');
 
   // Modals state
-  const [isScannerOpen, setIsScannerOpen] = useState<boolean>(false);
-  const [isPinModalOpen, setIsPinModalOpen] = useState<boolean>(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
 
@@ -61,12 +56,12 @@ function NexDropMainContent() {
   // Master Session Hook
   const {
     sessionState,
-    sessionId,
-    pin,
-    qrPayload,
     peerInfo,
     sasCode,
     isSecurityVerified,
+    pairingError,
+    offerQr,
+    answerQr,
     deviceInfo,
     capabilities,
     textMessages,
@@ -76,9 +71,10 @@ function NexDropMainContent() {
     vibrationEnabled,
     rttMs,
     peerManager,
-    createSession,
-    joinByPin,
-    joinByQrPayload,
+    cipher,
+    createPairing,
+    submitAnswer,
+    joinWithOffer,
     verifySasSecurityCode,
     sendTextMessage,
     sendClipboardItem,
@@ -87,6 +83,7 @@ function NexDropMainContent() {
     toggleSound,
     toggleVibration,
     updateDeviceName,
+    setPairingError,
     disconnect,
     onFileChunkCallbackRef,
     onControlCallbackRef,
@@ -110,9 +107,10 @@ function NexDropMainContent() {
     isPeerConnected,
     onFileChunkCallbackRef,
     onControlCallbackRef,
+    cipher,
     (completedItem) => {
       addHistoryItem({
-        id: `hist_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        id: completedItem.transferId || `hist_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         name: completedItem.name,
         size: completedItem.size,
         direction: completedItem.direction,
@@ -120,24 +118,28 @@ function NexDropMainContent() {
         status: 'completed',
         hashVerified: completedItem.hashVerified,
       });
+    },
+    (transferId, match) => {
+      // Update the local history record when the receiver's VERIFY verdict arrives
+      try {
+        updateHistoryVerification(transferId, match);
+      } catch {
+        // history is best-effort local metadata
+      }
     }
   );
 
-  // Handle URL query parameters for auto-joining via PIN or QR session link
+  // Handle invite links: #join=<pairing code> loads the offer automatically
   useEffect(() => {
     if (autoJoinAttempted.current) return;
-    const urlPin = searchParams?.get('pin');
-    const urlSession = searchParams?.get('session');
-    const urlToken = searchParams?.get('token');
-
-    if (urlPin && urlPin.length === 6) {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    const match = hash && hash.startsWith('#join=') ? decodeURIComponent(hash.slice('#join='.length)) : null;
+    if (match) {
       autoJoinAttempted.current = true;
-      joinByPin(urlPin);
-    } else if (urlSession) {
-      autoJoinAttempted.current = true;
-      joinByQrPayload(JSON.stringify({ v: 1, app: 'nexdrop', session: urlSession, token: urlToken || '' }));
+      joinWithOffer(match);
     }
-  }, [searchParams, joinByPin, joinByQrPayload]);
+  }, [joinWithOffer]);
 
   return (
     <div className="min-h-screen bg-[#0B0D0F] text-[#F5F7F8] selection:bg-[#19C37D]/20 selection:text-[#3DD6A0] flex flex-col justify-between">
@@ -159,7 +161,7 @@ function NexDropMainContent() {
           onOpenConnectionDetails={() => setActiveTab('transfer')}
           onStartPairing={() => {
             setActiveTab('transfer');
-            createSession();
+            createPairing();
           }}
         />
 
@@ -169,16 +171,17 @@ function NexDropMainContent() {
             {/* Top Focused Connection Status Area */}
             <ConnectionStatusArea
               sessionState={sessionState}
-              sessionId={sessionId}
-              pin={pin}
-              qrPayload={qrPayload}
+              offerQr={offerQr}
+              answerQr={answerQr}
+              pairingError={pairingError}
               peerInfo={peerInfo}
               sasCode={sasCode}
               isSecurityVerified={isSecurityVerified}
               rttMs={rttMs}
-              onOpenScanner={() => setIsScannerOpen(true)}
-              onOpenPinModal={() => setIsPinModalOpen(true)}
-              onCreateSession={createSession}
+              onCreatePairing={() => void createPairing()}
+              onSubmitAnswer={submitAnswer}
+              onJoinWithOffer={joinWithOffer}
+              onClearPairingError={() => setPairingError(null)}
               onDisconnect={disconnect}
               onOpenSecurityModal={() => setIsSecurityModalOpen(true)}
             />
@@ -237,7 +240,7 @@ function NexDropMainContent() {
                   onFilesSelected={addFilesToSend}
                   onRemoveItem={removeSendItem}
                   onClearCompleted={clearCompletedSends}
-                  onPromptConnect={() => createSession()}
+                  onPromptConnect={() => setActiveTab('transfer')}
                 />
               </div>
 
@@ -264,7 +267,7 @@ function NexDropMainContent() {
                 <div>
                   <p className="font-medium text-[#F5F7F8]">Zero-Cloud P2P Architecture</p>
                   <p className="text-[11px] text-[#9AA3AD] mt-0.5">
-                    Signaling relays only temporary SDP &amp; ICE handshakes. File payloads and clipboard data travel strictly over encrypted WebRTC DataChannels.
+                    Pairing happens by QR or pasted codes between your devices only — there is no server at all. Files and text travel strictly over encrypted WebRTC DataChannels.
                   </p>
                 </div>
               </div>
@@ -300,7 +303,6 @@ function NexDropMainContent() {
             onSendClipboard={sendClipboardItem}
             onPromptConnect={() => {
               setActiveTab('transfer');
-              createSession();
             }}
           />
         )}
@@ -331,25 +333,10 @@ function NexDropMainContent() {
       </div>
 
       {/* Global Dialogs & Modals */}
-      <QrScannerModal
-        isOpen={isScannerOpen}
-        onClose={() => setIsScannerOpen(false)}
-        onScanSuccess={(payload) => {
-          joinByQrPayload(payload);
-        }}
-      />
-
-      <PinEntryModal
-        isOpen={isPinModalOpen}
-        onClose={() => setIsPinModalOpen(false)}
-        onJoinByPin={joinByPin}
-        onSwitchToScanner={() => setIsScannerOpen(true)}
-      />
-
       <SecurityVerifyModal
         isOpen={isSecurityModalOpen}
         onClose={() => setIsSecurityModalOpen(false)}
-        sasCode={sasCode}
+        sasCode={sasCode || '—'}
         isVerified={isSecurityVerified}
         peerName={peerInfo?.name}
         onConfirmVerification={(verified) => verifySasSecurityCode(verified)}

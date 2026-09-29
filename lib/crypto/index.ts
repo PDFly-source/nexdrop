@@ -1,165 +1,351 @@
 /**
  * Cryptographic utilities for NexDrop.
- * Ephemeral ECDH, AES-256-GCM with unique IV per chunk, SAS security codes,
- * incremental hashing, and filename sanitization.
+ *
+ * - Ephemeral ECDH (P-256) key agreement exchanged inside the QR/paste pairing payload
+ * - HKDF-SHA256 key derivation
+ * - AES-256-GCM application-layer chunk encryption with unique IVs (no reuse)
+ * - Incremental (streaming) SHA-256 for integrity verification of any file size
+ * - Short Authentication String (SAS) derived from the ACTUAL shared secret,
+ *   so it is cryptographically tied to this handshake.
+ *
+ * Only standard Web Crypto APIs are used. No custom algorithms, no hardcoded keys.
  */
 
-/**
- * Generate a 6-digit cryptographically secure PIN (100000 - 999999).
- */
-export function generateSixDigitPin(): string {
-  if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
-    const arr = new Uint32Array(1);
-    window.crypto.getRandomValues(arr);
-    const pin = (arr[0] % 900000) + 100000;
-    return pin.toString();
+// ---------------------------------------------------------------------------
+// Encoding helpers
+// ---------------------------------------------------------------------------
+
+export function bytesToBase64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
   }
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-/**
- * Generate an ephemeral ECDH keypair (P-256).
- */
-export async function generateEcdhKeyPair(): Promise<CryptoKeyPair | null> {
-  if (typeof window === 'undefined' || !window.crypto?.subtle) return null;
-  try {
-    return await window.crypto.subtle.generateKey(
-      { name: 'ECDH', namedCurve: 'P-256' },
-      true,
-      ['deriveKey']
-    );
-  } catch (err) {
-    console.warn('ECDH generation failed:', err);
-    return null;
+export function base64UrlToBytes(b64: string): Uint8Array {
+  const normalized = b64.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
   }
+  return bytes;
 }
 
-/**
- * Export public key to raw bytes.
- */
-export async function exportPublicKey(key: CryptoKey): Promise<ArrayBuffer> {
-  return await window.crypto.subtle.exportKey('raw', key);
+export function stringToBytes(text: string): Uint8Array<ArrayBuffer> {
+  const encoded = new TextEncoder().encode(text);
+  // Copy into a plain ArrayBuffer-backed view for strict BufferSource typing
+  const out = new Uint8Array(encoded.byteLength);
+  out.set(encoded);
+  return out;
 }
 
-/**
- * Import peer public key from raw bytes.
- */
-export async function importPeerPublicKey(rawKey: ArrayBuffer): Promise<CryptoKey> {
-  return await window.crypto.subtle.importKey(
-    'raw',
-    rawKey,
-    { name: 'ECDH', namedCurve: 'P-256' },
-    true,
-    []
+// ---------------------------------------------------------------------------
+// ECDH key agreement
+// ---------------------------------------------------------------------------
+
+export async function generateEcdhKeyPair(): Promise<CryptoKeyPair> {
+  return await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
+    'deriveBits',
+  ]);
+}
+
+export async function exportPublicKeyRaw(key: CryptoKey): Promise<ArrayBuffer> {
+  return await crypto.subtle.exportKey('raw', key);
+}
+
+export async function importPublicKeyRaw(raw: ArrayBuffer): Promise<CryptoKey> {
+  return await crypto.subtle.importKey('raw', raw, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+}
+
+/** Derive raw shared bits (32 bytes) via ECDH. */
+export async function deriveSharedBits(
+  privateKey: CryptoKey,
+  remotePublicKey: CryptoKey
+): Promise<ArrayBuffer> {
+  return await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: remotePublicKey },
+    privateKey,
+    256
   );
 }
 
-/**
- * Derive AES-256-GCM key from local private key and remote public key.
- */
-export async function deriveSharedAesKey(
-  privateKey: CryptoKey,
-  remotePublicKey: CryptoKey
-): Promise<CryptoKey | null> {
-  if (typeof window === 'undefined' || !window.crypto?.subtle) return null;
-  try {
-    return await window.crypto.subtle.deriveKey(
-      { name: 'ECDH', public: remotePublicKey },
-      privateKey,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['encrypt', 'decrypt']
-    );
-  } catch (err) {
-    console.error('Failed to derive shared AES key:', err);
-    return null;
-  }
+// ---------------------------------------------------------------------------
+// HKDF-SHA256 (implemented with Web Crypto Hkdf support)
+// ---------------------------------------------------------------------------
+
+async function hkdf(master: ArrayBuffer, info: string, lengthBytes: number): Promise<ArrayBuffer> {
+  const keyMaterial = await crypto.subtle.importKey('raw', master, 'HKDF', false, ['deriveBits']);
+  return await crypto.subtle.deriveBits(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      // No salt: the ECDH shared secret already has full entropy.
+      salt: new Uint8Array(new ArrayBuffer(0)),
+      info: stringToBytes(info),
+    },
+    keyMaterial,
+    lengthBytes * 8
+  );
+}
+
+/** Derive the AES-256-GCM session key used for app-layer chunk encryption. */
+export async function deriveSessionAesKey(
+  sharedBits: ArrayBuffer
+): Promise<CryptoKey> {
+  const raw = await hkdf(sharedBits, 'nexdrop-e2ee-v1', 32);
+  return await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [
+    'encrypt',
+    'decrypt',
+  ]);
 }
 
 /**
- * Generate unique 12-byte IV for a chunk using chunk sequence index and random salt.
- * Guarantees zero IV reuse.
+ * Derive a 6-digit Short Authentication String from the actual ECDH shared
+ * secret. Both devices compute the same code; it is a real verification
+ * mechanism against a manipulated pairing payload exchange.
  */
-export function createChunkIv(chunkIndex: number, sessionSalt: Uint8Array): Uint8Array {
+export async function deriveSasCode(sharedBits: ArrayBuffer): Promise<string> {
+  const bytes = new Uint8Array(await hkdf(sharedBits, 'nexdrop-sas-v1', 4));
+  const view = new DataView(bytes.buffer);
+  const num = view.getUint32(0) % 1000000;
+  const code = num.toString().padStart(6, '0');
+  return `${code.slice(0, 3)} ${code.slice(3)}`;
+}
+
+// ---------------------------------------------------------------------------
+// AES-256-GCM chunk encryption
+// ---------------------------------------------------------------------------
+
+export interface ChunkCipher {
+  key: CryptoKey;
+  /** 4-byte random session salt — first part of every IV. */
+  salt: Uint8Array;
+}
+
+/**
+ * Derive the 4-byte session IV salt from the ECDH shared secret.
+ * CRITICAL: both peers must derive the SAME salt deterministically —
+ * random per-device salts would break cross-decryption (unique IVs come
+ * from the per-chunk counter, not from the salt).
+ */
+export async function deriveSessionCipherSalt(sharedBits: ArrayBuffer): Promise<Uint8Array> {
+  const saltBits = await hkdf(sharedBits, 'nexdrop-gcm-iv-salt', 4);
+  return new Uint8Array(saltBits.slice(0, 4));
+}
+
+export async function createChunkCipher(key: CryptoKey, salt: Uint8Array): Promise<ChunkCipher> {
+  return { key, salt };
+}
+
+/**
+ * Build a unique 12-byte GCM IV for a chunk index: 4-byte session salt +
+ * 8-byte big-endian counter. Counter is the chunk index, so no IV is ever
+ * reused within a session.
+ */
+export function chunkIv(cipher: ChunkCipher, chunkIndex: number): Uint8Array {
   const iv = new Uint8Array(12);
-  // First 4 bytes: random session salt prefix
-  iv.set(sessionSalt.subarray(0, 4), 0);
-  // Next 8 bytes: big-endian 64-bit integer of chunkIndex
+  iv.set(cipher.salt, 0);
   const view = new DataView(iv.buffer);
   view.setBigUint64(4, BigInt(chunkIndex), false);
   return iv;
 }
 
-/**
- * Encrypt a chunk with AES-256-GCM.
- */
 export async function encryptChunk(
-  key: CryptoKey,
-  iv: Uint8Array,
+  cipher: ChunkCipher,
+  chunkIndex: number,
   data: ArrayBuffer
 ): Promise<ArrayBuffer> {
-  return await window.crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: iv as unknown as BufferSource },
-    key,
+  return await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: chunkIv(cipher, chunkIndex) as unknown as BufferSource },
+    cipher.key,
     data
   );
 }
 
-/**
- * Decrypt a chunk with AES-256-GCM.
- */
 export async function decryptChunk(
-  key: CryptoKey,
-  iv: Uint8Array,
-  encryptedData: ArrayBuffer
+  cipher: ChunkCipher,
+  chunkIndex: number,
+  data: ArrayBuffer
 ): Promise<ArrayBuffer> {
-  return await window.crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv as unknown as BufferSource },
-    key,
-    encryptedData
+  return await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: chunkIv(cipher, chunkIndex) as unknown as BufferSource },
+    cipher.key,
+    data
   );
 }
 
-/**
- * Compute SHA-256 hash of an ArrayBuffer as hex string.
- */
-export async function computeSha256(data: ArrayBuffer): Promise<string> {
-  if (typeof window === 'undefined' || !window.crypto?.subtle) return 'verification-unavailable';
-  const digest = await window.crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(digest));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+// ---------------------------------------------------------------------------
+// Incremental SHA-256 (streaming — bounded memory for any file size)
+// ---------------------------------------------------------------------------
+
+const K = [
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+];
+
+function rotr(x: number, n: number): number {
+  return (x >>> n) | (x << (32 - n));
 }
 
 /**
- * Derive a 6-digit Short Authentication String (SAS) code from session info or public key bytes.
- * Example display: "482 913"
+ * Streaming SHA-256. Feed chunks of any size with update(), read the hex
+ * digest with finalize(). Memory use is O(1) regardless of file size.
  */
-export async function deriveSasCode(combinedMaterial: string): Promise<string> {
-  if (typeof window === 'undefined' || !window.crypto?.subtle) {
-    return '000 000';
+export class IncrementalSha256 {
+  private h = new Uint32Array([
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+  ]);
+  private buffer = new Uint8Array(64);
+  private bufferLength = 0;
+  private bytesProcessed = 0; // total bytes (use BigInt-safe number up to 2^53)
+  private finalized = false;
+
+  update(data: Uint8Array): void {
+    if (this.finalized) throw new Error('SHA-256 already finalized');
+
+    let offset = 0;
+    this.bytesProcessed += data.length;
+
+    // Fill partial buffer first
+    if (this.bufferLength > 0) {
+      const need = 64 - this.bufferLength;
+      const take = Math.min(need, data.length);
+      this.buffer.set(data.subarray(0, take), this.bufferLength);
+      this.bufferLength += take;
+      offset = take;
+      if (this.bufferLength === 64) {
+        this.processBlock(this.buffer, 0);
+        this.bufferLength = 0;
+      }
+    }
+
+    // Process full 64-byte blocks directly from the input
+    while (offset + 64 <= data.length) {
+      this.processBlock(data, offset);
+      offset += 64;
+    }
+
+    // Stash remainder
+    if (offset < data.length) {
+      this.buffer.set(data.subarray(offset), 0);
+      this.bufferLength = data.length - offset;
+    }
   }
-  const encoder = new TextEncoder();
-  const digest = await window.crypto.subtle.digest('SHA-256', encoder.encode(combinedMaterial));
-  const view = new DataView(digest);
-  const num = (view.getUint32(0, false) % 900000) + 100000;
-  const str = num.toString();
-  return `${str.slice(0, 3)} ${str.slice(3)}`;
+
+  private processBlock(bytes: Uint8Array, offset: number): void {
+    const w = new Uint32Array(64);
+    for (let i = 0; i < 16; i++) {
+      w[i] =
+        (bytes[offset + i * 4] << 24) |
+        (bytes[offset + i * 4 + 1] << 16) |
+        (bytes[offset + i * 4 + 2] << 8) |
+        bytes[offset + i * 4 + 3];
+    }
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+
+    let [a, b, c, d, e, f, g, h] = this.h;
+
+    for (let i = 0; i < 64; i++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (h + S1 + ch + K[i] + w[i]) | 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) | 0;
+
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temp1) | 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temp1 + temp2) | 0;
+    }
+
+    this.h[0] = (this.h[0] + a) | 0;
+    this.h[1] = (this.h[1] + b) | 0;
+    this.h[2] = (this.h[2] + c) | 0;
+    this.h[3] = (this.h[3] + d) | 0;
+    this.h[4] = (this.h[4] + e) | 0;
+    this.h[5] = (this.h[5] + f) | 0;
+    this.h[6] = (this.h[6] + g) | 0;
+    this.h[7] = (this.h[7] + h) | 0;
+  }
+
+  finalize(): string {
+    if (this.finalized) throw new Error('SHA-256 already finalized');
+
+    const bitLengthHi = Math.floor(this.bytesProcessed / 0x20000000); // bytes * 8 >> 32
+    const bitLengthLo = (this.bytesProcessed % 0x20000000) * 8;
+
+    // 0x80, zeros, then 8-byte big-endian bit length — sized so that
+    // bufferLength + padLen + 8 lands exactly on a 64-byte block boundary.
+    const padLen = (this.bufferLength < 56 ? 56 : 120) - this.bufferLength;
+    const tail = new Uint8Array(padLen + 8);
+    tail[0] = 0x80;
+    const dv = new DataView(tail.buffer);
+    dv.setUint32(padLen, bitLengthHi, false);
+    dv.setUint32(padLen + 4, bitLengthLo >>> 0, false);
+
+    this.update(tail);
+    // Seal only after the padding update — update() refuses calls once sealed.
+    this.finalized = true;
+
+    if (this.bufferLength !== 0) {
+      throw new Error('SHA-256 padding failed');
+    }
+
+    return Array.from(this.h)
+      .map((x) => (x >>> 0).toString(16).padStart(8, '0'))
+      .join('');
+  }
 }
 
-/**
- * Sanitize filename against directory traversal and dangerous characters.
- */
-export function sanitizeFilename(raw: string): string {
-  if (!raw || typeof raw !== 'string') return 'unnamed-file';
-  // Strip null bytes, paths, and control characters
-  let clean = raw.replace(/[\0\x00-\x1f\x7f-\x9f\\/]/g, '_');
-  clean = clean.replace(/\.{2,}/g, '.'); // eliminate ../
-  clean = clean.trim();
-  if (!clean || clean === '.') return 'download';
-  // Truncate to safe length
-  if (clean.length > 255) {
-    const ext = clean.lastIndexOf('.') !== -1 ? clean.slice(clean.lastIndexOf('.')) : '';
-    clean = clean.slice(0, 255 - ext.length) + ext;
+/** SHA-256 of an ArrayBuffer as hex (one-shot, for small payloads). */
+export async function computeSha256Hex(data: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** SHA-256 of a string, returned base64url (for pairing ack fields). */
+export async function computeSha256Base64Url(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', stringToBytes(text));
+  return bytesToBase64Url(new Uint8Array(digest));
+}
+
+// ---------------------------------------------------------------------------
+// Misc
+// ---------------------------------------------------------------------------
+
+/** Generate a random ID. */
+export function randomId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
   }
-  return clean;
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** Sanitize a filename for safe local storage. */
+export function sanitizeFilename(name: string): string {
+  return name.replace(/[/\\?%*:|"<>\x00-\x1f]/g, '_').slice(0, 180) || 'nexdrop-file';
 }

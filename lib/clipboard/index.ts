@@ -3,10 +3,8 @@
  * Supports:
  * - Direct clipboard copy & read with fallback
  * - Smart content categorization (code, URL, JSON, plain text)
- * - AppMintly smart launcher detection
  */
 
-import { AppMintlyMetadata } from '@/types/transfer';
 
 export async function copyToClipboard(text: string): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -52,7 +50,6 @@ export async function readFromClipboard(): Promise<string | null> {
 export function detectContentCategory(text: string): {
   category: 'plain' | 'code' | 'url' | 'json';
   language?: string;
-  appMintlyMeta?: AppMintlyMetadata;
 } {
   const trimmed = text.trim();
 
@@ -61,7 +58,7 @@ export function detectContentCategory(text: string): {
     return { category: 'url' };
   }
 
-  // 2. JSON & AppMintly metadata check
+  // 2. JSON check
   if (
     (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
     (trimmed.startsWith('[') && trimmed.endsWith(']'))
@@ -69,19 +66,6 @@ export function detectContentCategory(text: string): {
     try {
       const parsed = JSON.parse(trimmed);
       if (parsed && typeof parsed === 'object') {
-        if (parsed.appmintly || parsed._appmintly || parsed.app === 'nexdrop' || parsed.appType === 'appmintly-app') {
-          return {
-            category: 'json',
-            language: 'json',
-            appMintlyMeta: {
-              isApp: true,
-              appName: parsed.name || parsed.appName || 'AppMintly App',
-              description: parsed.description || 'PWA Application package',
-              appId: parsed.id || parsed.appId,
-              version: parsed.version || '1.0.0',
-            },
-          };
-        }
         return { category: 'json', language: 'json' };
       }
     } catch (e) {
