@@ -20,6 +20,7 @@ import {
 import { LocalHistoryItem } from '@/types/transfer';
 import { SessionState } from '@/types/session';
 import { formatBytes, formatTimestamp } from '@/lib/utils/format';
+import { Reveal } from '@/components/ui/Reveal';
 
 interface HomeWorkspaceProps {
   isConnected: boolean;
@@ -108,7 +109,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
         <div className="relative">
           {/* Brand + live status */}
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[10px] font-semibold tracking-[0.22em] uppercase text-[#00F5A0]">
+            <p className="text-[10px] font-semibold tracking-[0.22em] uppercase text-[#00F5A0] animate-in fade-in duration-300">
               Private · Direct · Fast
             </p>
             <span
@@ -127,30 +128,40 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
             </span>
           </div>
 
-          <h2 className="mt-3 text-2xl sm:text-3xl font-semibold tracking-tight text-[#F5F7F8] text-balance">
+          <h2 className="mt-3 text-2xl sm:text-3xl font-semibold tracking-tight text-[#F5F7F8] text-balance animate-in fade-in slide-in-from-bottom-2 duration-500">
             Send directly.
             <br />
             <span className="text-[#9AA7AE]">Keep it private.</span>
           </h2>
-          <p className="mt-2 text-xs sm:text-sm text-[#9AA7AE] max-w-md leading-relaxed">
+          <p className="mt-2 text-xs sm:text-sm text-[#9AA7AE] max-w-md leading-relaxed animate-in fade-in duration-700">
             Share files &amp; text directly between your devices. Private by design — no cloud file uploads.
           </p>
 
-          {/* Primary actions */}
-          <div className="mt-6 grid grid-cols-2 gap-3 max-w-md">
+          {/* Primary actions — the two strongest actions on Home */}
+          <div className="mt-6 grid grid-cols-2 gap-3 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-500">
             <button
               onClick={() => openPicker('')}
-              className="group flex items-center justify-center gap-2 rounded-xl bg-[#00F5A0] px-5 py-3.5 text-sm font-semibold text-[#070A0D] hover:bg-[#00D9B5] active:scale-[0.98] transition-all min-h-[44px] shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F12]"
+              className="nd-press group flex flex-col items-center justify-center gap-1 rounded-xl bg-[#00F5A0] px-5 py-3.5 text-sm font-semibold text-[#070A0D] hover:bg-[#00D9B5] transition-colors min-h-[56px] shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F12]"
             >
-              <ArrowUpFromLine className="w-4 h-4" aria-hidden="true" />
-              <span>Send</span>
+              <span className="flex items-center gap-2">
+                <ArrowUpFromLine className="w-4 h-4" aria-hidden="true" />
+                <span>Send</span>
+              </span>
+              <span className="text-[10px] font-medium text-[#070A0D]/70">
+                Pick files &amp; send to peer
+              </span>
             </button>
             <button
               onClick={() => onNavigate('devices')}
-              className="group flex items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-[#11171B] px-5 py-3.5 text-sm font-semibold text-[#F5F7F8] hover:bg-[#172027] active:scale-[0.98] transition-all min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F12]"
+              className="nd-press group flex flex-col items-center justify-center gap-1 rounded-xl border border-white/[0.12] bg-[#11171B] px-5 py-3.5 text-sm font-semibold text-[#F5F7F8] hover:bg-[#172027] transition-colors min-h-[56px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F12]"
             >
-              <ArrowDownToLine className="w-4 h-4 text-[#9AA7AE]" aria-hidden="true" />
-              <span>Receive</span>
+              <span className="flex items-center gap-2">
+                <ArrowDownToLine className="w-4 h-4 text-[#00D9B5]" aria-hidden="true" />
+                <span>Receive</span>
+              </span>
+              <span className="text-[10px] font-medium text-[#9AA7AE]">
+                Connect via QR pairing
+              </span>
             </button>
           </div>
 
@@ -158,7 +169,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
           {!isPaired && (
             <button
               onClick={() => onNavigate('devices')}
-              className="mt-4 inline-flex items-center gap-2 text-xs text-[#00D9B5] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] rounded px-1"
+              className="mt-4 inline-flex items-center gap-2 text-xs text-[#00D9B5] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] rounded px-1 animate-in fade-in duration-700"
             >
               <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Connect a device — one-scan QR pairing</span>
@@ -186,13 +197,14 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-          {QUICK_ACTIONS.map((action) => {
+          {QUICK_ACTIONS.map((action, index) => {
             const Icon = action.icon;
             return (
               <button
                 key={action.id}
                 onClick={() => openPicker(action.accept)}
-                className="flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-[#11171B] px-2 py-4 text-center hover:bg-[#172027] hover:border-white/[0.12] active:scale-[0.97] transition-all min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+                style={{ animationDelay: `${index * 40}ms` }}
+                className="nd-press flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-[#11171B] px-2 py-4 text-center hover:bg-[#172027] hover:border-white/[0.12] transition-colors min-h-[44px] animate-in fade-in slide-in-from-bottom-2 duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0B0F12] border border-white/[0.06] text-[#00D9B5]">
                   <Icon className="w-4 h-4" aria-hidden="true" />
@@ -205,7 +217,8 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
           {/* Text */}
           <button
             onClick={onOpenText}
-            className="flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-[#11171B] px-2 py-4 text-center hover:bg-[#172027] hover:border-white/[0.12] active:scale-[0.97] transition-all min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+            style={{ animationDelay: '160ms' }}
+            className="nd-press flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-[#11171B] px-2 py-4 text-center hover:bg-[#172027] hover:border-white/[0.12] transition-colors min-h-[44px] animate-in fade-in slide-in-from-bottom-2 duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0B0F12] border border-white/[0.06] text-[#39D9FF]">
               <FileText className="w-4 h-4" aria-hidden="true" />
@@ -216,7 +229,8 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
           {/* Clipboard */}
           <button
             onClick={onOpenText}
-            className="flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-[#11171B] px-2 py-4 text-center hover:bg-[#172027] hover:border-white/[0.12] active:scale-[0.97] transition-all min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+            style={{ animationDelay: '200ms' }}
+            className="nd-press flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-[#11171B] px-2 py-4 text-center hover:bg-[#172027] hover:border-white/[0.12] transition-colors min-h-[44px] animate-in fade-in slide-in-from-bottom-2 duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0B0F12] border border-white/[0.06] text-[#A78BFA]">
               <ClipboardList className="w-4 h-4" aria-hidden="true" />
@@ -245,6 +259,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
           )}
         </div>
 
+        <Reveal>
         <div className="rounded-2xl border border-white/[0.08] bg-[#11171B]">
           {recentItems.length === 0 ? (
             <div className="py-10 px-5 text-center">
@@ -253,6 +268,13 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
               <p className="text-[11px] mt-1 text-[#9AA7AE]/80">
                 When you send or receive files, they appear here — stored only on this device.
               </p>
+              <button
+                onClick={() => openPicker('')}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#00F5A0] px-4 py-2 text-xs font-semibold text-[#070A0D] hover:bg-[#00D9B5] transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+              >
+                <ArrowUpFromLine className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Send your first file</span>
+              </button>
             </div>
           ) : (
             <ul className="divide-y divide-white/[0.04]">
@@ -307,6 +329,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
             </ul>
           )}
         </div>
+        </Reveal>
       </section>
     </div>
   );

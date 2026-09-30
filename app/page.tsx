@@ -207,7 +207,7 @@ function NexDropMainContent() {
           }}
         />
 
-        <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8 sm:px-6">
+        <main key={activeTab} className="mx-auto max-w-6xl px-4 py-6 sm:py-8 sm:px-6 animate-in fade-in duration-200">
           <h1 className="sr-only">NexDrop — peer-to-peer file and text transfer</h1>
 
           {/* LAYER 2 — HOME DASHBOARD (command center) */}

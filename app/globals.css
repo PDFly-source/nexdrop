@@ -46,6 +46,84 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 
+/* ------------------------------------------------------------------ */
+/* Motion system — tiny, dependency-free entrance animations.          */
+/* Implements the subset of tailwindcss-animate utilities the app      */
+/* uses (animate-in, fade-in, slide-in-from-*, zoom-in), so no         */
+/* animation library is shipped. Duration follows the standard         */
+/* `duration-*` utilities via --tw-duration.                           */
+/* ------------------------------------------------------------------ */
+
+@keyframes nd-enter {
+  from {
+    opacity: var(--nd-enter-opacity, 1);
+    transform: translate3d(var(--nd-enter-x, 0), var(--nd-enter-y, 0), 0)
+      scale(var(--nd-enter-scale, 1));
+  }
+}
+
+.animate-in {
+  animation-name: nd-enter;
+  animation-duration: var(--tw-duration, 150ms);
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.21, 1.02, 0.73, 1);
+}
+
+.fade-in {
+  --nd-enter-opacity: 0;
+}
+
+.fade-in-50 {
+  --nd-enter-opacity: 0.5;
+}
+
+.slide-in-from-bottom-2 {
+  --nd-enter-y: 0.5rem;
+}
+
+.slide-in-from-bottom-4 {
+  --nd-enter-y: 1rem;
+}
+
+.slide-in-from-bottom-6 {
+  --nd-enter-y: 1.5rem;
+}
+
+.slide-in-from-top-2 {
+  --nd-enter-y: -0.5rem;
+}
+
+.zoom-in {
+  --nd-enter-scale: 0.95;
+}
+
+/* Card scroll reveal — progressive enhancement only; the Intersection
+   Observer hook flips .nd-reveal-visible. Without JS the element stays
+   fully visible because the no-JS build has no observer (the hook sets
+   visible on mount when IO is unavailable). */
+.nd-reveal {
+  opacity: 0;
+  transform: translate3d(0, 0.5rem, 0);
+  transition:
+    opacity 0.4s cubic-bezier(0.21, 1.02, 0.73, 1),
+    transform 0.4s cubic-bezier(0.21, 1.02, 0.73, 1);
+  will-change: opacity, transform;
+}
+
+.nd-reveal-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Shared tactile press feedback for primary/secondary buttons */
+.nd-press {
+  transition: transform 0.15s cubic-bezier(0.21, 1.02, 0.73, 1);
+}
+
+.nd-press:active {
+  transform: scale(0.97);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -54,5 +132,9 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  .nd-reveal {
+    opacity: 1;
+    transform: none;
   }
 }

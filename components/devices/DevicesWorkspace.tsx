@@ -84,9 +84,11 @@ export const DevicesWorkspace: React.FC<DevicesWorkspaceProps> = (props) => {
         disconnect. It is reused unchanged — the engine stays the source
         of truth.
       */}
-      <ConnectionStatusArea
-        {...connectionProps}
-      />
+      {/* Keyed by session state: each state-machine transition replays one
+          subtle 200ms fade — the pairing state change is felt, not flashed. */}
+      <div key={props.sessionState} className="animate-in fade-in duration-200">
+        <ConnectionStatusArea {...connectionProps} />
+      </div>
     </div>
   );
 };

@@ -8,6 +8,7 @@ import { IncomingTransfersCard } from '@/components/transfer/IncomingTransfersCa
 import { ActiveTransferCard } from '@/components/transfer/ActiveTransferCard';
 import { TransferCompleteBanner } from '@/components/transfer/TransferCompleteBanner';
 import { HistoryWorkspace } from '@/components/history/HistoryWorkspace';
+import { Reveal } from '@/components/ui/Reveal';
 import { FileItem, LocalHistoryItem } from '@/types/transfer';
 
 interface ActiveTransferSummary {
@@ -183,11 +184,13 @@ export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
       </div>
 
       {/* Transfer history with status filters (Active state is the card above) */}
-      <HistoryWorkspace
-        historyItems={historyItems}
-        onClearHistory={onClearHistory}
-        onNavigateTransfer={onPromptConnect}
-      />
+      <Reveal>
+        <HistoryWorkspace
+          historyItems={historyItems}
+          onClearHistory={onClearHistory}
+          onNavigateTransfer={onPromptConnect}
+        />
+      </Reveal>
     </div>
   );
 };
