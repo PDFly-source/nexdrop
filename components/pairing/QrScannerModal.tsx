@@ -137,7 +137,11 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
 
         if (code && code.data) {
           handleScannedText(code.data);
-          if (code.data.startsWith('NDP1.') || code.data.startsWith('NDP2.')) {
+          if (
+            code.data.startsWith('NDP1.') ||
+            code.data.startsWith('NDP2.') ||
+            code.data.startsWith('NDPS1.')
+          ) {
             return; // complete single QR — stop the camera immediately
           }
           // multi-segment: keep the camera running for the next segment

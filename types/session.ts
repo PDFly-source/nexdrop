@@ -65,4 +65,8 @@ export type PairingError =
   | 'wrong-session'
   | 'incomplete'
   | 'timeout'
-  | 'unsupported-browser';
+  | 'unsupported-browser'
+  | 'declined'
+  | 'signal-unavailable'
+  | 'signal-network'
+  | 'already-joined';

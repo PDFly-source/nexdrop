@@ -194,22 +194,19 @@ async function main() {
   // ---------------------------------------------------------------------
   // A: create pairing — real RTCPeerConnection + SDP offer + QR
   // ---------------------------------------------------------------------
-  console.log('[two-device e2e] A: create pairing (real offer)');
+  console.log('[two-device e2e] A: create pairing (ONE-scan automatic, real signaling service)');
   await pageA.getByRole('button', { name: /create pairing/i }).first().click();
-  await pageA.waitForSelector('img[alt*="QR code"]', { timeout: 20000 });
+  await pageA.waitForSelector('img[alt*="QR code"]', { timeout: 30000 });
   const offerSegments = await decodeAllQrSegments(pageA);
-  check(offerSegments.every((s) => s.startsWith('NDQS2.') || s.startsWith('NDQS.') || s.startsWith('NDP1.') || s.startsWith('NDP2.')),
-    'A rendered real pairing QR image(s) decodable by jsQR',
-    JSON.stringify(offerSegments.map((s) => s.slice(0, 12)))
+  check(offerSegments.length === 1, 'A shows exactly ONE QR — never a carousel');
+  check(offerSegments[0].startsWith('NDPS1.'),
+    'the ONE QR is an NDPS1 automatic-pairing payload', offerSegments[0].slice(0, 16));
+  check(
+    !/candidate|o=[0-9]|BEGIN/.test(offerSegments[0]),
+    'the QR carries NO SDP / ICE / key material — only session id + single-use token + endpoint'
   );
-  if (offerSegments[0].startsWith('NDP2.')) {
-    check(offerSegments.length === 1,
-      'OFFER FITS ONE COMPACT QR (NDP2) — no carousel');
-  } else {
-    // No-candidate environment (sandbox/CI without UDP): the packer honestly
-    // falls back to v1 JSON. On real devices this branch should not fire.
-    check(true, `offer used the v1 fallback format (${offerSegments.length} segments)`);
-  }
+  const scanAnswerBtn = await pageA.getByRole('button', { name: /scan answer qr/i }).isVisible().catch(() => false);
+  check(!scanAnswerBtn, 'A NEVER shows a "Scan answer QR" control in the primary flow');
 
   // ---------------------------------------------------------------------
   // A: Download QR fallback
@@ -222,56 +219,35 @@ async function main() {
   // ---------------------------------------------------------------------
   // B: join with A's real QR payload (multi-segment reassembly via paste)
   // ---------------------------------------------------------------------
-  console.log('[two-device e2e] B: join pairing using the decoded QR segments');
+  console.log('[two-device e2e] B: join pairing with the ONE decoded QR payload');
   await pageB.getByRole('button', { name: /join pairing/i }).first().click();
   const noRtcBeforeAccept = await pageB.evaluate(
     () => Object.keys(window).filter((k) => k.startsWith('nexdrop') || k.startsWith('pc')).length === 0
   );
   check(noRtcBeforeAccept, 'no session material exists before the user taps Accept');
-  // feed segment 1 twice to prove duplicate tolerance
-  if (offerSegments.length > 1) {
-    await submitViaPaste(pageB, [offerSegments[0]]);
-    await submitViaPaste(pageB, offerSegments);
-    check(true, 'duplicate QR segment tolerated by reassembler');
-  } else {
-    await submitViaPaste(pageB, offerSegments);
-  }
+  await submitViaPaste(pageB, offerSegments);
 
-  // Connection request screen — real user consent before WebRTC starts
-  await pageB.waitForSelector('text=NexDrop wants to connect', { timeout: 15000 });
-  check(true, 'B shows a connection request screen after scanning');
-  const deviceRow = await pageB.locator('text=A nearby device, NexDrop ·').first().isVisible().catch(() => false);
-  check(deviceRow || true, 'connection request shows the peer device label when available');
+  // Connection request screen — real user consent before WebRTC starts.
+  // The sender's device name arrives from the REAL signaling service.
+  await pageB.waitForSelector('text=NexDrop wants to connect', { timeout: 20000 });
+  check(true, 'B shows the connection request screen after ONE scan');
+  const consentText = await pageB.locator('dl').first().textContent();
+  check(/NexDrop/.test(consentText || ''), 'consent screen shows the sender device name (from the pairing service)');
 
-  console.log('[two-device e2e] B: Accept & Connect');
+  console.log('[two-device e2e] B: Accept → connection completes AUTOMATICALLY');
   await pageB.getByRole('button', { name: /accept & connect/i }).click();
-
-  console.log('[two-device e2e] B: real answer generated');
-  await pageB.waitForSelector('text=Return this connection code to the sender', { timeout: 30000 });
-  const answerSegments = await decodeAllQrSegments(pageB);
-  check(answerSegments.every((s) => s.startsWith('NDQS2.') || s.startsWith('NDQS.') || s.startsWith('NDP1.') || s.startsWith('NDP2.')),
-    'B rendered real answer QR image(s) decodable by jsQR');
-  if (answerSegments[0].startsWith('NDP2.')) {
-    check(answerSegments.length === 1,
-      'ANSWER FITS ONE COMPACT QR (NDP2) — no carousel');
-  } else {
-    check(true, `answer used the v1 fallback format (${answerSegments.length} segments)`);
-  }
+  await pageB.waitForSelector('text=Establishing the secure peer-to-peer link', { timeout: 20000 }).catch(() => {});
+  const bNeverAnswerQr = !(await pageB
+    .waitForSelector('text=Return this connection code to the sender', { timeout: 3000 })
+    .catch(() => false));
+  check(bNeverAnswerQr, 'B NEVER shows an answer QR in the primary flow');
 
   // ---------------------------------------------------------------------
-  // A: accept B's real answer → real connection
-  // ---------------------------------------------------------------------
-  console.log('[two-device e2e] A: submit the real answer QR segments');
-  await pageA.getByRole('button', { name: /scan answer qr/i }).click();
-  await submitViaPaste(pageA, answerSegments);
-
-  if (!REQUIRE_CONNECTION) {
-    skip('connection, SAS, text, file transfer',
-      'sandbox has no ICE path (NEXDROP_E2E_REQUIRE_CONNECTION=0) — validated through real SDP exchange');
-    // ---------------------------------------------------------------------
   // NEGATIVE PATHS: Decline, invalid QR, stale sessions, repeated pairing
+  // (extracted: runs in BOTH modes with fresh contexts C and D)
   // ---------------------------------------------------------------------
-  try {
+  const runNegativePaths = async () => {
+    try {
     console.log('[two-device e2e] negative paths: fresh contexts C and D');
     const ctxC = await browser.newContext();
     const ctxD = await browser.newContext({ ...devices['Pixel 7'] });
@@ -295,30 +271,35 @@ async function main() {
     await pageD.waitForSelector('text=Join pairing', { timeout: 10000 });
     check(true, 'Start over returns the joiner to a clean state');
 
-    // Decline: D scans C's real offer, then DECLINES — nothing must survive
+    // Decline: D scans C's real NDPS1 offer, then DECLINES — nothing survives
     console.log('[two-device e2e] D: decline C\'s real offer');
     await pageC.getByRole('button', { name: /create pairing/i }).first().click();
-    await pageC.waitForSelector('img[alt*="QR code"]', { timeout: 20000 });
+    await pageC.waitForSelector('img[alt*="QR code"]', { timeout: 30000 });
     const cOffer = await decodeAllQrSegments(pageC);
-    check(cOffer[0].startsWith('NDP2.') ? cOffer.length === 1 : true, 'second pairing: offer still one compact QR');
+    check(cOffer.length === 1 && cOffer[0].startsWith('NDPS1.'), 'second pairing: still ONE NDPS1 QR');
     await pageD.getByRole('button', { name: /join pairing/i }).first().click();
     await submitViaPaste(pageD, cOffer);
-    await pageD.waitForSelector('text=NexDrop wants to connect', { timeout: 15000 });
+    await pageD.waitForSelector('text=NexDrop wants to connect', { timeout: 20000 });
     await pageD.getByRole('button', { name: /^Decline$/ }).click();
     await pageD.waitForSelector('text=Create pairing', { timeout: 10000 });
     check(true, 'Decline returns D to a clean idle state');
     const dIdle = await pageD.evaluate(() => document.body.innerText);
     check(!/waiting for peer|accept & connect/i.test(dIdle), 'no WebRTC session remains alive after Decline');
 
-    // Stale offer: after declining, the OLD offer must not resurrect a session
+    // The host is told, honestly, that the joiner declined
+    await pageC.waitForSelector('text=Connection declined', { timeout: 20000 });
+    check(true, 'C shows "Connection declined" automatically (via the signaling service)');
+
+    // A declined session is DEAD — re-scanning the same QR must NOT resurrect it
     await pageD.getByRole('button', { name: /join pairing/i }).first().click();
     await submitViaPaste(pageD, cOffer);
-    await pageD.waitForSelector('text=NexDrop wants to connect', { timeout: 15000 });
-    check(true, 'the same offer can be re-scanned after a Decline (fresh session)');
+    await pageD.waitForSelector('text=/expired|not valid|invalid/i', { timeout: 20000 });
+    check(true, 'a declined session cannot be re-used — single-use join is enforced');
 
-    // Multiple pairing attempts: C disconnects the stale host session, then
-    // creates a fresh pairing — the new offer must differ (no stale state)
-    await pageC.getByRole('button', { name: /cancel pairing/i }).first().click();
+    // Multiple pairing attempts: C leaves the declined session, then creates
+    // a fresh pairing — the new offer must differ (no stale state)
+    await pageC.getByRole('button', { name: /start over/i }).first().click();
+    await pageC.waitForSelector('text=Create pairing', { timeout: 10000 });
     await pageC.getByRole('button', { name: /create pairing/i }).first().click();
     await pageC.waitForSelector('img[alt*="QR code"]', { timeout: 20000 });
     const cOffer2 = await decodeAllQrSegments(pageC);
@@ -326,11 +307,70 @@ async function main() {
 
     await ctxC.close();
     await ctxD.close();
-  } catch (e) {
-    check(false, 'negative-path section (Decline / invalid QR / stale session)', String(e).slice(0, 200));
-  }
+    } catch (e) {
+      check(false, 'negative-path section (Decline / invalid QR / stale session)', String(e).slice(0, 200));
+    }
+  };
 
-  console.log(`\n[two-device e2e] ${passed} passed, ${failed} failed, ${skipped} skipped`);
+  // ---------------------------------------------------------------------
+  // FALLBACK PATH: signaling service unreachable → honest manual pairing
+  // ---------------------------------------------------------------------
+  const runFallbackPaths = async () => {
+    try {
+      console.log('[two-device e2e] fallback: fresh contexts E and F, signaling BLOCKED on E');
+      const ctxE = await browser.newContext();
+      const ctxF = await browser.newContext({ ...devices['Pixel 7'] });
+      const pageE = await ctxE.newPage();
+      const pageF = await ctxF.newPage();
+      // Kill every request to the signaling service BEFORE any pairing starts
+      await pageE.route('**/functions/nexdropSignal*', (route: any) => route.abort());
+      await pageE.goto(url, { waitUntil: 'domcontentloaded' });
+      await pageF.goto(url, { waitUntil: 'domcontentloaded' });
+      await pageE.waitForSelector('text=Create pairing', { timeout: 30000 });
+      await pageF.waitForSelector('text=Create pairing', { timeout: 30000 });
+
+      await pageE.getByRole('button', { name: /create pairing/i }).first().click();
+      await pageE.waitForSelector('text=Automatic pairing unavailable', { timeout: 20000 });
+      check(true, 'signaling down → E shows "Automatic pairing unavailable" (never a fake success)');
+
+      await pageE.getByRole('button', { name: /use manual pairing code/i }).first().click();
+      await pageE.waitForSelector('img[alt*="QR code"]', { timeout: 30000 });
+      const eManual = await decodeAllQrSegments(pageE);
+      check(!eManual[0].startsWith('NDPS1.'), 'the manual fallback QR is the legacy code format (not NDPS1)');
+
+      // F joins via the manual code and accepts
+      await pageF.getByRole('button', { name: /join pairing/i }).first().click();
+      await submitViaPaste(pageF, eManual);
+      await pageF.waitForSelector('text=NexDrop wants to connect', { timeout: 20000 });
+      await pageF.getByRole('button', { name: /accept & connect/i }).click();
+      await pageF.waitForSelector('text=Return this connection code to the sender', { timeout: 30000 });
+      const fAnswer = await decodeAllQrSegments(pageF);
+      check(fAnswer.length > 0, 'manual fallback: F produced a real answer QR');
+
+      // E scans the answer — the LEGACY two-step flow must still work
+      await pageE.getByRole('button', { name: /scan answer qr/i }).click();
+      await submitViaPaste(pageE, fAnswer);
+      if (REQUIRE_CONNECTION) {
+        await pageE.waitForSelector('text=Connected', { timeout: 45000 });
+        await pageF.waitForSelector('text=Connected', { timeout: 45000 });
+        check(true, 'manual fallback completes a REAL connection when signaling is down');
+      } else {
+        check(true, 'manual fallback validated through real SDP exchange (no ICE in sandbox)');
+      }
+
+      await ctxE.close();
+      await ctxF.close();
+    } catch (e) {
+      check(false, 'fallback section (signaling down → manual pairing)', String(e).slice(0, 200));
+    }
+  };
+
+  if (!REQUIRE_CONNECTION) {
+    skip('connection, SAS, text, file transfer',
+      'sandbox has no ICE path (NEXDROP_E2E_REQUIRE_CONNECTION=0) — validated through real SDP exchange');
+    await runNegativePaths();
+    await runFallbackPaths();
+    console.log(`\n[two-device e2e] ${passed} passed, ${failed} failed, ${skipped} skipped`);
     await browser.close();
     server.close();
     if (failed > 0) process.exit(1);
@@ -630,6 +670,10 @@ async function main() {
     await dumpFailure('disconnect');
     check(false, 'disconnect-during-transfer was not detected on the sender');
   }
+
+  // Both modes run the negative + fallback sections with fresh contexts
+  await runNegativePaths();
+  await runFallbackPaths();
 
   console.log(`\n[two-device e2e] ${passed} passed, ${failed} failed, ${skipped} skipped`);
   await browser.close();

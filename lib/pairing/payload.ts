@@ -11,6 +11,7 @@
  * multi-QR segments that the receiving device reassembles.
  */
 
+import { SIGNAL_PREFIX } from './signalPayload';
 import {
   base64UrlToBytes,
   bytesToBase64Url,
@@ -353,6 +354,12 @@ export class QrSegmentAssembler {
 
     if (scanned.startsWith(ENVELOPE_PREFIX) || scanned.startsWith(COMPACT_PREFIX)) {
       // A complete single-QR code scanned directly (v1 JSON or v2 compact)
+      return { code: scanned, received: 1, total: 1 };
+    }
+
+    if (scanned.startsWith(SIGNAL_PREFIX)) {
+      // A complete ONE-scan automatic-pairing code (NDPS1): a complete
+      // payload on its own — never segmented, never assembled.
       return { code: scanned, received: 1, total: 1 };
     }
 

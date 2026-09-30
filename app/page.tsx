@@ -73,6 +73,10 @@ function NexDropMainContent() {
     peerManager,
     cipher,
     createPairing,
+    createPairingManual,
+    pairingMode,
+    signalUnavailable,
+    signalJoinerAccepted,
     submitAnswer,
     joinWithOffer,
     acceptPendingOffer,
@@ -184,6 +188,10 @@ function NexDropMainContent() {
               isSecurityVerified={isSecurityVerified}
               rttMs={rttMs}
               onCreatePairing={() => void createPairing()}
+              onCreatePairingManual={() => void createPairingManual()}
+              pairingMode={pairingMode}
+              signalUnavailable={signalUnavailable}
+              signalJoinerAccepted={signalJoinerAccepted}
               onSubmitAnswer={submitAnswer}
               onJoinWithOffer={joinWithOffer}
               onAcceptPendingOffer={acceptPendingOffer}

@@ -40,15 +40,33 @@ interface ConnectionStatusAreaProps {
   isSecurityVerified: boolean;
   rttMs: number | null;
   onCreatePairing: () => void;
+  onCreatePairingManual: () => void;
+  pairingMode: 'signal' | 'manual' | null;
+  signalUnavailable: boolean;
+  signalJoinerAccepted: boolean;
   onSubmitAnswer: (code: string) => Promise<boolean>;
   onJoinWithOffer: (code: string) => Promise<boolean>;
   onAcceptPendingOffer: () => Promise<boolean>;
   onDeclinePendingOffer: () => void;
   onStartOver: () => void;
-  pendingOfferInfo: { device?: string; expiresAt: number } | null;
+  pendingOfferInfo: {
+    device?: string;
+    expiresAt: number;
+    platform?: string | null;
+    fileCount?: number | null;
+    totalBytes?: number | null;
+    connectionType?: string | null;
+  } | null;
   onClearPairingError: () => void;
   onDisconnect: () => void;
   onOpenSecurityModal: () => void;
+}
+
+function formatBytes(n: number): string {
+  if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  if (n >= 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${n} B`;
 }
 
 /** Error copy that humans can act on. */
@@ -68,6 +86,14 @@ function pairingErrorMessage(err: PairingError | string | null): string {
       return 'That answer belongs to a different pairing. Restart pairing on both devices.';
     case 'timeout':
       return 'Pairing timed out. Please start again.';
+    case 'declined':
+      return 'Connection declined. The other device chose not to connect.';
+    case 'signal-unavailable':
+      return 'Automatic pairing is unavailable right now (the pairing service could not be reached). You can still pair with manual codes.';
+    case 'signal-network':
+      return 'Could not reach the pairing service. Check your connection, or ask the other device for a manual pairing code.';
+    case 'already-joined':
+      return 'This pairing was already used by another device. Ask for a new pairing.';
     case 'unsupported-browser':
       return 'This browser does not support WebRTC data channels. Try a modern browser like Chrome, Edge, Firefox or Safari.';
     default:
@@ -85,6 +111,10 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
   isSecurityVerified,
   rttMs,
   onCreatePairing,
+  onCreatePairingManual,
+  pairingMode,
+  signalUnavailable,
+  signalJoinerAccepted,
   onSubmitAnswer,
   onJoinWithOffer,
   onAcceptPendingOffer,
@@ -391,12 +421,18 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold text-[#19C37D]">
               <span className="h-2 w-2 rounded-full bg-[#19C37D] animate-pulse" aria-hidden="true" />
-              Step 1 of 2 — Show this QR
+              {pairingMode === 'manual' ? 'Step 1 of 2 — Show this QR' : 'Scan once — the rest is automatic'}
             </div>
             <h2 className="text-base font-semibold text-[#F5F7F8] mt-0.5">Pairing offer ready</h2>
             <p className="text-xs text-[#9AA3AD] mt-0.5">
               On the other device, choose <strong className="text-[#F5F7F8]">Join pairing</strong> and scan this code.
-              Session <span className="font-mono text-[#F5F7F8]">{offerQr?.sessionId}</span>
+              {pairingMode === 'manual' ? null : (
+                <>
+                  {' '}
+                  After they tap <strong className="text-[#F5F7F8]">Accept</strong>, the connection completes by itself — no second scan.
+                </>
+              )}
+              {' '}Session <span className="font-mono text-[#F5F7F8]">{offerQr?.sessionId}</span>
             </p>
           </div>
           <span className="text-[11px] font-mono text-[#9AA3AD] shrink-0" aria-live="polite">
@@ -450,14 +486,23 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
 
             <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-[#9AA3AD]" aria-live="polite">
               <Loader2 className="w-3.5 h-3.5 animate-spin text-[#19C37D]" aria-hidden="true" />
-              Waiting for peer…
+              {pairingMode !== 'manual' && signalJoinerAccepted
+                ? 'Device accepted — establishing secure channel…'
+                : 'Waiting for a device to scan…'}
             </div>
           </div>
 
           <div className="flex-1 min-w-0 flex flex-col gap-2.5">
-            <p className="text-xs text-[#9AA3AD]">
-              No camera available on the other device? Share the pairing code or link instead.
-            </p>
+            {pairingMode === 'manual' ? (
+              <p className="text-xs text-[#9AA3AD]">
+                No camera available on the other device? Share the pairing code or link instead.
+              </p>
+            ) : (
+              <p className="text-xs text-[#9AA3AD]">
+                Automatic pairing is active: after the other device accepts, the secure
+                connection completes on its own.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleCopyCode}
@@ -482,22 +527,42 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
               </button>
             </div>
 
-            <div className="mt-1 rounded-xl border border-[#19C37D]/25 bg-[#19C37D]/[0.06] p-3.5">
-              <div className="flex items-center gap-2 text-xs font-semibold text-[#19C37D]">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#19C37D]/15 text-[10px] font-bold">2</span>
-                Step 2 — Scan the answer
+            {pairingMode === 'manual' ? (
+              <div className="mt-1 rounded-xl border border-[#19C37D]/25 bg-[#19C37D]/[0.06] p-3.5">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#19C37D]">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#19C37D]/15 text-[10px] font-bold">2</span>
+                  Step 2 — Scan the answer
+                </div>
+                <p className="text-[11px] text-[#9AA3AD] mt-1.5 leading-relaxed">
+                  Once the other device scans this QR, it shows an <strong className="text-[#F5F7F8]">answer code</strong>. Scan it back here to finish connecting.
+                </p>
+                <button
+                  onClick={() => openScanner('answer')}
+                  className="mt-2.5 inline-flex items-center gap-2 rounded-xl bg-[#19C37D] px-4 py-2.5 text-xs font-semibold text-[#0B0D0F] hover:bg-[#3DD6A0] transition-all shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+                >
+                  <QrCode className="w-4 h-4" aria-hidden="true" />
+                  <span>Scan answer QR</span>
+                </button>
               </div>
-              <p className="text-[11px] text-[#9AA3AD] mt-1.5 leading-relaxed">
-                Once the other device scans this QR, it shows an <strong className="text-[#F5F7F8]">answer code</strong>. Scan it back here to finish connecting.
-              </p>
-              <button
-                onClick={() => openScanner('answer')}
-                className="mt-2.5 inline-flex items-center gap-2 rounded-xl bg-[#19C37D] px-4 py-2.5 text-xs font-semibold text-[#0B0D0F] hover:bg-[#3DD6A0] transition-all shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
-              >
-                <QrCode className="w-4 h-4" aria-hidden="true" />
-                <span>Scan answer QR</span>
-              </button>
-            </div>
+            ) : (
+              <div className="mt-1 rounded-xl border border-[#19C37D]/25 bg-[#19C37D]/[0.06] p-3.5">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#19C37D]">
+                  <ShieldCheck className="w-4 h-4" aria-hidden="true" />
+                  Automatic connection
+                </div>
+                <p className="text-[11px] text-[#9AA3AD] mt-1.5 leading-relaxed">
+                  When the other device taps <strong className="text-[#F5F7F8]">Accept</strong>, the
+                  encrypted connection finishes by itself. If automatic pairing is unavailable,
+                  you can switch to manual codes at any time.
+                </p>
+                <button
+                  onClick={onCreatePairingManual}
+                  className="mt-2.5 inline-flex items-center gap-2 rounded-xl border border-white/[0.12] bg-[#1B2026] px-4 py-2.5 text-xs font-semibold text-[#F5F7F8] hover:bg-white/[0.08] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+                >
+                  <span>Use manual pairing code</span>
+                </button>
+              </div>
+            )}
 
             <button
               onClick={onDisconnect}
@@ -546,6 +611,23 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
               {pendingOfferInfo?.device || 'A nearby device'}
             </dd>
           </div>
+          {pendingOfferInfo?.platform ? (
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-[#9AA3AD]">Platform</dt>
+              <dd className="font-medium text-[#F5F7F8] text-right truncate max-w-[60%]">{pendingOfferInfo.platform}</dd>
+            </div>
+          ) : null}
+          {typeof pendingOfferInfo?.fileCount === 'number' && pendingOfferInfo.fileCount > 0 ? (
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-[#9AA3AD]">Files queued</dt>
+              <dd className="font-medium text-[#F5F7F8] text-right">
+                {pendingOfferInfo.fileCount}
+                {typeof pendingOfferInfo.totalBytes === 'number' && pendingOfferInfo.totalBytes > 0
+                  ? ` · ${formatBytes(pendingOfferInfo.totalBytes)}`
+                  : ''}
+              </dd>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3">
             <dt className="text-[#9AA3AD]">Connection</dt>
             <dd className="font-medium text-[#F5F7F8] text-right">Direct peer-to-peer</dd>
@@ -703,13 +785,14 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
             <div>
               <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
                 <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" aria-hidden="true" />
-                Connecting directly…
+                Connecting…
               </span>
               <h2 className="text-base font-semibold text-[#F5F7F8] mt-0.5">
-                Establishing the peer-to-peer link
+                Establishing the secure peer-to-peer link
               </h2>
-              <p className="text-xs text-[#9AA3AD]">
-                Devices are negotiating a direct WebRTC connection. This can take a few seconds.
+              <p className="text-xs text-[#9AA3AD]" aria-live="polite">
+                Checking peer… verifying the shared security code… negotiating a direct
+                WebRTC connection. This can take a few seconds.
               </p>
             </div>
           </div>
@@ -803,6 +886,22 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
           </div>
         </div>
 
+        {signalUnavailable && (
+          <div className="mt-3 w-full rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-400" role="alert">
+            <div className="font-semibold">Automatic pairing unavailable</div>
+            <p className="mt-1 text-amber-400/90 leading-relaxed">
+              The pairing service could not be reached, so one-scan automatic pairing is
+              off right now. You can still pair with manual codes.
+            </p>
+            <button
+              onClick={onCreatePairingManual}
+              className="mt-2 inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/25 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            >
+              <span>Use manual pairing code</span>
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-2 sm:self-center">
           <button
             onClick={() => openScanner('offer')}
@@ -822,7 +921,8 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
       </div>
 
       <p className="mt-4 text-[11px] text-[#9AA3AD]/80 leading-relaxed border-t border-white/[0.06] pt-3">
-        Pairing works by exchanging QR codes between the two devices. Direct connectivity depends on your
+        One scan: the joining device accepts, and the encrypted connection completes by itself.
+        Manual QR/clipboard pairing is available as a fallback. Direct connectivity depends on your
         network and browser — for the most reliable link, keep both devices on the same Wi-Fi network.
       </p>
 
