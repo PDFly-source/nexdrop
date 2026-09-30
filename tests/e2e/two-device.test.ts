@@ -24,7 +24,7 @@
  * exchange only. CI runs with the default (1) so the full flow is enforced.
  */
 
-import { chromium } from 'playwright';
+import { chromium, devices } from 'playwright';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -161,8 +161,14 @@ async function main() {
       '--disable-features=WebRtcHideLocalIpsWithMdns',
     ],
   });
+  // A emulates a laptop, B a real Android phone (Pixel 7) — verifying the
+  // full handshake and transfer UI on a mobile browser: touch, DPR 2.625,
+  // mobile UA, 412x915 viewport.
   const ctxA = await browser.newContext();
-  const ctxB = await browser.newContext();
+  const ctxB = await browser.newContext({
+    ...devices['Pixel 7'],
+    permissions: ['camera'],
+  });
   const pageA = await ctxA.newPage();
   const pageB = await ctxB.newPage();
   pageA.on('console', (m) => {

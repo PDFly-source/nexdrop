@@ -72,15 +72,15 @@ export const ActiveTransferCard: React.FC<ActiveTransferCardProps> = ({
             <span className="text-xs font-medium text-[#9AA3AD] uppercase tracking-wider">
               {direction === 'outgoing' ? 'Sending to peer' : 'Receiving from peer'}
             </span>
-            <span className="text-white/20">·</span>
+            <span className="text-white/45">·</span>
             <span className="text-xs text-[#19C37D] font-mono">
               {status === 'paused' ? 'Paused' : 'Streaming'}
             </span>
           </div>
 
-          <h3 className="mt-1.5 truncate text-base font-semibold text-[#F5F7F8]">
+          <h2 className="mt-1.5 truncate text-base font-semibold text-[#F5F7F8]">
             {name}
-          </h3>
+          </h2>
 
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#9AA3AD]">
             <span>

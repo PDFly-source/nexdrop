@@ -236,7 +236,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                   <span className="h-2 w-2 rounded-full bg-[#19C37D] animate-pulse" aria-hidden="true" />
                   Connected
                 </span>
-                <span className="text-white/20">·</span>
+                <span className="text-white/45">·</span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400/90 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                   <Lock className="w-2.5 h-2.5" aria-hidden="true" />
                   P2P · E2E Encrypted
@@ -244,9 +244,9 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
               </div>
 
               <div className="flex items-baseline gap-2 mt-0.5">
-                <h3 className="text-base sm:text-lg font-semibold text-[#F5F7F8]">
+                <h2 className="text-base sm:text-lg font-semibold text-[#F5F7F8]">
                   {peerInfo?.name || 'Remote Device'}
-                </h3>
+                </h2>
                 <span className="text-xs text-[#9AA3AD]">
                   {peerInfo?.platform || 'WebRTC Peer'}
                 </span>
@@ -285,7 +285,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
         {isDetailsOpen && (
           <div className="mt-4 pt-4 border-t border-white/[0.06] grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-[#9AA3AD]">
             <div className="rounded-xl bg-[#15191E] border border-white/[0.06] p-3">
-              <span className="text-[10px] uppercase font-mono tracking-wider text-[#9AA3AD]/60 block mb-1">
+              <span className="text-[10px] uppercase font-mono tracking-wider text-[#9AA3AD]/80 block mb-1">
                 Encryption
               </span>
               <div className="flex items-center gap-2 text-[#F5F7F8] font-medium">
@@ -299,7 +299,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
 
             <div className="rounded-xl bg-[#15191E] border border-white/[0.06] p-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] uppercase font-mono tracking-wider text-[#9AA3AD]/60">
+                <span className="text-[10px] uppercase font-mono tracking-wider text-[#9AA3AD]/80">
                   Verification Code
                 </span>
                 {isSecurityVerified && (
@@ -323,7 +323,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
             </div>
 
             <div className="rounded-xl bg-[#15191E] border border-white/[0.06] p-3">
-              <span className="text-[10px] uppercase font-mono tracking-wider text-[#9AA3AD]/60 block mb-1">
+              <span className="text-[10px] uppercase font-mono tracking-wider text-[#9AA3AD]/80 block mb-1">
                 Active Channels
               </span>
               <div className="flex flex-wrap gap-1 text-[10px] font-mono text-[#F5F7F8]">
@@ -355,7 +355,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
               <span className="h-2 w-2 rounded-full bg-[#19C37D] animate-pulse" aria-hidden="true" />
               Step 1 of 2 — Show this QR
             </div>
-            <h3 className="text-base font-semibold text-[#F5F7F8] mt-0.5">Pairing offer ready</h3>
+            <h2 className="text-base font-semibold text-[#F5F7F8] mt-0.5">Pairing offer ready</h2>
             <p className="text-xs text-[#9AA3AD] mt-0.5">
               On the other device, choose <strong className="text-[#F5F7F8]">Join pairing</strong> and scan this code.
               Session <span className="font-mono text-[#F5F7F8]">{offerQr?.sessionId}</span>
@@ -391,7 +391,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                 <button
                   onClick={() => setActiveSegmentIndex(Math.max(0, activeSegmentIndex - 1))}
                   disabled={activeSegmentIndex === 0}
-                  className="p-1.5 rounded-lg border border-white/[0.1] bg-[#1B2026] text-[#9AA3AD] disabled:opacity-40 hover:text-[#F5F7F8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+                  className="p-1.5 rounded-lg border border-white/[0.1] bg-[#1B2026] text-[#9AA3AD] disabled:text-[#828B94] hover:text-[#F5F7F8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
                   aria-label="Previous QR code"
                 >
                   <ChevronLeft className="w-4 h-4" aria-hidden="true" />
@@ -402,7 +402,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                 <button
                   onClick={() => setActiveSegmentIndex(Math.min(activeSegments.length - 1, activeSegmentIndex + 1))}
                   disabled={activeSegmentIndex === activeSegments.length - 1}
-                  className="p-1.5 rounded-lg border border-white/[0.1] bg-[#1B2026] text-[#9AA3AD] disabled:opacity-40 hover:text-[#F5F7F8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+                  className="p-1.5 rounded-lg border border-white/[0.1] bg-[#1B2026] text-[#9AA3AD] disabled:text-[#828B94] hover:text-[#F5F7F8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
                   aria-label="Next QR code"
                 >
                   <ChevronRight className="w-4 h-4" aria-hidden="true" />
@@ -489,7 +489,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
               <span className="h-2 w-2 rounded-full bg-[#19C37D] animate-pulse" aria-hidden="true" />
               Almost there
             </div>
-            <h3 className="text-base font-semibold text-[#F5F7F8] mt-0.5">Show this answer QR</h3>
+            <h2 className="text-base font-semibold text-[#F5F7F8] mt-0.5">Show this answer QR</h2>
             <p className="text-xs text-[#9AA3AD] mt-0.5">
               On the first device, tap <strong className="text-[#F5F7F8]">Scan answer QR</strong> and scan this code.
               Session <span className="font-mono text-[#F5F7F8]">{answerQr?.sessionId}</span>
@@ -519,7 +519,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                 <button
                   onClick={() => setActiveSegmentIndex(Math.max(0, activeSegmentIndex - 1))}
                   disabled={activeSegmentIndex === 0}
-                  className="p-1.5 rounded-lg border border-white/[0.1] bg-[#1B2026] text-[#9AA3AD] disabled:opacity-40 hover:text-[#F5F7F8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+                  className="p-1.5 rounded-lg border border-white/[0.1] bg-[#1B2026] text-[#9AA3AD] disabled:text-[#828B94] hover:text-[#F5F7F8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
                   aria-label="Previous QR code"
                 >
                   <ChevronLeft className="w-4 h-4" aria-hidden="true" />
@@ -530,7 +530,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                 <button
                   onClick={() => setActiveSegmentIndex(Math.min(activeSegments.length - 1, activeSegmentIndex + 1))}
                   disabled={activeSegmentIndex === activeSegments.length - 1}
-                  className="p-1.5 rounded-lg border border-white/[0.1] bg-[#1B2026] text-[#9AA3AD] disabled:opacity-40 hover:text-[#F5F7F8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+                  className="p-1.5 rounded-lg border border-white/[0.1] bg-[#1B2026] text-[#9AA3AD] disabled:text-[#828B94] hover:text-[#F5F7F8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
                   aria-label="Next QR code"
                 >
                   <ChevronRight className="w-4 h-4" aria-hidden="true" />
@@ -597,9 +597,9 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                 <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" aria-hidden="true" />
                 Connecting directly…
               </span>
-              <h3 className="text-base font-semibold text-[#F5F7F8] mt-0.5">
+              <h2 className="text-base font-semibold text-[#F5F7F8] mt-0.5">
                 Establishing the peer-to-peer link
-              </h3>
+              </h2>
               <p className="text-xs text-[#9AA3AD]">
                 Devices are negotiating a direct WebRTC connection. This can take a few seconds.
               </p>
@@ -634,9 +634,9 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
               <span className="text-xs font-semibold text-red-400">
                 {failed ? 'Connection failed' : 'Device disconnected'}
               </span>
-              <h3 className="text-base font-semibold text-[#F5F7F8] mt-0.5">
+              <h2 className="text-base font-semibold text-[#F5F7F8] mt-0.5">
                 {failed ? 'The direct link could not be established' : 'The peer session has ended'}
-              </h3>
+              </h2>
               <p className="text-xs text-[#9AA3AD]">
                 {pairingError
                   ? pairingErrorMessage(pairingError)
@@ -677,9 +677,9 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                 Not connected
               </span>
             </div>
-            <h3 className="text-base sm:text-lg font-semibold text-[#F5F7F8] mt-0.5">
+            <h2 className="text-base sm:text-lg font-semibold text-[#F5F7F8] mt-0.5">
               No device connected
-            </h3>
+            </h2>
             <p className="text-xs text-[#9AA3AD] max-w-md">
               Pair another device to share files and text directly over an encrypted peer-to-peer link. No server, no account, nothing is uploaded.
             </p>

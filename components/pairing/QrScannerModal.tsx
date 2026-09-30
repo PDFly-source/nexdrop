@@ -367,7 +367,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
                 onChange={(e) => setPasteText(e.target.value)}
                 rows={2}
                 placeholder="NDP1.…"
-                className="flex-1 rounded-lg border border-white/[0.1] bg-[#111418] px-3 py-2 text-xs font-mono text-[#F5F7F8] placeholder:text-[#9AA3AD]/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D] resize-none"
+                className="flex-1 rounded-lg border border-white/[0.1] bg-[#111418] px-3 py-2 text-xs font-mono text-[#F5F7F8] placeholder:text-[#9AA3AD]/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D] resize-none"
               />
               <button
                 onClick={handlePasteSubmit}

@@ -77,7 +77,7 @@ export const IncomingTransfersCard: React.FC<IncomingTransfersCardProps> = ({
 
       <div className="mt-4 flex-1 flex flex-col min-h-48">
         {incomingFiles.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.04] p-8 text-center text-xs text-[#9AA3AD]/60">
+          <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.04] p-8 text-center text-xs text-[#9AA3AD]/80">
             <Download className="w-6 h-6 text-[#9AA3AD]/40 mb-2" />
             <span>No incoming files yet</span>
             <span className="text-[11px] mt-0.5">

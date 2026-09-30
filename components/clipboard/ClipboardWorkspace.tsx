@@ -153,7 +153,7 @@ export const ClipboardWorkspace: React.FC<ClipboardWorkspaceProps> = ({
               placeholder="Type or paste code, links, notes, or credentials to share directly..."
               rows={5}
               disabled={!isConnected}
-              className="w-full rounded-xl border border-white/[0.08] bg-[#111418] p-4 text-xs sm:text-sm font-mono text-[#F5F7F8] placeholder:text-[#9AA3AD]/50 focus:border-[#19C37D] focus:outline-none focus:ring-1 focus:ring-[#19C37D] disabled:opacity-50 transition-all resize-y min-h-[120px]"
+              className="w-full rounded-xl border border-white/[0.08] bg-[#111418] p-4 text-xs sm:text-sm font-mono text-[#F5F7F8] placeholder:text-[#9AA3AD]/80 focus:border-[#19C37D] focus:outline-none focus:ring-1 focus:ring-[#19C37D] disabled:opacity-50 transition-all resize-y min-h-[120px]"
             />
 
             {inputText.trim() && (
@@ -185,7 +185,7 @@ export const ClipboardWorkspace: React.FC<ClipboardWorkspaceProps> = ({
               <button
                 type="submit"
                 disabled={!isConnected || !inputText.trim()}
-                className="flex items-center gap-2 rounded-xl bg-[#19C37D] px-5 py-2.5 text-xs font-semibold text-[#0B0D0F] hover:bg-[#3DD6A0] disabled:cursor-not-allowed disabled:opacity-40 transition-all shadow-sm"
+                className="flex items-center gap-2 rounded-xl bg-[#19C37D] px-5 py-2.5 text-xs font-semibold text-[#0B0D0F] hover:bg-[#3DD6A0] disabled:cursor-not-allowed disabled:bg-[#263229] disabled:text-[#B7C0C9] transition-all shadow-sm"
               >
                 <span>Send to Device</span>
                 <Send className="w-3.5 h-3.5" />
@@ -205,10 +205,10 @@ export const ClipboardWorkspace: React.FC<ClipboardWorkspaceProps> = ({
         </div>
 
         {combinedItems.length === 0 ? (
-          <div className="py-12 text-center text-xs text-[#9AA3AD]/60">
+          <div className="py-12 text-center text-xs text-[#9AA3AD]/80">
             <Clipboard className="w-8 h-8 mx-auto mb-2 text-[#9AA3AD]/30" />
             <p className="font-medium text-[#9AA3AD]">No clipboard activity in this session</p>
-            <p className="text-[11px] mt-1 text-[#9AA3AD]/50">
+            <p className="text-[11px] mt-1 text-[#9AA3AD]/80">
               Text, code, or links sent between devices will appear here instantly.
             </p>
           </div>
@@ -238,8 +238,8 @@ export const ClipboardWorkspace: React.FC<ClipboardWorkspaceProps> = ({
                       {'language' in item && item.language && <span> ({item.language})</span>}
                     </span>
 
-                    <span className="text-white/20">·</span>
-                    <span className="text-[10px] text-[#9AA3AD]/60 font-mono">
+                    <span className="text-white/45">·</span>
+                    <span className="text-[10px] text-[#9AA3AD]/80 font-mono">
                       {formatTimestamp(item.timestamp)}
                     </span>
                   </div>

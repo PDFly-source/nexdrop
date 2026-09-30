@@ -29,10 +29,10 @@ export const Hero: React.FC<HeroProps> = ({ onSendClick, onReceiveClick, isConne
         </div>
 
         {/* Main Headline */}
-        <h1 className="text-3xl sm:text-5xl md:text-6xl font-semibold tracking-tight text-[#F5F7F8] max-w-3xl mx-auto text-balance leading-tight">
+        <h2 className="text-3xl sm:text-5xl md:text-6xl font-semibold tracking-tight text-[#F5F7F8] max-w-3xl mx-auto text-balance leading-tight">
           Share directly. <br className="hidden sm:inline" />
           <span className="text-[#9AA3AD]">Keep it private.</span>
-        </h1>
+        </h2>
 
         {/* Supporting description */}
         <p className="mt-4 text-sm sm:text-base text-[#9AA3AD] max-w-xl mx-auto leading-relaxed">
@@ -61,9 +61,9 @@ export const Hero: React.FC<HeroProps> = ({ onSendClick, onReceiveClick, isConne
         {/* Trust line */}
         <div className="mt-6 flex items-center justify-center gap-2 text-xs text-[#9AA3AD]/80">
           <span>No account</span>
-          <span className="text-white/20">·</span>
+          <span className="text-white/45">·</span>
           <span>No cloud upload</span>
-          <span className="text-white/20">·</span>
+          <span className="text-white/45">·</span>
           <span>Direct P2P</span>
         </div>
 

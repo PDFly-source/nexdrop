@@ -96,13 +96,13 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
         <div className="rounded-xl border border-white/[0.06] bg-[#15191E] p-4">
           <span className="text-[11px] text-[#9AA3AD] font-medium">Total Transfers</span>
           <div className="text-2xl font-bold text-[#F5F7F8] mt-1">{historyItems.length}</div>
-          <span className="text-[10px] text-[#9AA3AD]/60">Session lifetime records</span>
+          <span className="text-[10px] text-[#9AA3AD]/80">Session lifetime records</span>
         </div>
 
         <div className="rounded-xl border border-white/[0.06] bg-[#15191E] p-4">
           <span className="text-[11px] text-[#9AA3AD] font-medium">Total Volume</span>
           <div className="text-2xl font-bold text-[#19C37D] mt-1">{formatBytes(totalBytesTransferred)}</div>
-          <span className="text-[10px] text-[#9AA3AD]/60">Streamed peer-to-peer</span>
+          <span className="text-[10px] text-[#9AA3AD]/80">Streamed peer-to-peer</span>
         </div>
 
         <div className="rounded-xl border border-white/[0.06] bg-[#15191E] p-4">
@@ -111,7 +111,7 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
             <Shield className="w-4 h-4 text-[#19C37D]" />
             <span>Zero-Cloud Storage</span>
           </div>
-          <span className="text-[10px] text-[#9AA3AD]/60">Stored only in this browser</span>
+          <span className="text-[10px] text-[#9AA3AD]/80">Stored only in this browser</span>
         </div>
       </div>
 
@@ -151,7 +151,7 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search transfer history..."
-            className="w-full rounded-xl border border-white/[0.08] bg-[#15191E] pl-9 pr-3 py-1.5 text-xs text-[#F5F7F8] placeholder:text-[#9AA3AD]/50 focus:border-[#19C37D] focus:outline-none"
+            className="w-full rounded-xl border border-white/[0.08] bg-[#15191E] pl-9 pr-3 py-1.5 text-xs text-[#F5F7F8] placeholder:text-[#9AA3AD]/80 focus:border-[#19C37D] focus:outline-none"
           />
         </div>
       </div>
@@ -159,12 +159,12 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
       {/* History Items List */}
       <div className="rounded-2xl border border-white/[0.08] bg-[#15191E] p-5 shadow-sm">
         {filteredItems.length === 0 ? (
-          <div className="py-16 text-center text-xs text-[#9AA3AD]/60">
+          <div className="py-16 text-center text-xs text-[#9AA3AD]/80">
             <History className="w-9 h-9 mx-auto mb-2 text-[#9AA3AD]/30" />
             <p className="font-medium text-[#9AA3AD]">
               {historyItems.length === 0 ? 'No transfers yet' : 'No transfers match your filter'}
             </p>
-            <p className="text-[11px] mt-1 text-[#9AA3AD]/50">
+            <p className="text-[11px] mt-1 text-[#9AA3AD]/80">
               When you send or receive files, their metadata will be logged here locally.
             </p>
             {historyItems.length === 0 && (

@@ -122,15 +122,15 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
         <div className="pt-3 flex flex-wrap items-center gap-4 text-xs text-[#9AA3AD]">
           <div className="flex items-center gap-1.5">
-            <span className="text-[#9AA3AD]/60">Platform:</span>
+            <span className="text-[#9AA3AD]/80">Platform:</span>
             <span className="text-[#F5F7F8] font-mono">{deviceInfo.os}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[#9AA3AD]/60">Browser:</span>
+            <span className="text-[#9AA3AD]/80">Browser:</span>
             <span className="text-[#F5F7F8] font-mono">{deviceInfo.browser}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[#9AA3AD]/60">Device Type:</span>
+            <span className="text-[#9AA3AD]/80">Device Type:</span>
             <span className="text-[#F5F7F8] font-mono">
               {deviceInfo.isMobile ? (deviceInfo.isIOS ? 'iOS Mobile' : 'Android Mobile') : 'Desktop / Laptop'}
             </span>
@@ -154,6 +154,9 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
               </p>
             </div>
             <button
+              role="switch"
+              aria-checked={verifyIntegrity}
+              aria-label="Incremental SHA-256 hash verification"
               onClick={() => setVerifyIntegrity(!verifyIntegrity)}
               className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
                 verifyIntegrity ? 'bg-[#19C37D]' : 'bg-white/[0.1]'
@@ -175,6 +178,9 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
               </p>
             </div>
             <button
+              role="switch"
+              aria-checked={autoResume}
+              aria-label="Auto-resume interrupted transfers"
               onClick={() => setAutoResume(!autoResume)}
               className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
                 autoResume ? 'bg-[#19C37D]' : 'bg-white/[0.1]'
@@ -234,6 +240,9 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
               </p>
             </div>
             <button
+              role="switch"
+              aria-checked={soundEnabled}
+              aria-label="Sound effects"
               onClick={() => onToggleSound(!soundEnabled)}
               className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
                 soundEnabled ? 'bg-[#19C37D]' : 'bg-white/[0.1]'
@@ -255,6 +264,9 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
               </p>
             </div>
             <button
+              role="switch"
+              aria-checked={vibrationEnabled}
+              aria-label="Vibration feedback"
               onClick={() => onToggleVibration(!vibrationEnabled)}
               className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
                 vibrationEnabled ? 'bg-[#19C37D]' : 'bg-white/[0.1]'
@@ -283,7 +295,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
           <div className="rounded-xl bg-[#111418] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA3AD]/70 block font-mono">WebRTC Core</span>
+            <span className="text-[10px] text-[#9AA3AD]/80 block font-mono">WebRTC Core</span>
             <span className="font-medium text-[#F5F7F8] mt-1 block">
               {capabilities?.webRTC ? (
                 <span className="text-[#19C37D] flex items-center gap-1">
@@ -297,7 +309,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           </div>
 
           <div className="rounded-xl bg-[#111418] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA3AD]/70 block font-mono">RTCDataChannel</span>
+            <span className="text-[10px] text-[#9AA3AD]/80 block font-mono">RTCDataChannel</span>
             <span className="font-medium text-[#F5F7F8] mt-1 block">
               {capabilities?.dataChannel ? (
                 <span className="text-[#19C37D] flex items-center gap-1">
@@ -311,7 +323,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           </div>
 
           <div className="rounded-xl bg-[#111418] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA3AD]/70 block font-mono">File System Access</span>
+            <span className="text-[10px] text-[#9AA3AD]/80 block font-mono">File System Access</span>
             <span className="font-medium text-[#F5F7F8] mt-1 block">
               {capabilities?.fileSystemAccess ? (
                 <span className="text-[#19C37D] flex items-center gap-1">
@@ -325,7 +337,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           </div>
 
           <div className="rounded-xl bg-[#111418] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA3AD]/70 block font-mono">OPFS Storage</span>
+            <span className="text-[10px] text-[#9AA3AD]/80 block font-mono">OPFS Storage</span>
             <span className="font-medium text-[#F5F7F8] mt-1 block">
               {capabilities?.opfs ? (
                 <span className="text-[#19C37D] flex items-center gap-1">
@@ -339,7 +351,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           </div>
 
           <div className="rounded-xl bg-[#111418] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA3AD]/70 block font-mono">Web Crypto API</span>
+            <span className="text-[10px] text-[#9AA3AD]/80 block font-mono">Web Crypto API</span>
             <span className="font-medium text-[#F5F7F8] mt-1 block">
               {capabilities?.webCrypto ? (
                 <span className="text-[#19C37D] flex items-center gap-1">
@@ -353,7 +365,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           </div>
 
           <div className="rounded-xl bg-[#111418] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA3AD]/70 block font-mono">Camera API (QR)</span>
+            <span className="text-[10px] text-[#9AA3AD]/80 block font-mono">Camera API (QR)</span>
             <span className="font-medium text-[#F5F7F8] mt-1 block">
               {capabilities?.camera ? (
                 <span className="text-[#19C37D] flex items-center gap-1">
@@ -367,7 +379,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           </div>
 
           <div className="rounded-xl bg-[#111418] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA3AD]/70 block font-mono">Clipboard API</span>
+            <span className="text-[10px] text-[#9AA3AD]/80 block font-mono">Clipboard API</span>
             <span className="font-medium text-[#F5F7F8] mt-1 block">
               {capabilities?.clipboard ? (
                 <span className="text-[#19C37D] flex items-center gap-1">
@@ -381,7 +393,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           </div>
 
           <div className="rounded-xl bg-[#111418] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA3AD]/70 block font-mono">Service Worker</span>
+            <span className="text-[10px] text-[#9AA3AD]/80 block font-mono">Service Worker</span>
             <span className="font-medium text-[#F5F7F8] mt-1 block">
               {capabilities?.serviceWorker ? (
                 <span className="text-[#19C37D] flex items-center gap-1">

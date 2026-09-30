@@ -165,9 +165,11 @@ function NexDropMainContent() {
           }}
         />
 
+        <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8 sm:px-6 space-y-6">
+        <h1 className="sr-only">NexDrop — peer-to-peer file and text transfer</h1>
         {/* WORKSPACE 1: TRANSFER (MAIN P2P WORKSPACE) */}
         {activeTab === 'transfer' && (
-          <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8 sm:px-6 space-y-6">
+          <>
             {/* Top Focused Connection Status Area */}
             <ConnectionStatusArea
               sessionState={sessionState}
@@ -289,7 +291,7 @@ function NexDropMainContent() {
                 </Link>
               </div>
             </div>
-          </main>
+          </>
         )}
 
         {/* WORKSPACE 2: CLIPBOARD & CODE */}
@@ -330,6 +332,7 @@ function NexDropMainContent() {
             historyCount={transferHistory.length}
           />
         )}
+        </main>
       </div>
 
       {/* Global Dialogs & Modals */}

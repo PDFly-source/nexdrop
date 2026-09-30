@@ -161,7 +161,7 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
         </div>
 
         {sendQueue.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.04] p-6 text-center text-xs text-[#9AA3AD]/60">
+          <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.04] p-6 text-center text-xs text-[#9AA3AD]/80">
             <span>No files in send queue</span>
             <span className="text-[11px] mt-0.5">Files added will be transferred sequentially</span>
           </div>
