@@ -22,6 +22,7 @@ import {
 import { encodeBinaryChunk } from './protocol';
 import { bytesToBase64Url, ChunkCipher, encryptChunk, generateIvPrefix, IncrementalSha256 } from '@/lib/crypto';
 import { initialChunkSize, noteTransferSuccess, noteTransferFailure } from './tuner';
+import { updateSenderTelemetry } from './telemetry';
 
 export interface SenderProgress {
   transferId: string;
@@ -79,6 +80,9 @@ export class SenderEngine {
   private ackedAt = 0;
   /** Backpressure events (long buffer waits / ACK starvation). */
   private stallCount = 0;
+  /** Real counters for the dev diagnostics panel — never synthesized. */
+  private ackCount = 0;
+  private maxBufferedAmount = 0;
   private lastStallAt = 0;
   private isPaused = false;
   private isCancelled = false;
@@ -127,6 +131,7 @@ export class SenderEngine {
 
     const newlyAcked = index - this.acknowledgedChunkIndex;
     this.acknowledgedChunkIndex = Math.max(this.acknowledgedChunkIndex, index);
+    this.ackCount++;
 
     // Measured throughput from the ACK cadence (real bytes, real time).
     const now = Date.now();
@@ -326,6 +331,9 @@ export class SenderEngine {
 
       this.currentChunkIndex++;
 
+      const bufAmt = this.fileChannel.bufferedAmount;
+      if (bufAmt > this.maxBufferedAmount) this.maxBufferedAmount = bufAmt;
+
       // Real speed & ETA from actual transfer counters, throttled to 100ms.
       // Never emit 'transferring' once paused/cancelled: a pause can land
       // while this chunk was already committed to send (hash consumed it),
@@ -354,6 +362,25 @@ export class SenderEngine {
         this.lastProgressEmit = now;
         lastBytes = bytesSent;
         lastTime = now;
+        updateSenderTelemetry({
+          transferId: this.transferId,
+          name: this.file.name,
+          totalBytes: this.file.size,
+          chunkSize: this.chunkSize,
+          bytesSent,
+          bytesAcked: this.ackedBytes,
+          chunksSent: this.currentChunkIndex,
+          throughputBps: this.throughputBps,
+          srttMs: this.rttMs,
+          minRttMs: this.rttMs,
+          windowChunks: this.window,
+          windowBytes: this.window * this.chunkSize,
+          bufferedAmount: this.fileChannel.bufferedAmount,
+          maxBufferedAmount: this.maxBufferedAmount,
+          ackCount: this.ackCount,
+          stalls: this.stallCount,
+          startedAt: this.startTime,
+        });
       }
     }
 

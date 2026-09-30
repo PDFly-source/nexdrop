@@ -85,6 +85,37 @@ jobs:
       - name: Run two-device end-to-end test
         run: NEXDROP_E2E_VERBOSE=1 npx tsx tests/e2e/two-device.test.ts
 
+  transfer-benchmark:
+    # REAL throughput benchmark on the current engine: pairs two isolated
+    # Chromium sessions over real WebRTC (same ICE path as the e2e job) and
+    # transfers 100 MiB / 500 MiB / 1 GiB while sampling live engine
+    # telemetry. Prints one [BENCH] JSON line per size — measured values
+    # only (bytes/time/RTT/bufferedAmount/heap), never synthesized.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Build static export
+        run: npm run build
+
+      - name: Run two-device transfer benchmark
+        run: npx tsx tests/e2e/benchmark.test.ts
+
   deploy:
     environment:
       name: github-pages

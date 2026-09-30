@@ -16,6 +16,7 @@ import {
 import { createOptimalStorageWriter, StorageWriter } from './writer';
 import { decodeBinaryChunk, simpleStringHash } from './protocol';
 import { base64UrlToBytes, ChunkCipher, decryptChunk, IncrementalSha256 } from '@/lib/crypto';
+import { updateReceiverTelemetry } from './telemetry';
 
 export interface ReceiverProgress {
   transferId: string;
@@ -65,6 +66,7 @@ export class ReceiverEngine {
   private lastBytes = 0;
   private lastTime = 0;
   private recentSpeeds: number[] = [];
+  private acksSent = 0;
 
   private isPaused = false;
   /** PAUSE that arrived before this transfer started (applied at start). */
@@ -271,6 +273,7 @@ export class ReceiverEngine {
           index: decoded.chunkIndex,
           w: Math.round(this.writeMsEwma * 10) / 10,
         });
+        this.acksSent++;
       }
 
       // Real speed & ETA from actual counters, throttled to 100ms
@@ -294,6 +297,22 @@ export class ReceiverEngine {
         this.lastProgressEmit = now;
         this.lastBytes = this.bytesReceived;
         this.lastTime = now;
+        updateReceiverTelemetry({
+          transferId: this.transferId,
+          name: this.name,
+          totalBytes: this.size,
+          chunkSize: this.chunkSize,
+          bytesReceived: this.bytesReceived,
+          chunksReceived: this.receivedChunksCount,
+          writeMsEwma: this.writeMsEwma,
+          queueDepth: 0,
+          maxQueueDepth: 0,
+          acksSent: this.acksSent,
+          throughputBps: avgSpeed,
+          writerType: this.writer?.getType() || 'unknown',
+          heapBytes: (performance as any)?.memory?.usedJSHeapSize ?? 0,
+          startedAt: this.startTime,
+        });
       }
     } catch (err: any) {
       console.error('Failed processing chunk:', err);
