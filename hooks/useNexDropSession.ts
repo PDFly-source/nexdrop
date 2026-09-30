@@ -138,6 +138,9 @@ export function useNexDropSession() {
     expiresAt: number;
     endpoint: string;
   } | null>(null);
+  const pairingGenerationRef = useRef(0);
+  const sendFirstHostRef = useRef(false);
+  const receiverConsentRef = useRef(false);
   const signalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const signalAnswerAppliedRef = useRef(false);
   /** JOINER-side validated signaling session awaiting consent. */
@@ -253,6 +256,11 @@ export function useNexDropSession() {
   }, []);
 
   const cleanup = useCallback(() => {
+    pairingGenerationRef.current++;
+    sendFirstHostRef.current = false;
+    receiverConsentRef.current = false;
+    const host = signalHostRef.current;
+    if (host) void new SignalingClient(host.endpoint).hostDecline(host.hostToken).catch(() => {});
     if (expiryTimerRef.current) {
       clearTimeout(expiryTimerRef.current);
       expiryTimerRef.current = null;
@@ -442,15 +450,15 @@ export function useNexDropSession() {
     setIsSecurityVerified(false);
   }, []);
 
-  const schedulePairingExpiry = useCallback(() => {
+  const schedulePairingExpiry = useCallback((expiresAt = Date.now() + 10 * 60 * 1000) => {
     if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current);
     expiryTimerRef.current = setTimeout(() => {
       // Pairing payloads expire after 10 minutes
-      setPairingError('timeout');
-      peerManagerRef.current?.close();
+      cleanup();
+      setPairingError('expired');
       setSessionState('failed');
-    }, 10 * 60 * 1000 + 2000);
-  }, []);
+    }, Math.max(0, expiresAt - Date.now()));
+  }, [cleanup]);
 
   // -----------------------------------------------------------------------
   // HOST: polling loop for signal-mode pairing. Waits for the joiner's
@@ -461,10 +469,14 @@ export function useNexDropSession() {
     (host: { hostToken: string; joinToken: string; sessionId: string; expiresAt: number; endpoint: string }) => {
       stopSignalPolling();
       const signal = new SignalingClient(host.endpoint);
+      const generation = pairingGenerationRef.current;
+      let polling = false;
       signalPollRef.current = setInterval(async () => {
-        if (signalAnswerAppliedRef.current) return;
+        if (signalAnswerAppliedRef.current || polling) return;
+        polling = true;
         try {
           const res = await signal.pollHost(host.hostToken);
+          if (generation !== pairingGenerationRef.current) return;
           if (res.status === 'declined') {
             stopSignalPolling();
             peerManagerRef.current?.close();
@@ -476,6 +488,15 @@ export function useNexDropSession() {
           // A join request arrived — THE HOST now makes the Accept/Decline
           // decision. No offer material has been released to the joiner yet.
           if (res.status === 'join-requested') {
+            // File selection + sharing this invitation authorizes the sender.
+            // The receiver must accept before a join request can exist.
+            if (sendFirstHostRef.current) {
+              await signal.hostAccept(host.hostToken);
+              if (generation !== pairingGenerationRef.current) return;
+              setSignalJoinerAccepted(true);
+              setSessionState('accepted');
+              return;
+            }
             if (!joinRequestShownRef.current) {
               joinRequestShownRef.current = true;
               setJoinRequestInfo(res.joinRequest ?? { deviceName: 'Unknown device', platform: null });
@@ -494,9 +515,12 @@ export function useNexDropSession() {
             stopSignalPolling();
             try {
               await establishSessionKeys(pubKeyBytes(res.answer.publicKey));
+              if (generation !== pairingGenerationRef.current || !peerManagerRef.current) return;
               await peerManagerRef.current.acceptAnswer(res.answer.sdp);
+              if (generation !== pairingGenerationRef.current) return;
               setSessionState('connecting');
             } catch {
+              if (generation !== pairingGenerationRef.current) return;
               setPairingError('The joiner answer could not be applied. Please start pairing again.');
               setSessionState('failed');
               sounds.playError();
@@ -504,13 +528,16 @@ export function useNexDropSession() {
             return;
           }
         } catch (err) {
+          if (generation !== pairingGenerationRef.current) return;
           if (err instanceof SignalingError && (err.kind === 'expired' || err.kind === 'not-found')) {
             stopSignalPolling();
             setPairingError('expired');
             setSessionState('failed');
             sounds.playError();
           }
-          // Transient network errors: keep polling silently until TTL.
+          // Transient network errors: keep polling until TTL.
+        } finally {
+          polling = false;
         }
       }, 1200);
     },
@@ -523,7 +550,7 @@ export function useNexDropSession() {
   // single-use join token and the endpoint — no SDP, no keys. The joiner's
   // answer arrives automatically; there is NO answer QR and NO second scan.
   // -----------------------------------------------------------------------
-  const createPairing = useCallback(async (): Promise<boolean> => {
+  const createPairing = useCallback(async (options?: { sendFirst?: boolean; fileCount?: number; totalBytes?: number }): Promise<boolean> => {
     if (typeof RTCPeerConnection === 'undefined') {
       setPairingError('unsupported-browser');
       setSessionState('failed');
@@ -535,14 +562,19 @@ export function useNexDropSession() {
     setTextMessages([]);
     setClipboardItems([]);
 
+    const generation = pairingGenerationRef.current;
+    sendFirstHostRef.current = !!options?.sendFirst;
     const signal = new SignalingClient();
     let info;
     try {
       info = await signal.createSession({
         deviceName: buildDeviceLabel(deviceInfo),
         platform: `${deviceInfo.os} · ${deviceInfo.browser}`.slice(0, 32),
+        fileCount: options?.fileCount,
+        totalBytes: options?.totalBytes,
       });
     } catch {
+      if (generation !== pairingGenerationRef.current) return false;
       // Signaling service unreachable — NEVER fake a success. The UI shows
       // "Automatic pairing unavailable" and offers the manual code flow.
       setSignalUnavailable(true);
@@ -551,12 +583,17 @@ export function useNexDropSession() {
       return false;
     }
 
+    if (generation !== pairingGenerationRef.current) {
+      void signal.hostDecline(info.hostToken).catch(() => {});
+      return false;
+    }
     const code = buildSignalQr({
       a: 'nexdrop',
       v: 1,
       s: info.sessionId,
       t: info.joinToken,
       e: SIGNALING_ENDPOINT,
+      ...(options?.sendFirst ? { i: 'send' as const } : {}),
     });
     signalHostRef.current = {
       hostToken: info.hostToken,
@@ -574,7 +611,7 @@ export function useNexDropSession() {
       segments: [{ index: 1, total: 1, text: code }], // always ONE code
     });
     setSessionState('hosting');
-    schedulePairingExpiry();
+    schedulePairingExpiry(info.expiresAt);
 
     // Background: build the offer + gather ICE, publish to the signaling
     // service, then poll for the joiner's answer. The QR is already visible;
@@ -582,10 +619,12 @@ export function useNexDropSession() {
     void (async () => {
       try {
         const keyPair = await generateEcdhKeyPair();
+        if (generation !== pairingGenerationRef.current) return;
         keyPairRef.current = keyPair;
         const peer = buildPeerManager();
         peer.initialize(true);
         const localDesc = await peer.createOfferAndWaitForIce();
+        if (generation !== pairingGenerationRef.current) return;
         const pubB64 = bytesToBase64Url(new Uint8Array(await exportPublicKeyRaw(keyPair.publicKey)));
         try {
           await signal.publishOffer(info.hostToken, localDesc.sdp || '', pubB64);
@@ -595,12 +634,14 @@ export function useNexDropSession() {
           // start polling and let the session's own state tell the truth.
         }
       } catch {
+        if (generation !== pairingGenerationRef.current) return;
         // LOCAL offer creation failed (e.g. no WebRTC support) — honest error.
         setPairingError('Could not create the WebRTC offer. Please start pairing again.');
         setSessionState('failed');
         sounds.playError();
         return;
       }
+      if (generation !== pairingGenerationRef.current) return;
       if (signalHostRef.current) startSignalHostPolling(signalHostRef.current);
     })();
 
@@ -714,10 +755,12 @@ export function useNexDropSession() {
     (pending: { joinToken: string; endpoint: string; expiresAt: number }) => {
       stopSignalPolling();
       const signal = new SignalingClient(pending.endpoint);
+      const generation = pairingGenerationRef.current;
       signalPollRef.current = setInterval(async () => {
         if (joinerBuildingRef.current) return;
         try {
           const res = await signal.pollJoin(pending.joinToken);
+          if (generation !== pairingGenerationRef.current) return;
           if (res.status === 'declined') {
             stopSignalPolling();
             pendingSignalRef.current = null;
@@ -733,17 +776,22 @@ export function useNexDropSession() {
             void (async () => {
               try {
                 const keyPair = await generateEcdhKeyPair();
+                if (generation !== pairingGenerationRef.current) return;
                 keyPairRef.current = keyPair;
                 const peer = buildPeerManager();
                 peer.initialize(false);
                 const localDesc = await peer.acceptOfferAndWaitForIce(res.offer!.sdp);
+                if (generation !== pairingGenerationRef.current) return;
                 await establishSessionKeys(pubKeyBytes(res.offer!.publicKey));
+                if (generation !== pairingGenerationRef.current) return;
                 const pubB64 = bytesToBase64Url(new Uint8Array(await exportPublicKeyRaw(keyPair.publicKey)));
                 await signal.publishAnswer(pending.joinToken, localDesc.sdp || '', pubB64);
+                if (generation !== pairingGenerationRef.current) return;
                 setPendingOfferInfo(null);
                 // Stays 'connecting' until the host applies the answer and
                 // the DataChannel opens → onStateChange('connected').
               } catch {
+                if (generation !== pairingGenerationRef.current) return;
                 stopSignalPolling();
                 setPairingError('Could not complete the connection. Please start pairing again.');
                 setSessionState('failed');
@@ -752,6 +800,7 @@ export function useNexDropSession() {
             })();
           }
         } catch (err) {
+          if (generation !== pairingGenerationRef.current) return;
           if (err instanceof SignalingError && (err.kind === 'expired' || err.kind === 'not-found')) {
             stopSignalPolling();
             setPairingError('expired');
@@ -774,6 +823,7 @@ export function useNexDropSession() {
       }
 
       cleanup();
+      const generation = pairingGenerationRef.current;
       setPairingError(null);
       setTextMessages([]);
       setClipboardItems([]);
@@ -788,11 +838,13 @@ export function useNexDropSession() {
           const payload = parseSignalQr(offerCode);
           const signal = new SignalingClient(payload.e);
           const info = await signal.validate(payload.t);
+          if (generation !== pairingGenerationRef.current) return false;
           // File the join request — single-use, first request wins.
-          await signal.joinRequest(payload.t, {
+          if (payload.i !== 'send') await signal.joinRequest(payload.t, {
             deviceName: buildDeviceLabel(deviceInfo),
             platform: `${deviceInfo.os} · ${deviceInfo.browser}`.slice(0, 32),
           });
+          if (generation !== pairingGenerationRef.current) return false;
           pendingSignalRef.current = {
             joinToken: payload.t,
             endpoint: payload.e,
@@ -807,11 +859,17 @@ export function useNexDropSession() {
             connectionType: info.connectionType,
           });
           setPairingMode('signal');
-          setSessionState('waiting-for-join');
-          startSignalJoinPolling(pendingSignalRef.current);
-          schedulePairingExpiry();
+          if (payload.i === 'send') {
+            receiverConsentRef.current = true;
+            setSessionState('awaiting-accept');
+          } else {
+            setSessionState('waiting-for-join');
+            startSignalJoinPolling(pendingSignalRef.current);
+          }
+          schedulePairingExpiry(info.expiresAt);
           return true;
         } catch (err) {
+          if (generation !== pairingGenerationRef.current) return false;
           if (err instanceof SignalingError) {
             if (err.kind === 'expired') setPairingError('expired');
             else if (err.kind === 'not-found') setPairingError('invalid-format');
@@ -862,6 +920,28 @@ export function useNexDropSession() {
    *  start the REAL WebRTC negotiation and produce the answer code. In the
    *  signal flow the HOST decides; the joiner never confirms here. */
   const acceptPendingOffer = useCallback(async (): Promise<boolean> => {
+    const signalPending = pendingSignalRef.current;
+    if (signalPending && !receiverConsentRef.current) return false;
+    if (signalPending && receiverConsentRef.current) {
+      receiverConsentRef.current = false; // one request even on repeated clicks
+      const generation = pairingGenerationRef.current;
+      try {
+        await new SignalingClient(signalPending.endpoint).joinRequest(signalPending.joinToken, {
+          deviceName: buildDeviceLabel(deviceInfo),
+          platform: `${deviceInfo.os} · ${deviceInfo.browser}`.slice(0, 32),
+        });
+        if (generation !== pairingGenerationRef.current) return false;
+        setPairingError(null);
+        setSessionState('waiting-for-join');
+        startSignalJoinPolling(signalPending);
+        return true;
+      } catch (err) {
+        if (generation !== pairingGenerationRef.current) return false;
+        receiverConsentRef.current = true;
+        setPairingError(err instanceof SignalingError && err.kind === 'expired' ? 'expired' : 'signal-network');
+        return false;
+      }
+    }
     // ---- MANUAL mode (legacy fallback) ----
     const pending = pendingOfferRef.current;
     if (!pending) {
@@ -915,7 +995,7 @@ export function useNexDropSession() {
       setSessionState('failed');
       return false;
     }
-  }, [buildPeerManager, establishSessionKeys, schedulePairingExpiry]);
+  }, [buildPeerManager, establishSessionKeys, schedulePairingExpiry, deviceInfo, startSignalJoinPolling]);
 
   // ---------------------------------------------------------------------
   // HOST: the join-request decision. The Accept/Decline buttons on the

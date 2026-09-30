@@ -2,13 +2,14 @@
   "name": "nexdrop",
   "version": "1.0.0",
   "private": true,
-  "description": "NexDrop \u2014 Private, Direct, Fast P2P file & text sharing. 100% client-side, no server, no accounts.",
+  "description": "NexDrop — Private, Direct, Fast P2P file & text sharing. 100% client-side, no server, no accounts.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx tests/core.test.ts && tsx tests/compact-pairing.test.ts && tsx tests/qr-pairing.test.ts && tsx tests/signal-pairing.test.ts"
+    "test": "tsx tests/core.test.ts && tsx tests/compact-pairing.test.ts && tsx tests/qr-pairing.test.ts && tsx tests/signal-pairing.test.ts && tsx tests/send-flow.test.ts",
+    "test:e2e:send-first": "tsx tests/e2e/send-first.test.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

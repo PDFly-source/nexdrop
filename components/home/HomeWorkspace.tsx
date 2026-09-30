@@ -29,6 +29,7 @@ interface HomeWorkspaceProps {
   historyItems: LocalHistoryItem[];
   sendQueueCount: number;
   incomingCount: number;
+  onBeginSend: () => void;
   onFilesSelected: (files: FileList | File[]) => void;
   /** Opens the Text & Clipboard sheet. */
   onOpenText: () => void;
@@ -57,6 +58,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   incomingCount,
   onFilesSelected,
   onOpenText,
+  onBeginSend,
   onNavigate,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -140,7 +142,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
           {/* Primary actions — the two strongest actions on Home */}
           <div className="mt-6 grid grid-cols-2 gap-3 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-500">
             <button
-              onClick={() => openPicker('')}
+              onClick={onBeginSend}
               className="nd-press group flex flex-col items-center justify-center gap-1 rounded-xl bg-nd-teal px-5 py-3.5 text-sm font-semibold text-nd-bg-0 hover:bg-nd-teal-bright transition-colors min-h-[56px] shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal focus-visible:ring-offset-2 focus-visible:ring-offset-nd-bg-0"
             >
               <span className="flex items-center gap-2">
