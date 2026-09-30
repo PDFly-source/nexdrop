@@ -489,16 +489,10 @@ async function main() {
   await pageB.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });
 
   // Device B runs as a mobile browser: received files live behind the
-  // Send/Receive pill, and innerText excludes the hidden card. Switch B to
-  // the Receive tab (as a real user would) so incoming items are visible.
-  // This must run AFTER the transfer-workspace tab is active — the pill
-  // only exists inside that workspace.
-  const recvPill = pageB.getByRole('button', { name: /Receive \(\d+\)/ });
-  if (await recvPill.count()) {
-    await recvPill.first().click();
-    await pageB.waitForTimeout(300);
-    console.log('  ✓ B switched to the mobile Receive tab before transfers');
-  }
+  // Send/Receive segmented control (role="tab"), and innerText excludes the
+  // hidden panel. waitForNameStatus asserts the Receive tab is selected
+  // before every receiver-side status read; do it once up front too.
+  await ensureReceivePanelOpen(pageB);
   const patternBuffer = (bytes: number) => {
     const buf = Buffer.alloc(bytes);
     for (let i = 0; i < bytes; i += 4096) buf.fill((i / 4096) % 251, i, Math.min(i + 4096, bytes));
@@ -526,7 +520,29 @@ async function main() {
   };
 
   /** Wait until `name` followed by `status` appears in the page body text. */
+  /**
+   * Phase 19 UI: on mobile viewports the Transfers workspace shows one panel
+   * at a time behind the Send/Receive segmented control (role="tab"), and
+   * document.body.innerText EXCLUDES the hidden panel — so receiver-side
+   * status text is invisible to innerText unless the Receive tab is selected.
+   * Ensure it is. Idempotent: only clicks when the tab is not already
+   * selected. No-op on desktop viewports, where the segmented control is
+   * not rendered at all (both panels are always visible).
+   */
+  async function ensureReceivePanelOpen(page: any) {
+    const tab = page.getByRole('tab', { name: /Receive \(\d+\)/ }).first();
+    // The segmented control exists in the DOM on desktop too, but is
+    // display:none there (both panels are always visible) — a Playwright
+    // click on it would stall on actionability, so bail when not visible.
+    if (!(await tab.count()) || !(await tab.isVisible())) return;
+    if ((await tab.getAttribute('aria-selected')) !== 'true') {
+      await tab.click();
+      await page.waitForTimeout(300);
+    }
+  }
+
   async function waitForNameStatus(page: any, name: string, status: string, timeoutMs: number) {
+    await ensureReceivePanelOpen(page);
     await page.waitForFunction(
       ([fname, stat]: [string, string]) => {
         const esc = fname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -677,6 +693,7 @@ async function main() {
     await waitForNameStatus(pageB, 'e2e-cancel-live.bin', 'Cancelled', 15000);
     check(true, 'receiver: informed of the cancellation (no silent stall)');
     await pageA.waitForTimeout(3000);
+    await ensureReceivePanelOpen(pageB);
     const bText = await pageB.evaluate(() => document.body.innerText);
     const fake = bText.match(/e2e-cancel-live\.bin[\s\S]{0,40}?Completed/);
     check(!fake, 'no fake completion after cancellation');

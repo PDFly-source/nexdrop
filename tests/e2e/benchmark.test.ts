@@ -210,10 +210,35 @@ async function main() {
     await page.setInputFiles('input[type="file"]', { name, mimeType: 'application/octet-stream', buffer });
   };
 
-  const recvTab = pageB.getByRole('button', { name: /Receive \(\d+\)/ });
-  if (await recvTab.count()) { await recvTab.first().click(); await pageB.waitForTimeout(300); }
+  // Phase 19 UI: receiver status text is invisible to innerText on the
+  // mobile viewport unless the Receive tab of the Send/Receive segmented
+  // control is selected; waitForNameStatus re-asserts it before every
+  // receiver-side read.
+  await ensureReceivePanelOpen(pageB);
+
+  /**
+   * Phase 19 UI: on mobile viewports the Transfers workspace shows one panel
+   * at a time behind the Send/Receive segmented control (role="tab"), and
+   * document.body.innerText EXCLUDES the hidden panel — so receiver-side
+   * status text is invisible to innerText unless the Receive tab is selected.
+   * Ensure it is. Idempotent: only clicks when the tab is not already
+   * selected. No-op on desktop viewports, where the segmented control is
+   * not rendered at all (both panels are always visible).
+   */
+  async function ensureReceivePanelOpen(page: any) {
+    const tab = page.getByRole('tab', { name: /Receive \(\d+\)/ }).first();
+    // The segmented control exists in the DOM on desktop too, but is
+    // display:none there (both panels are always visible) — a Playwright
+    // click on it would stall on actionability, so bail when not visible.
+    if (!(await tab.count()) || !(await tab.isVisible())) return;
+    if ((await tab.getAttribute('aria-selected')) !== 'true') {
+      await tab.click();
+      await page.waitForTimeout(300);
+    }
+  }
 
   async function waitForNameStatus(page: any, name: string, status: string, timeoutMs: number) {
+    await ensureReceivePanelOpen(page);
     await page.waitForFunction(
       ([fname, stat]: [string, string]) => {
         const esc = fname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
