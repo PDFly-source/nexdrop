@@ -51,7 +51,7 @@ export const ActiveTransferCard: React.FC<ActiveTransferCardProps> = ({
   const strokeDashoffset = circumference - (progress / 100) * circumference;
 
   return (
-    <div className="rounded-xl border border-white/[0.12] bg-[#15191E] p-5 shadow-lg">
+    <div className="rounded-xl border border-white/[0.12] bg-[#11171B] p-5 shadow-lg">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
         {/* Left: Info & Metrics */}
         <div className="flex-1 min-w-0 text-left w-full">
@@ -60,7 +60,7 @@ export const ActiveTransferCard: React.FC<ActiveTransferCardProps> = ({
               className={`flex h-6 w-6 items-center justify-center rounded-md ${
                 direction === 'outgoing'
                   ? 'bg-blue-500/10 text-blue-400'
-                  : 'bg-emerald-500/10 text-[#3DD6A0]'
+                  : 'bg-emerald-500/10 text-[#00D9B5]'
               }`}
             >
               {direction === 'outgoing' ? (
@@ -69,11 +69,11 @@ export const ActiveTransferCard: React.FC<ActiveTransferCardProps> = ({
                 <ArrowDownLeft className="w-3.5 h-3.5" />
               )}
             </span>
-            <span className="text-xs font-medium text-[#9AA3AD] uppercase tracking-wider">
+            <span className="text-xs font-medium text-[#9AA7AE] uppercase tracking-wider">
               {direction === 'outgoing' ? 'Sending to peer' : 'Receiving from peer'}
             </span>
             <span className="text-white/45">·</span>
-            <span className="text-xs text-[#19C37D] font-mono">
+            <span className="text-xs text-[#00F5A0] font-mono">
               {status === 'paused' ? 'Paused' : 'Streaming'}
             </span>
           </div>
@@ -82,7 +82,7 @@ export const ActiveTransferCard: React.FC<ActiveTransferCardProps> = ({
             {name}
           </h2>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#9AA3AD]">
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#9AA7AE]">
             <span>
               <strong className="font-mono text-[#F5F7F8] font-normal">
                 {formatBytes(bytesTransferred)}
@@ -93,13 +93,13 @@ export const ActiveTransferCard: React.FC<ActiveTransferCardProps> = ({
 
             <span>·</span>
 
-            <span className="font-mono text-[#3DD6A0]">
+            <span className="font-mono text-[#00D9B5]">
               {formatSpeed(speedBps)}
             </span>
 
             <span>·</span>
 
-            <span className="font-mono text-[#9AA3AD]">
+            <span className="font-mono text-[#9AA7AE]">
               {formatEta(etaSeconds)}
             </span>
           </div>
@@ -113,7 +113,7 @@ export const ActiveTransferCard: React.FC<ActiveTransferCardProps> = ({
                     onClick={onResume}
                     className="flex items-center gap-1.5 rounded-lg border border-white/[0.12] bg-[#1B2026] px-3 py-1.5 text-xs font-medium text-[#F5F7F8] hover:bg-white/10 transition-colors"
                   >
-                    <Play className="w-3.5 h-3.5 fill-current text-[#19C37D]" />
+                    <Play className="w-3.5 h-3.5 fill-current text-[#00F5A0]" />
                     <span>Resume</span>
                   </button>
                 ) : (
@@ -121,7 +121,7 @@ export const ActiveTransferCard: React.FC<ActiveTransferCardProps> = ({
                     onClick={onPause}
                     className="flex items-center gap-1.5 rounded-lg border border-white/[0.12] bg-[#1B2026] px-3 py-1.5 text-xs font-medium text-[#F5F7F8] hover:bg-white/10 transition-colors"
                   >
-                    <Pause className="w-3.5 h-3.5 text-[#9AA3AD]" />
+                    <Pause className="w-3.5 h-3.5 text-[#9AA7AE]" />
                     <span>Pause</span>
                   </button>
                 )}
@@ -130,7 +130,7 @@ export const ActiveTransferCard: React.FC<ActiveTransferCardProps> = ({
 
             <button
               onClick={onCancel}
-              className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-[#EF4444] hover:bg-red-500/20 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-[#FF5C5C] hover:bg-red-500/20 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
               <span>Cancel</span>
@@ -152,7 +152,7 @@ export const ActiveTransferCard: React.FC<ActiveTransferCardProps> = ({
             />
             {/* Active progress ring */}
             <circle
-              stroke="#19C37D"
+              stroke="#00F5A0"
               fill="transparent"
               strokeWidth={strokeWidth}
               strokeDasharray={`${circumference} ${circumference}`}
@@ -172,7 +172,7 @@ export const ActiveTransferCard: React.FC<ActiveTransferCardProps> = ({
             </span>
           </div>
 
-          <span className="mt-2 font-mono text-[11px] text-[#9AA3AD]">
+          <span className="mt-2 font-mono text-[11px] text-[#9AA7AE]">
             {formatSpeed(speedBps)}
           </span>
         </div>

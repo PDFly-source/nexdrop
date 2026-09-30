@@ -1,15 +1,36 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ */
-/* Accessibility: visible focus states + reduced motion support        */
+/* NexDrop Design Tokens — Phase A (Premium 8-Layer Transformation)    */
 /* ------------------------------------------------------------------ */
 
 :root {
   color-scheme: dark;
+
+  /* Base surfaces */
+  --nd-bg-0: #070A0D; /* deepest app background */
+  --nd-bg-1: #0B0F12; /* secondary surface */
+  --nd-bg-2: #11171B; /* elevated card / nav surface */
+  --nd-bg-3: #172027; /* highest elevation / hover surface */
+
+  /* Brand */
+  --nd-primary: #00F5A0;
+  --nd-secondary: #00D9B5;
+
+  /* Semantic accents */
+  --nd-connection: #39D9FF;
+  --nd-accent-file: #A78BFA;
+  --nd-warning: #FFB84D;
+  --nd-error: #FF5C5C;
+
+  /* Text */
+  --nd-text-1: #F5F7F8;
+  --nd-text-2: #9AA7AE;
+  --nd-text-3: #66737B;
 }
 
 *:focus-visible {
-  outline: 2px solid #19c37d;
+  outline: 2px solid var(--nd-primary);
   outline-offset: 2px;
 }
 

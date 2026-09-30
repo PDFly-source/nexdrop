@@ -104,7 +104,7 @@ async function main() {
       `dark=${QR_DARK} light=${QR_LIGHT}`);
     check(QR_MARGIN_MODULES >= 4, 'quiet zone >= 4 modules (spec minimum)');
     check(QR_RENDER_OPTIONS.errorCorrectionLevel === 'M', 'error correction level M (balanced)');
-    check(QR_DARK === '#0B0D0F' && QR_LIGHT === '#FFFFFF', 'high contrast near-black on white');
+    check(QR_DARK === '#070A0D' && QR_LIGHT === '#FFFFFF', 'high contrast near-black on white');
   }
 
   console.log('[qr-pairing tests] camera decode round-trip (jsQR, production path)');

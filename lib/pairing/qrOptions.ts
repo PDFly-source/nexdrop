@@ -20,7 +20,7 @@
 
 import QRCode from 'qrcode';
 
-export const QR_DARK = '#0B0D0F';
+export const QR_DARK = '#070A0D';
 export const QR_LIGHT = '#FFFFFF';
 export const QR_MARGIN_MODULES = 4; // quiet zone; the spec minimum is 4
 export const QR_ERROR_CORRECTION: QRCode.QRCodeErrorCorrectionLevel = 'M';

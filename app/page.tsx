@@ -156,10 +156,10 @@ function NexDropMainContent() {
   }, [joinWithOffer]);
 
   return (
-    <div className="min-h-screen bg-[#0B0D0F] text-[#F5F7F8] selection:bg-[#19C37D]/20 selection:text-[#3DD6A0] flex flex-col justify-between">
+    <div className="min-h-screen bg-[#070A0D] text-[#F5F7F8] selection:bg-[#00F5A0]/20 selection:text-[#00D9B5] flex flex-col justify-between">
       {/* Offline Banner */}
       {isMounted && !isOnline && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center text-xs text-[#F59E0B] flex items-center justify-center gap-2">
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center text-xs text-[#FFB84D] flex items-center justify-center gap-2">
           <WifiOff className="w-3.5 h-3.5" />
           <span>You are currently offline. Local P2P features remain cached and functional.</span>
         </div>
@@ -227,13 +227,13 @@ function NexDropMainContent() {
 
             {/* Mobile Segmented Toggle [ Send ] [ Receive ] when space is limited */}
             <div className="flex lg:hidden items-center justify-center pt-1">
-              <div className="grid grid-cols-2 rounded-xl bg-[#15191E] p-1 border border-white/[0.08] w-full max-w-xs shadow-sm">
+              <div className="grid grid-cols-2 rounded-xl bg-[#11171B] p-1 border border-white/[0.08] w-full max-w-xs shadow-sm">
                 <button
                   onClick={() => setMobileTransferMode('send')}
                   className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all ${
                     mobileTransferMode === 'send'
-                      ? 'bg-[#19C37D] text-[#0B0D0F] shadow-sm'
-                      : 'text-[#9AA3AD] hover:text-[#F5F7F8]'
+                      ? 'bg-[#00F5A0] text-[#070A0D] shadow-sm'
+                      : 'text-[#9AA7AE] hover:text-[#F5F7F8]'
                   }`}
                 >
                   <UploadCloud className="w-3.5 h-3.5" />
@@ -243,8 +243,8 @@ function NexDropMainContent() {
                   onClick={() => setMobileTransferMode('receive')}
                   className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all ${
                     mobileTransferMode === 'receive'
-                      ? 'bg-[#19C37D] text-[#0B0D0F] shadow-sm'
-                      : 'text-[#9AA3AD] hover:text-[#F5F7F8]'
+                      ? 'bg-[#00F5A0] text-[#070A0D] shadow-sm'
+                      : 'text-[#9AA7AE] hover:text-[#F5F7F8]'
                   }`}
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -286,14 +286,14 @@ function NexDropMainContent() {
             </div>
 
             {/* Minimal Trust & Architecture Info Banner */}
-            <div className="rounded-2xl border border-white/[0.06] bg-[#111418] p-5 text-xs text-[#9AA3AD] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="rounded-2xl border border-white/[0.06] bg-[#0B0F12] p-5 text-xs text-[#9AA7AE] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-[#19C37D] border border-emerald-500/20">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-[#00F5A0] border border-emerald-500/20">
                   <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
                   <p className="font-medium text-[#F5F7F8]">Direct P2P Architecture</p>
-                  <p className="text-[11px] text-[#9AA3AD] mt-0.5">
+                  <p className="text-[11px] text-[#9AA7AE] mt-0.5">
                     Pairing uses a lightweight ephemeral signaling service. Files and text travel directly between devices over encrypted WebRTC DataChannels.
                   </p>
                 </div>
@@ -302,7 +302,7 @@ function NexDropMainContent() {
               <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
                 <Link
                   href="/security"
-                  className="flex items-center gap-1 text-[11px] text-[#3DD6A0] hover:underline"
+                  className="flex items-center gap-1 text-[11px] text-[#00D9B5] hover:underline"
                 >
                   <span>Security Whitepaper</span>
                   <ExternalLink className="w-3 h-3" />
@@ -310,7 +310,7 @@ function NexDropMainContent() {
                 <span className="text-white/20">·</span>
                 <Link
                   href="/privacy"
-                  className="flex items-center gap-1 text-[11px] text-[#9AA3AD] hover:text-white"
+                  className="flex items-center gap-1 text-[11px] text-[#9AA7AE] hover:text-white"
                 >
                   <span>Privacy Policy</span>
                 </Link>
@@ -398,9 +398,9 @@ export default function HomePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#0B0D0F] flex items-center justify-center">
-          <div className="flex items-center gap-3 text-xs text-[#9AA3AD]">
-            <div className="h-4 w-4 rounded-full border-2 border-[#19C37D] border-t-transparent animate-spin" />
+        <div className="min-h-screen bg-[#070A0D] flex items-center justify-center">
+          <div className="flex items-center gap-3 text-xs text-[#9AA7AE]">
+            <div className="h-4 w-4 rounded-full border-2 border-[#00F5A0] border-t-transparent animate-spin" />
             <span>Loading NexDrop workspace…</span>
           </div>
         </div>

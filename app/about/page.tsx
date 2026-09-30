@@ -6,35 +6,35 @@ import { ArrowLeft, Layers, Cpu, Globe } from 'lucide-react';
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-[#0B0D0F] text-[#F5F7F8] selection:bg-[#19C37D]/20 selection:text-[#3DD6A0]">
+    <div className="min-h-screen bg-[#070A0D] text-[#F5F7F8] selection:bg-[#00F5A0]/20 selection:text-[#00D9B5]">
       {/* Top Header */}
-      <header className="border-b border-white/[0.08] bg-[#0B0D0F]/90 backdrop-blur-md sticky top-0 z-20">
+      <header className="border-b border-white/[0.08] bg-[#070A0D]/90 backdrop-blur-md sticky top-0 z-20">
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 sm:px-6">
           <Link
             href="/"
-            className="flex items-center gap-2 text-xs font-medium text-[#9AA3AD] hover:text-[#F5F7F8] transition-colors"
+            className="flex items-center gap-2 text-xs font-medium text-[#9AA7AE] hover:text-[#F5F7F8] transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to NexDrop</span>
           </Link>
-          <span className="text-xs font-semibold text-[#19C37D]">About NexDrop</span>
+          <span className="text-xs font-semibold text-[#00F5A0]">About NexDrop</span>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 text-left">
         <div className="max-w-2xl">
-          <div className="flex items-center gap-2 text-xs text-[#19C37D] font-medium mb-3">
+          <div className="flex items-center gap-2 text-xs text-[#00F5A0] font-medium mb-3">
             <span>NexDrop</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#F5F7F8]">
             About NexDrop
           </h1>
-          <p className="mt-3 text-sm text-[#9AA3AD] leading-relaxed">
+          <p className="mt-3 text-sm text-[#9AA7AE] leading-relaxed">
             Private. Direct. Fast. Browser-to-browser file and text sharing without accounts or cloud storage intermediaries.
           </p>
         </div>
 
-        <div className="mt-10 space-y-8 text-xs sm:text-sm text-[#9AA3AD] leading-relaxed">
+        <div className="mt-10 space-y-8 text-xs sm:text-sm text-[#9AA7AE] leading-relaxed">
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-[#F5F7F8]">What is NexDrop?</h2>
             <p>
@@ -47,7 +47,7 @@ export default function AboutPage() {
             <p>
               Traditional web applications crash when loading gigabyte-sized files into memory. NexDrop solves this with high-performance 64 KiB chunk streaming:
             </p>
-            <ul className="list-disc pl-5 space-y-1.5 text-xs text-[#9AA3AD]">
+            <ul className="list-disc pl-5 space-y-1.5 text-xs text-[#9AA7AE]">
               <li><strong className="text-white">File.slice() Engine:</strong> Reads small 64 KiB slices from the source disk on demand without loading the full file into heap RAM.</li>
               <li><strong className="text-white">Backpressure & Flow Control:</strong> Automatically throttles chunk delivery when RTCDataChannel buffer limits are reached.</li>
               <li><strong className="text-white">Direct Disk Streaming:</strong> On modern Chromium browsers, the File System Access API streams incoming chunks directly to disk through a file handle.</li>
@@ -56,10 +56,10 @@ export default function AboutPage() {
 
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-[#F5F7F8]">Browser Compatibility</h2>
-            <div className="overflow-x-auto rounded-lg border border-white/[0.08] bg-[#15191E] p-4 text-xs">
+            <div className="overflow-x-auto rounded-lg border border-white/[0.08] bg-[#11171B] p-4 text-xs">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="border-b border-white/[0.06] text-[#9AA3AD]">
+                  <tr className="border-b border-white/[0.06] text-[#9AA7AE]">
                     <th className="pb-2">Browser / Platform</th>
                     <th className="pb-2">P2P WebRTC</th>
                     <th className="pb-2">Storage Pipeline</th>
@@ -70,13 +70,13 @@ export default function AboutPage() {
                   <tr>
                     <td className="py-2.5 font-medium text-white">Chrome / Edge Desktop</td>
                     <td className="py-2.5 text-[#22C55E]">Full Support</td>
-                    <td className="py-2.5 text-[#3DD6A0]">File System Access API (Direct to Disk)</td>
+                    <td className="py-2.5 text-[#00D9B5]">File System Access API (Direct to Disk)</td>
                     <td className="py-2.5 font-mono text-white">50+ GB</td>
                   </tr>
                   <tr>
                     <td className="py-2.5 font-medium text-white">Chrome Android</td>
                     <td className="py-2.5 text-[#22C55E]">Full Support</td>
-                    <td className="py-2.5 text-[#3DD6A0]">OPFS / Blob Assembly</td>
+                    <td className="py-2.5 text-[#00D9B5]">OPFS / Blob Assembly</td>
                     <td className="py-2.5 font-mono text-white">10 GB</td>
                   </tr>
                   <tr>
@@ -88,7 +88,7 @@ export default function AboutPage() {
                   <tr>
                     <td className="py-2.5 font-medium text-white">Firefox Desktop</td>
                     <td className="py-2.5 text-[#22C55E]">Full Support</td>
-                    <td className="py-2.5 text-[#3DD6A0]">OPFS / Blob Assembly</td>
+                    <td className="py-2.5 text-[#00D9B5]">OPFS / Blob Assembly</td>
                     <td className="py-2.5 font-mono text-white">5 GB</td>
                   </tr>
                 </tbody>
@@ -107,7 +107,7 @@ export default function AboutPage() {
         <div className="mt-12 pt-8 border-t border-white/[0.08] text-center">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-lg bg-[#19C37D] px-6 py-2.5 text-xs font-semibold text-[#0B0D0F] hover:bg-[#3DD6A0] transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#00F5A0] px-6 py-2.5 text-xs font-semibold text-[#070A0D] hover:bg-[#00D9B5] transition-colors"
           >
             Launch NexDrop
           </Link>

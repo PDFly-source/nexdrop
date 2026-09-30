@@ -68,7 +68,7 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
     const category = getFileCategory(name, type);
     switch (category) {
       case 'image':
-        return <ImageIcon className="w-4 h-4 text-[#3DD6A0]" />;
+        return <ImageIcon className="w-4 h-4 text-[#00D9B5]" />;
       case 'video':
         return <Video className="w-4 h-4 text-purple-400" />;
       case 'audio':
@@ -80,23 +80,23 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
       case 'pdf':
         return <FileText className="w-4 h-4 text-blue-400" />;
       default:
-        return <File className="w-4 h-4 text-[#9AA3AD]" />;
+        return <File className="w-4 h-4 text-[#9AA7AE]" />;
     }
   };
 
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#15191E] p-5 shadow-sm flex flex-col h-full">
+    <div className="rounded-xl border border-white/[0.08] bg-[#11171B] p-5 shadow-sm flex flex-col h-full">
       <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
         <div>
           <h2 className="text-sm font-semibold text-[#F5F7F8]">Send Files</h2>
-          <p className="text-xs text-[#9AA3AD] mt-0.5">Direct P2P · Adaptive streaming</p>
+          <p className="text-xs text-[#9AA7AE] mt-0.5">Direct P2P · Adaptive streaming</p>
         </div>
 
         <div className="flex items-center gap-2">
           {sendQueue.some((i) => i.status === 'completed') && (
             <button
               onClick={onClearCompleted}
-              className="text-[11px] text-[#9AA3AD] hover:text-[#F5F7F8] transition-colors"
+              className="text-[11px] text-[#9AA7AE] hover:text-[#F5F7F8] transition-colors"
             >
               Clear Completed
             </button>
@@ -112,8 +112,8 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
         onClick={() => fileInputRef.current?.click()}
         className={`mt-4 relative flex flex-col items-center justify-center rounded-xl border border-dashed py-8 px-4 text-center cursor-pointer transition-all ${
           isDragOver
-            ? 'border-[#19C37D] bg-[#19C37D]/5 scale-[0.99]'
-            : 'border-white/[0.12] bg-[#111418] hover:border-white/20 hover:bg-white/[0.02]'
+            ? 'border-[#00F5A0] bg-[#00F5A0]/5 scale-[0.99]'
+            : 'border-white/[0.12] bg-[#0B0F12] hover:border-white/20 hover:bg-white/[0.02]'
         }`}
       >
         <input
@@ -125,14 +125,14 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
         />
 
         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#1B2026] border border-white/[0.08] mb-3">
-          <UploadCloud className="w-5 h-5 text-[#19C37D]" />
+          <UploadCloud className="w-5 h-5 text-[#00F5A0]" />
         </div>
 
         <p className="text-xs font-medium text-[#F5F7F8]">
-          Drop files here or <span className="text-[#19C37D] underline">browse</span>
+          Drop files here or <span className="text-[#00F5A0] underline">browse</span>
         </p>
 
-        <p className="mt-1 text-[11px] text-[#9AA3AD]">
+        <p className="mt-1 text-[11px] text-[#9AA7AE]">
           Photos, videos, documents, ZIP, APK, code · Any size
         </p>
 
@@ -142,7 +142,7 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
               e.stopPropagation();
               onPromptConnect();
             }}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-white/[0.05] border border-white/[0.08] px-2.5 py-1 text-[11px] text-[#9AA3AD] hover:text-[#F5F7F8] hover:border-white/20"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-white/[0.05] border border-white/[0.08] px-2.5 py-1 text-[11px] text-[#9AA7AE] hover:text-[#F5F7F8] hover:border-white/20"
           >
             <span>Connect peer device to start sending</span>
           </div>
@@ -151,7 +151,7 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
 
       {/* Send Queue List */}
       <div className="mt-4 flex-1 flex flex-col min-h-36">
-        <div className="flex items-center justify-between text-xs text-[#9AA3AD] pb-2">
+        <div className="flex items-center justify-between text-xs text-[#9AA7AE] pb-2">
           <span>Outbound Queue ({sendQueue.length})</span>
           {sendQueue.length > 0 && (
             <span>
@@ -161,7 +161,7 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
         </div>
 
         {sendQueue.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.04] p-6 text-center text-xs text-[#9AA3AD]/80">
+          <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.04] p-6 text-center text-xs text-[#9AA7AE]/80">
             <span>No files in send queue</span>
             <span className="text-[11px] mt-0.5">Files added will be transferred sequentially</span>
           </div>
@@ -170,7 +170,7 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
             {sendQueue.map((item) => (
               <div
                 key={item.id}
-                className="group flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-[#111418] p-2.5 text-xs transition-colors hover:border-white/10"
+                className="group flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-[#0B0F12] p-2.5 text-xs transition-colors hover:border-white/10"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="shrink-0">{renderFileIcon(item.name, item.type)}</div>
@@ -178,7 +178,7 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
                     <p className="truncate font-medium text-[#F5F7F8] text-xs">
                       {item.name}
                     </p>
-                    <div className="flex items-center gap-2 text-[11px] text-[#9AA3AD]">
+                    <div className="flex items-center gap-2 text-[11px] text-[#9AA7AE]">
                       <span>{formatBytes(item.size)}</span>
                       <span>·</span>
                       <span className="capitalize">{item.status}</span>
@@ -189,7 +189,7 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
                         <span className="text-[#22C55E]">· Verified by receiver</span>
                       )}
                       {item.status === 'completed' && item.integrityVerified === false && (
-                        <span className="text-[#EF4444]">· Receiver reported integrity failure</span>
+                        <span className="text-[#FF5C5C]">· Receiver reported integrity failure</span>
                       )}
                     </div>
                   </div>
@@ -200,15 +200,15 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
                     <CheckCircle2 className="w-4 h-4 text-[#22C55E]" />
                   )}
                   {item.status === 'failed' && (
-                    <AlertCircle className="w-4 h-4 text-[#EF4444]" />
+                    <AlertCircle className="w-4 h-4 text-[#FF5C5C]" />
                   )}
                   {item.status === 'queued' && (
-                    <Clock className="w-3.5 h-3.5 text-[#9AA3AD]" />
+                    <Clock className="w-3.5 h-3.5 text-[#9AA7AE]" />
                   )}
                   {item.status !== 'transferring' && (
                     <button
                       onClick={() => onRemoveItem(item.id)}
-                      className="text-[#9AA3AD] hover:text-[#EF4444] transition-colors p-1"
+                      className="text-[#9AA7AE] hover:text-[#FF5C5C] transition-colors p-1"
                       title="Remove from queue"
                     >
                       <X className="w-3.5 h-3.5" />

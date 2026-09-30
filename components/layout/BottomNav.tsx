@@ -41,7 +41,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-white/[0.08] bg-[#0B0D0F]/95 backdrop-blur-lg pb-safe">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-white/[0.08] bg-[#070A0D]/95 backdrop-blur-lg pb-safe">
       <div className="grid grid-cols-4 h-14">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -51,13 +51,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               className={`relative flex flex-col items-center justify-center gap-1 transition-colors ${
-                isActive ? 'text-[#19C37D]' : 'text-[#9AA3AD] hover:text-[#F5F7F8]'
+                isActive ? 'text-[#00F5A0]' : 'text-[#9AA7AE] hover:text-[#F5F7F8]'
               }`}
             >
               <div className="relative">
                 <Icon className={`w-4 h-4 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
                 {tab.badge && (
-                  <span className="absolute -top-1 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#19C37D] px-1 text-[9px] font-bold text-[#0B0D0F]">
+                  <span className="absolute -top-1 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#00F5A0] px-1 text-[9px] font-bold text-[#070A0D]">
                     {tab.badge}
                   </span>
                 )}
@@ -66,7 +66,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 {tab.label}
               </span>
               {isActive && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px] bg-[#19C37D] rounded-full" />
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px] bg-[#00F5A0] rounded-full" />
               )}
             </button>
           );

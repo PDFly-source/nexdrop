@@ -39,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#0B0D0F]/90 backdrop-blur-md">
+    <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#070A0D]/90 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
         {/* Zone 1: NexDrop Wordmark */}
         <div className="flex items-center gap-6">
@@ -47,8 +47,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => onTabChange('transfer')}
             className="flex items-center gap-2 group text-left"
           >
-            <div className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-[#15191E] border border-white/10 group-hover:border-emerald-500/40 transition-colors">
-              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-none stroke-[#19C37D] stroke-[2.2]">
+            <div className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-[#11171B] border border-white/10 group-hover:border-emerald-500/40 transition-colors">
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-none stroke-[#00F5A0] stroke-[2.2]">
                 <path d="M7 10l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M12 5v14" strokeLinecap="round" />
                 <path d="M17 14l-5 5-5-5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 3" />
@@ -60,13 +60,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           {/* Zone 2: Desktop Workspace Navigation Tabs */}
-          <nav className="hidden md:flex items-center gap-1 bg-[#15191E]/60 p-1 rounded-xl border border-white/[0.06]">
+          <nav className="hidden md:flex items-center gap-1 bg-[#11171B]/60 p-1 rounded-xl border border-white/[0.06]">
             <button
               onClick={() => onTabChange('transfer')}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeTab === 'transfer'
-                  ? 'bg-[#19C37D] text-[#0B0D0F] shadow-sm font-semibold'
-                  : 'text-[#9AA3AD] hover:text-[#F5F7F8] hover:bg-white/[0.04]'
+                  ? 'bg-[#00F5A0] text-[#070A0D] shadow-sm font-semibold'
+                  : 'text-[#9AA7AE] hover:text-[#F5F7F8] hover:bg-white/[0.04]'
               }`}
             >
               Transfer
@@ -75,8 +75,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => onTabChange('clipboard')}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeTab === 'clipboard'
-                  ? 'bg-[#19C37D] text-[#0B0D0F] shadow-sm font-semibold'
-                  : 'text-[#9AA3AD] hover:text-[#F5F7F8] hover:bg-white/[0.04]'
+                  ? 'bg-[#00F5A0] text-[#070A0D] shadow-sm font-semibold'
+                  : 'text-[#9AA7AE] hover:text-[#F5F7F8] hover:bg-white/[0.04]'
               }`}
             >
               Clipboard
@@ -85,8 +85,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => onTabChange('history')}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeTab === 'history'
-                  ? 'bg-[#19C37D] text-[#0B0D0F] shadow-sm font-semibold'
-                  : 'text-[#9AA3AD] hover:text-[#F5F7F8] hover:bg-white/[0.04]'
+                  ? 'bg-[#00F5A0] text-[#070A0D] shadow-sm font-semibold'
+                  : 'text-[#9AA7AE] hover:text-[#F5F7F8] hover:bg-white/[0.04]'
               }`}
             >
               History
@@ -95,8 +95,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => onTabChange('settings')}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeTab === 'settings'
-                  ? 'bg-[#19C37D] text-[#0B0D0F] shadow-sm font-semibold'
-                  : 'text-[#9AA3AD] hover:text-[#F5F7F8] hover:bg-white/[0.04]'
+                  ? 'bg-[#00F5A0] text-[#070A0D] shadow-sm font-semibold'
+                  : 'text-[#9AA7AE] hover:text-[#F5F7F8] hover:bg-white/[0.04]'
               }`}
             >
               Settings
@@ -111,24 +111,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={handleStatusBadgeClick}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
               isConnected
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-[#3DD6A0] hover:bg-emerald-500/15'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-[#00D9B5] hover:bg-emerald-500/15'
                 : isConnecting
-                ? 'border-amber-500/30 bg-amber-500/10 text-[#F59E0B] hover:bg-amber-500/15'
+                ? 'border-amber-500/30 bg-amber-500/10 text-[#FFB84D] hover:bg-amber-500/15'
                 : isReconnecting
                 ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
                 : isPairing
-                ? 'border-[#19C37D]/30 bg-[#19C37D]/10 text-[#19C37D]'
-                : 'border-white/[0.08] bg-[#15191E] text-[#9AA3AD] hover:text-[#F5F7F8] hover:border-white/20'
+                ? 'border-[#00F5A0]/30 bg-[#00F5A0]/10 text-[#00F5A0]'
+                : 'border-white/[0.08] bg-[#11171B] text-[#9AA7AE] hover:text-[#F5F7F8] hover:border-white/20'
             }`}
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${
                 isConnected
-                  ? 'bg-[#19C37D] animate-pulse'
+                  ? 'bg-[#00F5A0] animate-pulse'
                   : isConnecting
-                  ? 'bg-[#F59E0B] animate-ping'
+                  ? 'bg-[#FFB84D] animate-ping'
                   : isPairing
-                  ? 'bg-[#19C37D] animate-ping'
+                  ? 'bg-[#00F5A0] animate-ping'
                   : 'bg-white/30'
               }`}
             />

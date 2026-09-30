@@ -81,12 +81,12 @@ export default function DiagnosticsPanel() {
   ];
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-[#111418] p-4 text-left">
+    <div className="rounded-xl border border-white/[0.06] bg-[#0B0F12] p-4 text-left">
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs font-semibold text-[#F5F7F8]">
-          Transfer diagnostics <span className="text-[#9AA3AD] font-normal">(live, measured)</span>
+          Transfer diagnostics <span className="text-[#9AA7AE] font-normal">(live, measured)</span>
         </p>
-        <p className="text-[10px] text-[#9AA3AD]">refresh 5 Hz</p>
+        <p className="text-[10px] text-[#9AA7AE]">refresh 5 Hz</p>
       </div>
       <div className="flex flex-wrap gap-8">
         <DiagSection title="Sender" rows={senderRows} />
@@ -100,11 +100,11 @@ export default function DiagnosticsPanel() {
 function DiagSection({ title, rows }: { title: string; rows: Array<[string, string]> }) {
   return (
     <div className="min-w-[220px]">
-      <p className="text-[10px] uppercase tracking-wider text-[#3DD6A0] mb-1.5">{title}</p>
+      <p className="text-[10px] uppercase tracking-wider text-[#00D9B5] mb-1.5">{title}</p>
       <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 text-[11px] font-mono">
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
-            <span className="text-[#9AA3AD]">{k}</span>
+            <span className="text-[#9AA7AE]">{k}</span>
             <span className="text-right text-[#F5F7F8]">{v}</span>
           </div>
         ))}

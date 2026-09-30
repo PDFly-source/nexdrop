@@ -62,13 +62,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#15191E] p-5 shadow-2xl text-left max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#11171B] p-5 shadow-2xl text-left max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
           <div className="flex items-center gap-2">
-            <Settings className="w-4 h-4 text-[#19C37D]" />
+            <Settings className="w-4 h-4 text-[#00F5A0]" />
             <h3 className="text-sm font-semibold text-[#F5F7F8]">NexDrop Settings</h3>
           </div>
-          <button onClick={onClose} className="text-[#9AA3AD] hover:text-[#F5F7F8]">
+          <button onClick={onClose} className="text-[#9AA7AE] hover:text-[#F5F7F8]">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -85,11 +85,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
                 maxLength={40}
-                className="flex-1 rounded-lg border border-white/[0.1] bg-[#111418] px-3 py-1.5 text-xs text-[#F5F7F8] focus:border-[#19C37D] focus:outline-none"
+                className="flex-1 rounded-lg border border-white/[0.1] bg-[#0B0F12] px-3 py-1.5 text-xs text-[#F5F7F8] focus:border-[#00F5A0] focus:outline-none"
               />
               <button
                 type="submit"
-                className="rounded-lg bg-[#19C37D] px-3 py-1.5 text-xs font-medium text-[#0B0D0F] hover:bg-[#3DD6A0] transition-colors"
+                className="rounded-lg bg-[#00F5A0] px-3 py-1.5 text-xs font-medium text-[#070A0D] hover:bg-[#00D9B5] transition-colors"
               >
                 {savedName ? <Check className="w-3.5 h-3.5 inline" /> : 'Save'}
               </button>
@@ -104,12 +104,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-[#F5F7F8]">Synthesized Audio Cues</p>
-                  <p className="text-[11px] text-[#9AA3AD]">Play chime on connect, finish, and alerts</p>
+                  <p className="text-[11px] text-[#9AA7AE]">Play chime on connect, finish, and alerts</p>
                 </div>
                 <button
                   onClick={() => onToggleSound(!soundEnabled)}
                   className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-                    soundEnabled ? 'bg-[#19C37D]' : 'bg-[#1B2026]'
+                    soundEnabled ? 'bg-[#00F5A0]' : 'bg-[#1B2026]'
                   }`}
                 >
                   <span
@@ -123,12 +123,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-[#F5F7F8]">Haptic Vibration</p>
-                  <p className="text-[11px] text-[#9AA3AD]">Vibrate mobile devices on transfer completion</p>
+                  <p className="text-[11px] text-[#9AA7AE]">Vibrate mobile devices on transfer completion</p>
                 </div>
                 <button
                   onClick={() => onToggleVibration(!vibrationEnabled)}
                   className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-                    vibrationEnabled ? 'bg-[#19C37D]' : 'bg-[#1B2026]'
+                    vibrationEnabled ? 'bg-[#00F5A0]' : 'bg-[#1B2026]'
                   }`}
                 >
                   <span
@@ -144,21 +144,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Section 3: Transfer & Security */}
           <div className="pt-3 border-t border-white/[0.06]">
             <p className="text-xs font-semibold text-[#F5F7F8] mb-2">Transfer & Protocols</p>
-            <div className="rounded-lg bg-[#111418] border border-white/[0.04] p-3 space-y-2">
+            <div className="rounded-lg bg-[#0B0F12] border border-white/[0.04] p-3 space-y-2">
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[#9AA3AD]">Chunk Size</span>
+                <span className="text-[#9AA7AE]">Chunk Size</span>
                 <span className="font-mono text-[#F5F7F8]">64 KiB</span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[#9AA3AD]">Flow Control Window</span>
+                <span className="text-[#9AA7AE]">Flow Control Window</span>
                 <span className="font-mono text-[#F5F7F8]">16 Chunks</span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[#9AA3AD]">Integrity Verification</span>
-                <span className="text-[#19C37D] font-mono">SHA-256 Enabled</span>
+                <span className="text-[#9AA7AE]">Integrity Verification</span>
+                <span className="text-[#00F5A0] font-mono">SHA-256 Enabled</span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[#9AA3AD]">Cloud Storage</span>
+                <span className="text-[#9AA7AE]">Cloud Storage</span>
                 <span className="text-[#22C55E] font-mono">Zero (Pure P2P)</span>
               </div>
             </div>
@@ -169,13 +169,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-[#F5F7F8]">Local Transfer History</p>
-                <p className="text-[11px] text-[#9AA3AD]">
+                <p className="text-[11px] text-[#9AA7AE]">
                   Stored locally in browser only ({historyCount} items). No files stored.
                 </p>
               </div>
               <button
                 onClick={handleClear}
-                className="flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs text-[#EF4444] hover:bg-red-500/20 transition-colors"
+                className="flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs text-[#FF5C5C] hover:bg-red-500/20 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>{clearedNotice ? 'Cleared' : 'Clear'}</span>
