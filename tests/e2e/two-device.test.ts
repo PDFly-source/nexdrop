@@ -224,18 +224,26 @@ async function main() {
   const noRtcBeforeAccept = await pageB.evaluate(
     () => Object.keys(window).filter((k) => k.startsWith('nexdrop') || k.startsWith('pc')).length === 0
   );
-  check(noRtcBeforeAccept, 'no session material exists before the user taps Accept');
+  check(noRtcBeforeAccept, 'no session material exists on the joiner before the host taps Accept');
   await submitViaPaste(pageB, offerSegments);
 
-  // Connection request screen — real user consent before WebRTC starts.
-  // The sender's device name arrives from the REAL signaling service.
-  await pageB.waitForSelector('text=NexDrop wants to connect', { timeout: 20000 });
-  check(true, 'B shows the connection request screen after ONE scan');
-  const consentText = await pageB.locator('dl').first().textContent();
-  check(/NexDrop/.test(consentText || ''), 'consent screen shows the sender device name (from the pairing service)');
+  // B files a single-use join request — the HOST decides now. B holds NO
+  // WebRTC session, no offer material, nothing but the wait state.
+  await pageB.waitForSelector('text=Join request sent', { timeout: 20000 });
+  check(true, 'B files the join request after ONE scan — no consent UI on B');
+  const bWaitClean = await pageB.evaluate(
+    () => Object.keys(window).filter((k) => k.startsWith('nexdrop') || k.startsWith('pc')).length === 0
+  );
+  check(bWaitClean, 'B holds no WebRTC session while waiting for the host decision');
 
-  console.log('[two-device e2e] B: Accept → connection completes AUTOMATICALLY');
-  await pageB.getByRole('button', { name: /accept & connect/i }).click();
+  // A receives the INCOMING connection request — the decision is A's.
+  await pageA.waitForSelector('text=New connection request', { timeout: 20000 });
+  check(true, 'A shows the incoming connection request (the decision moved to A)');
+  const reqText = (await pageA.locator('dl').first().textContent()) || '';
+  check(/Android|Chrome|Windows|Linux|NexDrop/i.test(reqText), 'A sees the joiner\'s real device info (from the pairing service)');
+
+  console.log('[two-device e2e] A: Accept → connection completes AUTOMATICALLY');
+  await pageA.getByRole('button', { name: /^Accept$/ }).click();
   await pageB.waitForSelector('text=Establishing the secure peer-to-peer link', { timeout: 20000 }).catch(() => {});
   const bNeverAnswerQr = !(await pageB
     .waitForSelector('text=Return this connection code to the sender', { timeout: 3000 })
@@ -271,26 +279,31 @@ async function main() {
     await pageD.waitForSelector('text=Join pairing', { timeout: 10000 });
     check(true, 'Start over returns the joiner to a clean state');
 
-    // Decline: D scans C's real NDPS1 offer, then DECLINES — nothing survives
-    console.log('[two-device e2e] D: decline C\'s real offer');
+    // HOST-DECLINE: D scans C's real NDPS1 offer → C gets the request →
+    // C (the HOST) declines — nothing survives.
+    console.log('[two-device e2e] C: decline D\'s join request as the host');
     await pageC.getByRole('button', { name: /create pairing/i }).first().click();
     await pageC.waitForSelector('img[alt*="QR code"]', { timeout: 30000 });
     const cOffer = await decodeAllQrSegments(pageC);
     check(cOffer.length === 1 && cOffer[0].startsWith('NDPS1.'), 'second pairing: still ONE NDPS1 QR');
     await pageD.getByRole('button', { name: /join pairing/i }).first().click();
     await submitViaPaste(pageD, cOffer);
-    await pageD.waitForSelector('text=NexDrop wants to connect', { timeout: 20000 });
-    await pageD.getByRole('button', { name: /^Decline$/ }).click();
-    await pageD.waitForSelector('text=Create pairing', { timeout: 10000 });
-    check(true, 'Decline returns D to a clean idle state');
-    const dIdle = await pageD.evaluate(() => document.body.innerText);
-    check(!/waiting for peer|accept & connect/i.test(dIdle), 'no WebRTC session remains alive after Decline');
+    // D waits; C receives the request and declines it
+    await pageC.waitForSelector('text=New connection request', { timeout: 20000 });
+    check(true, 'C sees D\'s join request after ONE scan');
+    await pageC.getByRole('button', { name: /^Decline$/ }).click();
+    await pageC.waitForSelector('text=Connection declined', { timeout: 10000 });
+    check(true, 'C shows "Connection declined" after declining');
 
-    // The host is told, honestly, that the joiner declined
-    await pageC.waitForSelector('text=Connection declined', { timeout: 20000 });
-    check(true, 'C shows "Connection declined" automatically (via the signaling service)');
+    // D is told the honest declined state — and never connected
+    await pageD.waitForSelector('text=Connection declined', { timeout: 20000 });
+    check(true, 'D shows "Connection declined" (the host declined, D is informed)');
+    const dIdle = await pageD.evaluate(() => document.body.innerText);
+    check(!/waiting for peer|accept & connect|connected ✓/i.test(dIdle), 'no WebRTC session remains alive after the host declines');
 
     // A declined session is DEAD — re-scanning the same QR must NOT resurrect it
+    await pageD.getByRole('button', { name: /start over/i }).first().click();
+    await pageD.waitForSelector('text=Join pairing', { timeout: 10000 });
     await pageD.getByRole('button', { name: /join pairing/i }).first().click();
     await submitViaPaste(pageD, cOffer);
     await pageD.waitForSelector('text=/expired|not valid|invalid/i', { timeout: 20000 });

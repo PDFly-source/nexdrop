@@ -52,7 +52,9 @@ export function useTransferEngine(
   onControlCallbackRef: React.MutableRefObject<((msg: ControlMessage) => void) | null>,
   cipherRef: React.MutableRefObject<ChunkCipher | null>,
   onTransferComplete?: (item: TransferCompleteInfo) => void,
-  onTransferVerified?: (transferId: string, match: boolean) => void
+  onTransferVerified?: (transferId: string, match: boolean) => void,
+  /** Session state machine: CONNECTED → TRANSFERRING → COMPLETED (sender side). */
+  onTransferActivity?: (active: boolean) => void
 ) {
   const [sendQueue, setSendQueue] = useState<FileItem[]>([]);
   const [incomingFiles, setIncomingFiles] = useState<FileItem[]>([]);
@@ -73,7 +75,7 @@ export function useTransferEngine(
   useEffect(() => {
     onTransferCompleteRef.current = onTransferComplete;
     onTransferVerifiedRef.current = onTransferVerified;
-  }, [onTransferComplete, onTransferVerified]);
+  }, [onTransferComplete, onTransferVerified, onTransferActivity]);
   const isTransferringRef = useRef<boolean>(false);
   const peerManagerRef = useRef<PeerConnectionManager | null>(null);
 
@@ -218,7 +220,7 @@ export function useTransferEngine(
           break;
 
         case 'ACK':
-          sender?.handleAck(msg.index);
+          sender?.handleAck(msg.index, typeof msg.w === 'number' ? msg.w : undefined);
           break;
 
         case 'FILE_END':
@@ -249,6 +251,7 @@ export function useTransferEngine(
           if (r) void receiver?.cancel(msg.reason || 'Cancelled by peer');
           if (s || r) {
             isTransferringRef.current = false;
+    onTransferActivity?.(false);
             setActiveTransfer((prev) =>
               prev && prev.id === (cancelId ?? prev.id) ? { ...prev, status: 'cancelled' } : prev
             );
@@ -277,7 +280,7 @@ export function useTransferEngine(
       onFileChunkCallbackRef.current = null;
       onControlCallbackRef.current = null;
     };
-  }, [onFileChunkCallbackRef, onControlCallbackRef, onTransferVerified]);
+  }, [onFileChunkCallbackRef, onControlCallbackRef, onTransferVerified, onTransferActivity]);
 
   // -----------------------------------------------------------------------
   // Send queue processing
@@ -308,6 +311,7 @@ export function useTransferEngine(
       }
 
       isTransferringRef.current = true;
+      onTransferActivity?.(true);
       console.debug('[nexdrop] queue: starting transfer', targetItem.id, targetItem.name);
 
       const sender = new SenderEngine({
@@ -349,6 +353,7 @@ export function useTransferEngine(
           console.debug('[nexdrop] sender completed:', transferId.slice(0, 8));
           sounds.playComplete();
           isTransferringRef.current = false;
+    onTransferActivity?.(false);
           activeSenderRef.current = null;
 
           setSendQueue((q) =>
@@ -384,6 +389,7 @@ export function useTransferEngine(
           console.debug('[nexdrop] sender ERROR:', transferId.slice(0, 8), err);
           sounds.playError();
           isTransferringRef.current = false;
+    onTransferActivity?.(false);
           activeSenderRef.current = null;
 
           setSendQueue((q) =>
@@ -409,7 +415,7 @@ export function useTransferEngine(
         idx === nextIndex && item.id === targetItem.id ? { ...item, status: 'transferring' } : item
       );
     }
-  }, [peerManager, isPeerConnected, cipherRef]);
+  }, [peerManager, isPeerConnected, cipherRef, onTransferActivity]);
 
   useEffect(() => {
     processNextQueueItemRef.current = processNextQueueItem;
@@ -419,7 +425,7 @@ export function useTransferEngine(
     if (isPeerConnected && !isTransferringRef.current) {
       processNextQueueItem();
     }
-  }, [sendQueue, isPeerConnected, processNextQueueItem]);
+  }, [sendQueue, isPeerConnected, processNextQueueItem, onTransferActivity]);
 
   // The peer connection dropped (disconnect/failure): abort the in-flight
   // transfer immediately instead of letting the sender keep pushing the
@@ -443,6 +449,7 @@ export function useTransferEngine(
 
     activeSenderRef.current = null;
     isTransferringRef.current = false;
+    onTransferActivity?.(false);
 
     if (sender) {
       void sender.cancel('Connection lost');
@@ -468,7 +475,7 @@ export function useTransferEngine(
       )
     );
     setActiveTransfer((prev) => (prev ? { ...prev, status: 'failed' } : prev));
-  }, [isPeerConnected]);
+  }, [isPeerConnected, onTransferActivity]);
 
   // -----------------------------------------------------------------------
   // Public queue operations
@@ -498,11 +505,13 @@ export function useTransferEngine(
       if (target?.status === 'transferring' && activeSenderRef.current) {
         activeSenderRef.current.cancel();
         isTransferringRef.current = false;
+    onTransferActivity?.(false);
         activeSenderRef.current = null;
       }
       return prev.filter((i) => i.id !== id);
     });
-  }, []);
+    onTransferActivity?.(false);
+  }, [onTransferActivity]);
 
   const reorderSendQueue = useCallback((fromIndex: number, toIndex: number) => {
     setSendQueue((prev) => {
@@ -531,11 +540,13 @@ export function useTransferEngine(
     if (activeSenderRef.current) {
       activeSenderRef.current.cancel();
       isTransferringRef.current = false;
+    onTransferActivity?.(false);
       activeSenderRef.current = null;
     }
     void receiverEngineRef.current?.cancel();
     setActiveTransfer(null);
-  }, []);
+    onTransferActivity?.(false);
+  }, [onTransferActivity]);
 
   return {
     sendQueue,

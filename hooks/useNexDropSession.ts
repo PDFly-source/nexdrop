@@ -138,6 +138,12 @@ export function useNexDropSession() {
   const [signalUnavailable, setSignalUnavailable] = useState(false);
   /** HOST signal mode: joiner tapped Accept — answer is on its way. */
   const [signalJoinerAccepted, setSignalJoinerAccepted] = useState(false);
+  /** HOST signal mode: the pending join request the host must Accept/Decline. */
+  const [joinRequestInfo, setJoinRequestInfo] = useState<{ deviceName: string; platform: string | null } | null>(null);
+  /** JOINER signal mode: the answer build is in flight (one-shot poll guard). */
+  const joinerBuildingRef = useRef(false);
+  /** HOST signal mode: request card shown once (notification guard). */
+  const joinRequestShownRef = useRef(false);
   const [rttMs, setRttMs] = useState<number | null>(null);
   const [activePeerManager, setActivePeerManager] = useState<PeerConnectionManager | null>(null);
 
@@ -265,6 +271,9 @@ export function useNexDropSession() {
     setPairingError(null);
     setRttMs(null);
     setSignalJoinerAccepted(false);
+    setJoinRequestInfo(null);
+    joinerBuildingRef.current = false;
+    joinRequestShownRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -334,14 +343,20 @@ export function useNexDropSession() {
           case 'new':
           case 'gathering':
             // NEVER clobber an active pairing screen: the host stays on
-            // hosting-offer (showing the offer QR / scan-answer controls)
-            // and the joiner stays on joiner-answer (showing the answer QR)
-            // while their RTCPeerConnection legitimately cycles through
+            // hosting (showing the offer QR / the join-request card) and
+            // the joiner stays on waiting-for-join while their
+            // RTCPeerConnection legitimately cycles through
             // new/gathering/connecting during ICE. The UI state machine
             // must not allow impossible states (pairing screen vanished).
             setSessionState((prev) =>
               prev === 'connected' ||
+              prev === 'transferring' ||
+              prev === 'completed' ||
+              prev === 'hosting' ||
               prev === 'hosting-offer' ||
+              prev === 'join-requested' ||
+              prev === 'accepted' ||
+              prev === 'waiting-for-join' ||
               prev === 'joiner-answer' ||
               prev === 'connecting'
                 ? prev
@@ -443,11 +458,23 @@ export function useNexDropSession() {
             stopSignalPolling();
             peerManagerRef.current?.close();
             setPairingError('declined');
-            setSessionState('failed');
+            setSessionState('declined');
             sounds.playError();
             return;
           }
-          if (res.status === 'accepted') {
+          // A join request arrived — THE HOST now makes the Accept/Decline
+          // decision. No offer material has been released to the joiner yet.
+          if (res.status === 'join-requested') {
+            if (!joinRequestShownRef.current) {
+              joinRequestShownRef.current = true;
+              setJoinRequestInfo(res.joinRequest ?? { deviceName: 'Unknown device', platform: null });
+              setSessionState('join-requested');
+              sounds.playConnect();
+              if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(60);
+            }
+            return;
+          }
+          if (res.status === 'host-accepted') {
             setSignalJoinerAccepted(true);
             return;
           }
@@ -535,7 +562,7 @@ export function useNexDropSession() {
       sessionId: info.sessionId.slice(0, 8).toUpperCase(),
       segments: [{ index: 1, total: 1, text: code }], // always ONE code
     });
-    setSessionState('hosting-offer');
+    setSessionState('hosting');
     schedulePairingExpiry();
 
     // Background: build the offer + gather ICE, publish to the signaling
@@ -567,7 +594,7 @@ export function useNexDropSession() {
     })();
 
     return true;
-  }, [buildPeerManager, cleanup, deviceInfo, schedulePairingExpiry, startSignalHostPolling, stopSignalPolling]);
+  }, [buildPeerManager, cleanup, deviceInfo, schedulePairingExpiry, startSignalHostPolling]);
 
   // -----------------------------------------------------------------------
   // HOST: MANUAL pairing (fallback when the signaling service is
@@ -666,6 +693,67 @@ export function useNexDropSession() {
   /** JOINER step 1: scan + validate the offer, then WAIT for explicit user
    *  consent. No keypair, no RTCPeerConnection, no ICE — nothing is created
    *  before the user taps Accept & Connect. */
+  // ---------------------------------------------------------------------
+  // JOINER: polling loop for signal-mode pairing. Waits for the HOST's
+  // decision. The offer is only released once the host has accepted — the
+  // joiner then builds the WebRTC answer and publishes it automatically.
+  // No user action, no second QR, ever.
+  // -----------------------------------------------------------------------
+  const startSignalJoinPolling = useCallback(
+    (pending: { joinToken: string; endpoint: string; expiresAt: number }) => {
+      stopSignalPolling();
+      const signal = new SignalingClient(pending.endpoint);
+      signalPollRef.current = setInterval(async () => {
+        if (joinerBuildingRef.current) return;
+        try {
+          const res = await signal.pollJoin(pending.joinToken);
+          if (res.status === 'declined') {
+            stopSignalPolling();
+            pendingSignalRef.current = null;
+            setPendingOfferInfo(null);
+            setPairingError('declined');
+            setSessionState('declined');
+            sounds.playError();
+            return;
+          }
+          if (res.status === 'host-accepted' && res.offerReady && res.offer) {
+            joinerBuildingRef.current = true; // one-shot: build the answer once
+            setSessionState('connecting');
+            void (async () => {
+              try {
+                const keyPair = await generateEcdhKeyPair();
+                keyPairRef.current = keyPair;
+                const peer = buildPeerManager();
+                peer.initialize(false);
+                const localDesc = await peer.acceptOfferAndWaitForIce(res.offer!.sdp);
+                await establishSessionKeys(pubKeyBytes(res.offer!.publicKey));
+                const pubB64 = bytesToBase64Url(new Uint8Array(await exportPublicKeyRaw(keyPair.publicKey)));
+                await signal.publishAnswer(pending.joinToken, localDesc.sdp || '', pubB64);
+                setPendingOfferInfo(null);
+                // Stays 'connecting' until the host applies the answer and
+                // the DataChannel opens → onStateChange('connected').
+              } catch {
+                stopSignalPolling();
+                setPairingError('Could not complete the connection. Please start pairing again.');
+                setSessionState('failed');
+                sounds.playError();
+              }
+            })();
+          }
+        } catch (err) {
+          if (err instanceof SignalingError && (err.kind === 'expired' || err.kind === 'not-found')) {
+            stopSignalPolling();
+            setPairingError('expired');
+            setSessionState('failed');
+            sounds.playError();
+          }
+          // Transient network errors: keep polling silently until TTL.
+        }
+      }, 1200);
+    },
+    [buildPeerManager, establishSessionKeys, stopSignalPolling]
+  );
+
   const joinWithOffer = useCallback(
     async (offerCode: string): Promise<boolean> => {
       if (typeof RTCPeerConnection === 'undefined') {
@@ -679,14 +767,21 @@ export function useNexDropSession() {
       setTextMessages([]);
       setClipboardItems([]);
 
-      // NDPS1: ONE-scan automatic pairing. Validate the session via the
-      // signaling service, then WAIT for explicit consent. No keypair, no
-      // RTCPeerConnection, no answer QR — nothing is created before Accept.
+      // NDPS1: ONE-scan automatic pairing. Validate the session, FILE a
+      // single-use join request, then WAIT for the HOST's decision. The
+      // host renders the Accept/Decline card; no keypair, no
+      // RTCPeerConnection, no offer material exists on this side until the
+      // host accepts.
       if (isSignalQr(offerCode)) {
         try {
           const payload = parseSignalQr(offerCode);
           const signal = new SignalingClient(payload.e);
           const info = await signal.validate(payload.t);
+          // File the join request — single-use, first request wins.
+          await signal.joinRequest(payload.t, {
+            deviceName: buildDeviceLabel(deviceInfo),
+            platform: `${deviceInfo.os} · ${deviceInfo.browser}`.slice(0, 32),
+          });
           pendingSignalRef.current = {
             joinToken: payload.t,
             endpoint: payload.e,
@@ -701,7 +796,9 @@ export function useNexDropSession() {
             connectionType: info.connectionType,
           });
           setPairingMode('signal');
-          setSessionState('awaiting-accept');
+          setSessionState('waiting-for-join');
+          startSignalJoinPolling(pendingSignalRef.current);
+          schedulePairingExpiry();
           return true;
         } catch (err) {
           if (err instanceof SignalingError) {
@@ -747,75 +844,13 @@ export function useNexDropSession() {
         return false;
       }
     },
-    [cleanup]
+    [cleanup, deviceInfo, schedulePairingExpiry, startSignalJoinPolling]
   );
 
-  /** JOINER step 2: user tapped Accept & Connect — start the REAL WebRTC
-   *  negotiation and produce the answer code. */
+  /** JOINER step 2 (MANUAL fallback only): user tapped Accept & Connect —
+   *  start the REAL WebRTC negotiation and produce the answer code. In the
+   *  signal flow the HOST decides; the joiner never confirms here. */
   const acceptPendingOffer = useCallback(async (): Promise<boolean> => {
-    // ---- SIGNAL mode: accept, build the answer, publish it automatically.
-    // The user sees Connecting… → Connected. There is NO answer QR.
-    const pendingSignal = pendingSignalRef.current;
-    if (pendingSignal) {
-      if (pendingSignal.expiresAt < Date.now()) {
-        pendingSignalRef.current = null;
-        setPendingOfferInfo(null);
-        setPairingError('expired');
-        setSessionState('failed');
-        return false;
-      }
-      try {
-        const signal = new SignalingClient(pendingSignal.endpoint);
-        // The host publishes its offer right after creating the session; if
-        // the joiner accepted within that window, retry briefly until the
-        // offer is ready.
-        let accepted: Awaited<ReturnType<SignalingClient['accept']>> | null = null;
-        for (let i = 0; i < 12 && !accepted; i++) {
-          try {
-            accepted = await signal.accept(pendingSignal.joinToken);
-          } catch (err) {
-            if (err instanceof SignalingError && err.kind === 'offer-not-ready') {
-              await new Promise((r) => setTimeout(r, 1200));
-              continue;
-            }
-            throw err;
-          }
-        }
-        if (!accepted) throw new SignalingError('offer-not-ready');
-
-        setSessionState('connecting');
-
-        const keyPair = await generateEcdhKeyPair();
-        keyPairRef.current = keyPair;
-
-        const peer = buildPeerManager();
-        peer.initialize(false);
-
-        const localDesc = await peer.acceptOfferAndWaitForIce(accepted.offer.sdp);
-        await establishSessionKeys(pubKeyBytes(accepted.offer.publicKey));
-        const pubB64 = bytesToBase64Url(new Uint8Array(await exportPublicKeyRaw(keyPair.publicKey)));
-        await signal.publishAnswer(pendingSignal.joinToken, localDesc.sdp || '', pubB64);
-
-        setPendingOfferInfo(null);
-        // Stays 'connecting' until the host applies the answer and the
-        // DataChannel opens → onStateChange('connected').
-        return true;
-      } catch (err) {
-        const msg =
-          err instanceof SignalingError
-            ? err.kind === 'expired'
-              ? 'expired'
-              : err.kind === 'already-joined'
-                ? 'already-joined'
-                : 'invalid-format'
-            : 'Could not complete the connection. Please start pairing again.';
-        setPairingError(msg);
-        setSessionState('failed');
-        sounds.playError();
-        return false;
-      }
-    }
-
     // ---- MANUAL mode (legacy fallback) ----
     const pending = pendingOfferRef.current;
     if (!pending) {
@@ -871,13 +906,71 @@ export function useNexDropSession() {
     }
   }, [buildPeerManager, establishSessionKeys, schedulePairingExpiry]);
 
+  // ---------------------------------------------------------------------
+  // HOST: the join-request decision. The Accept/Decline buttons on the
+  // HOST's request card drive these — the joiner has no authority.
+  // ---------------------------------------------------------------------
+
+  /** HOST: accept the pending join request. The joiner receives the offer
+   *  and completes the WebRTC answer automatically. */
+  const acceptJoinRequest = useCallback(async (): Promise<boolean> => {
+    const host = signalHostRef.current;
+    if (!host) return false;
+    try {
+      await new SignalingClient(host.endpoint).hostAccept(host.hostToken);
+    } catch (err) {
+      if (err instanceof SignalingError && (err.kind === 'expired' || err.kind === 'not-found')) {
+        stopSignalPolling();
+        setPairingError('expired');
+        setSessionState('failed');
+        sounds.playError();
+        return false;
+      }
+      // Transient network error — keep the request card, allow a retry.
+      setPairingError('Could not reach the pairing service. Please try again.');
+      return false;
+    }
+    setJoinRequestInfo(null);
+    setSessionState('accepted');
+    return true;
+  }, [stopSignalPolling]);
+
+  /** HOST: decline the pending join request. Nothing survives: the joiner
+   *  is told the honest declined state and no WebRTC transfer starts. */
+  const declineJoinRequest = useCallback(() => {
+    const host = signalHostRef.current;
+    if (host) {
+      new SignalingClient(host.endpoint)
+        .hostDecline(host.hostToken)
+        .catch(() => {});
+    }
+    stopSignalPolling();
+    peerManagerRef.current?.close();
+    setJoinRequestInfo(null);
+    setPairingError('declined');
+    setSessionState('declined');
+    sounds.playError();
+  }, [stopSignalPolling]);
+
+  /** Session-level transfer activity for the explicit state machine:
+   *  CONNECTED → TRANSFERRING → COMPLETED (next transfer returns to
+   *  TRANSFERRING). Driven by the transfer engine, never faked. */
+  const setTransferActivity = useCallback((active: boolean) => {
+    setSessionState((prev) => {
+      if (active) return prev === 'connected' || prev === 'completed' ? 'transferring' : prev;
+      return prev === 'transferring' ? 'completed' : prev;
+    });
+  }, []);
+
   /** JOINER decline: terminate the pending session completely. Nothing was
    *  created yet (no RTCPeerConnection ever existed), and cleanup discards
-   *  the stashed offer and all session material. */
+   *  the stashed offer and all session material. In signal mode this also
+   *  WITHDRAWS the pending join request — the host is shown the honest
+   *  declined state. */
   const declinePendingOffer = useCallback(() => {
     const pendingSignal = pendingSignalRef.current;
     if (pendingSignal) {
-      // Tell the signaling service so the host sees "Connection declined".
+      // Tell the signaling service so the host sees the honest state.
       new SignalingClient(pendingSignal.endpoint)
         .decline(pendingSignal.joinToken)
         .catch(() => {});
@@ -974,10 +1067,14 @@ export function useNexDropSession() {
     pairingMode,
     signalUnavailable,
     signalJoinerAccepted,
+    joinRequestInfo,
     submitAnswer,
     joinWithOffer,
     acceptPendingOffer,
     declinePendingOffer,
+    acceptJoinRequest,
+    declineJoinRequest,
+    setTransferActivity,
     pendingOfferInfo,
     verifySasSecurityCode,
     sendTextMessage,

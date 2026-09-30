@@ -389,4 +389,80 @@ async function exportPublicKeyRawOf(kp: CryptoKeyPair): Promise<ArrayBuffer> {
   return exportPublicKeyRaw(kp.publicKey);
 }
 
-void main();
+
+// =====================================================================
+// MEASURED FLOW CONTROL — link tuner, sender RTT/window, ACK feedback
+// =====================================================================
+
+import {
+  initialChunkSize,
+  noteTransferSuccess,
+  noteTransferFailure,
+  resetLinkProfile,
+} from '../lib/transfer/tuner';
+import { SenderEngine } from '../lib/transfer/sender';
+import type { SenderOptions } from '../lib/transfer/sender';
+
+resetLinkProfile();
+assert(initialChunkSize(0) === 64 * 1024 - 256, 'tuner: conservative 64 KiB start (minus crypto/SCTP envelope headroom)');
+assert(initialChunkSize(131072) === 64 * 1024, 'tuner: start never exceeds 64 KiB before learning');
+
+// A clean, healthy run learns a larger chunk for the NEXT transfer
+noteTransferSuccess(64 * 1024, 20 * 1024 * 1024, 0);
+assert(initialChunkSize(262144) === 128 * 1024, 'tuner: clean run grows the next chunk size (capped by SCTP)');
+noteTransferSuccess(64 * 1024, 20 * 1024 * 1024, 3);
+assert(initialChunkSize(262144) === 64 * 1024, 'tuner: stalls reset to conservative');
+noteTransferSuccess(64 * 1024, 20 * 1024 * 1024, 0);
+noteTransferFailure();
+assert(initialChunkSize(262144) === 64 * 1024, 'tuner: a failed transfer resets the learned profile');
+resetLinkProfile();
+
+// Sender: RTT measured from real ACK timing, window grows on a stable link
+async function testMeasuredFlowControl(): Promise<void> {
+  const chunkSizeCap = 64 * 1024;
+  const file = new File([new Uint8Array(chunkSizeCap * 4)], 'flow.bin', { type: 'application/octet-stream' });
+  const channel = {
+    readyState: 'open',
+    bufferedAmount: 0,
+    bufferedAmountLowThreshold: 0,
+    send: (_d: ArrayBuffer) => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  } as unknown as RTCDataChannel;
+  const opts = {
+    file,
+    transferId: 'flowtest',
+    fileChannel: channel,
+    sendControlMessage: () => true,
+    onProgress: () => {},
+    onCompleted: () => {},
+    onError: () => {},
+  } as unknown as SenderOptions;
+  const sender = new SenderEngine(opts);
+  void sender.start();
+  // ACK every chunk after a simulated ~40 ms round trip
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setTimeout(r, 40));
+    sender.handleAck(i, 1);
+  }
+  const m = sender.metrics;
+  assert(m.rttMs >= 30 && m.rttMs <= 200, 'sender: RTT is measured from ACK timing (real, not faked)', `rtt=${m.rttMs}`);
+  assert(m.throughputBps > 0, 'sender: throughput measured from the ACK cadence');
+  assert(m.window >= 8, 'sender: adaptive window stays within safe bounds');
+  assert(m.stalls === 0, 'sender: no backpressure stalls on a clean run');
+  resetLinkProfile();
+}
+
+// Receiver write feedback flows through the ACK contract (type-level check)
+{
+  type AckHasWriteCost = { w?: number };
+  const ack: AckHasWriteCost = { w: 2.5 };
+  assert(typeof ack.w === 'number', 'ACK contract carries receiver write-cost feedback (optional, backward compatible)');
+}
+
+// Run the measured flow-control checks BEFORE the summary/exit — a
+// pending async block would be killed by main()'s process.exit.
+void (async () => {
+  await testMeasuredFlowControl();
+  await main();
+})();

@@ -18,11 +18,23 @@
  */
 export type SessionState =
   | 'idle'
+  // HOST: share created via the signaling service — ONE QR is visible.
+  | 'hosting'
+  // JOINER: join request filed, waiting for the HOST's decision.
+  | 'waiting-for-join'
+  // HOST: a join request arrived — the Accept/Decline decision is pending.
+  | 'join-requested'
+  // HOST accepted — automatic SDP/ICE exchange is in progress.
+  | 'accepted'
+  // Legacy manual code-flow states (fallback pairing).
   | 'hosting-offer'
   | 'awaiting-accept'
   | 'joiner-answer'
   | 'connecting'
   | 'connected'
+  | 'transferring'
+  | 'completed'
+  | 'declined'
   | 'disconnected'
   | 'failed'
   | 'closed';

@@ -74,6 +74,9 @@ export interface ChunkAckMessage {
   type: 'ACK';
   transferId: string;
   index: number;
+  /** Receiver's EWMA ms per chunk write — real write-throughput feedback
+   *  for the sender's flow control. Optional: old peers omit it. */
+  w?: number;
 }
 
 export interface FileEndMessage {

@@ -15,7 +15,7 @@ export interface SignalSessionInfo {
 }
 
 export interface SignalValidateInfo {
-  status: 'waiting' | 'offer-published' | 'accepted' | 'answered' | 'declined' | 'connected';
+  status: 'waiting' | 'offer-published' | 'join-requested' | 'host-accepted' | 'answered' | 'declined' | 'connected';
   hasOffer: boolean;
   deviceName: string;
   platform: string | null;
@@ -25,15 +25,26 @@ export interface SignalValidateInfo {
   expiresAt: number;
 }
 
-export interface SignalOfferInfo {
-  offer: { sdp: string; publicKey: string; deviceName: string };
-  sessionId: string;
-  expiresAt: number;
+export interface SignalHostPoll {
+  status:
+    | 'waiting'
+    | 'offer-published'
+    | 'join-requested'
+    | 'host-accepted'
+    | 'answered'
+    | 'declined'
+    | 'connected';
+  /** Present when status === 'join-requested' — renders the host's decision card. */
+  joinRequest?: { deviceName: string; platform: string | null };
+  answer?: { sdp: string; publicKey: string };
 }
 
-export interface SignalHostPoll {
-  status: 'waiting' | 'offer-published' | 'accepted' | 'answered' | 'declined' | 'connected';
-  answer?: { sdp: string; publicKey: string };
+export interface SignalJoinPoll {
+  /** 'join-requested' = request filed, awaiting the host's decision. */
+  status: 'join-requested' | 'host-accepted' | 'answered' | 'declined';
+  /** Present when the host accepted and the offer is ready to consume. */
+  offer?: { sdp: string; publicKey: string; deviceName: string };
+  offerReady?: boolean;
 }
 
 export type SignalError =
@@ -132,14 +143,33 @@ export class SignalingClient {
     return call(this.endpoint, { action: 'reportConnected', ...token });
   }
 
-  /** JOINER: validate the scanned session BEFORE consent. */
+  /** JOINER: validate the scanned session BEFORE filing a request. */
   validate(joinToken: string): Promise<SignalValidateInfo> {
     return call<SignalValidateInfo>(this.endpoint, { action: 'validate', joinToken });
   }
 
-  /** JOINER: single-use accept; returns the host's offer. */
-  accept(joinToken: string): Promise<SignalOfferInfo> {
-    return call<SignalOfferInfo>(this.endpoint, { action: 'accept', joinToken });
+  /** JOINER: file a single-use join request. The HOST decides; no offer
+   *  material is returned — only confirmation the request was filed. */
+  joinRequest(
+    joinToken: string,
+    meta: { deviceName: string; platform?: string }
+  ): Promise<{ ok: true; deviceName: string; expiresAt: number }> {
+    return call(this.endpoint, { action: 'joinRequest', joinToken, ...meta });
+  }
+
+  /** JOINER: poll for the host's decision (and the offer once accepted). */
+  pollJoin(joinToken: string): Promise<SignalJoinPoll> {
+    return call<SignalJoinPoll>(this.endpoint, { action: 'pollJoin', joinToken });
+  }
+
+  /** HOST: accept the pending join request — the authorization decision. */
+  hostAccept(hostToken: string): Promise<{ ok: true; deviceName: string }> {
+    return call(this.endpoint, { action: 'hostAccept', hostToken });
+  }
+
+  /** HOST: decline the pending join request — nothing survives. */
+  hostDecline(hostToken: string): Promise<{ ok: true }> {
+    return call(this.endpoint, { action: 'hostDecline', hostToken });
   }
 
   /** JOINER: publish the gathered answer. */

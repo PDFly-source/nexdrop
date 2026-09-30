@@ -77,6 +77,10 @@ function NexDropMainContent() {
     pairingMode,
     signalUnavailable,
     signalJoinerAccepted,
+    joinRequestInfo,
+    acceptJoinRequest,
+    declineJoinRequest,
+    setTransferActivity,
     submitAnswer,
     joinWithOffer,
     acceptPendingOffer,
@@ -97,7 +101,8 @@ function NexDropMainContent() {
   } = useNexDropSession();
 
   // Master Transfer Engine Hook
-  const isPeerConnected = sessionState === 'connected';
+  const isPeerConnected =
+    sessionState === 'connected' || sessionState === 'transferring' || sessionState === 'completed';
 
   const {
     sendQueue,
@@ -133,7 +138,8 @@ function NexDropMainContent() {
       } catch {
         // history is best-effort local metadata
       }
-    }
+    },
+    setTransferActivity
   );
 
   // Handle invite links: #join=<pairing code> loads the offer automatically
@@ -192,6 +198,9 @@ function NexDropMainContent() {
               pairingMode={pairingMode}
               signalUnavailable={signalUnavailable}
               signalJoinerAccepted={signalJoinerAccepted}
+              joinRequestInfo={joinRequestInfo}
+              onAcceptJoinRequest={acceptJoinRequest}
+              onDeclineJoinRequest={declineJoinRequest}
               onSubmitAnswer={submitAnswer}
               onJoinWithOffer={joinWithOffer}
               onAcceptPendingOffer={acceptPendingOffer}

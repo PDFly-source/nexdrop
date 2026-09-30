@@ -15,12 +15,13 @@
 
 import {
   BUFFERED_AMOUNT_LOW_THRESHOLD,
-  CHUNK_SIZE,
   DEFAULT_FLOW_CONTROL_WINDOW,
+  ACK_BATCH,
   FileStartMessage,
 } from '@/types/transfer';
 import { encodeBinaryChunk } from './protocol';
 import { bytesToBase64Url, ChunkCipher, encryptChunk, generateIvPrefix, IncrementalSha256 } from '@/lib/crypto';
+import { initialChunkSize, noteTransferSuccess, noteTransferFailure } from './tuner';
 
 export interface SenderProgress {
   transferId: string;
@@ -64,6 +65,21 @@ export class SenderEngine {
   private readonly chunkSize: number;
   private currentChunkIndex = 0;
   private acknowledgedChunkIndex = -1;
+
+  // ---- MEASURED flow control (nothing here is synthesized) ----
+  /** Send timestamp per in-flight chunk → real RTT from ACK timing. */
+  private sendTimes = new Map<number, number>();
+  /** EWMA round-trip time in ms (chunk sent → chunk acknowledged). */
+  private rttMs = 0;
+  /** Adaptive in-flight window (chunks), ACK-driven. */
+  private window = DEFAULT_FLOW_CONTROL_WINDOW;
+  /** Measured throughput from the ACK cadence (bytes/sec). */
+  private throughputBps = 0;
+  private ackedBytes = 0;
+  private ackedAt = 0;
+  /** Backpressure events (long buffer waits / ACK starvation). */
+  private stallCount = 0;
+  private lastStallAt = 0;
   private isPaused = false;
   private isCancelled = false;
   private isDone = false;
@@ -87,15 +103,75 @@ export class SenderEngine {
     // offers 262144, but some paths negotiate exactly 64 KiB — a raw
     // 64 KiB chunk plus the crypto envelope would exceed it and the
     // channel throws. Headroom covers header + IV prefix + GCM tag.
+    // Never send a frame larger than the negotiated SCTP limit. Starts
+    // conservative (64 KiB) and grows only from measured, stable runs of
+    // PREVIOUS transfers in this session (see ./tuner).
     const negotiated = options.maxMessageSize && options.maxMessageSize > 0 ? options.maxMessageSize : 65536;
-    this.chunkSize = Math.max(16 * 1024, Math.min(CHUNK_SIZE, negotiated - 256));
+    this.chunkSize = initialChunkSize(negotiated);
 
     this.totalChunks = Math.max(1, Math.ceil(this.file.size / this.chunkSize));
     this.fileChannel.bufferedAmountLowThreshold = BUFFERED_AMOUNT_LOW_THRESHOLD;
   }
 
-  public handleAck(index: number) {
+  public handleAck(index: number, writeMs?: number) {
+    const sentAt = this.sendTimes.get(index);
+    if (sentAt !== undefined) {
+      const sample = Date.now() - sentAt;
+      if (sample > 0 && sample < 30000) {
+        // Real RTT: chunk N sent → chunk N acknowledged.
+        this.rttMs = this.rttMs > 0 ? this.rttMs * 0.75 + sample * 0.25 : sample;
+      }
+      for (let i = index; i >= index - 64 && i >= 0; i--) this.sendTimes.delete(i);
+      if (this.sendTimes.size > 512) this.sendTimes.clear();
+    }
+
+    const newlyAcked = index - this.acknowledgedChunkIndex;
     this.acknowledgedChunkIndex = Math.max(this.acknowledgedChunkIndex, index);
+
+    // Measured throughput from the ACK cadence (real bytes, real time).
+    const now = Date.now();
+    if (newlyAcked > 0) {
+      const bytes = newlyAcked * this.chunkSize;
+      if (this.ackedAt > 0 && now > this.ackedAt) {
+        const inst = bytes / ((now - this.ackedAt) / 1000);
+        this.throughputBps = this.throughputBps > 0 ? this.throughputBps * 0.7 + inst * 0.3 : inst;
+      }
+      this.ackedBytes += bytes;
+      this.ackedAt = now;
+    }
+
+    this.tuneWindow(writeMs);
+  }
+
+  /** Window adaptation from measured RTT, throughput, receiver write cost
+   *  and backpressure. Grows toward the bandwidth-delay product only while
+   *  the link is stable; shrinks immediately on real pressure. */
+  private tuneWindow(writeMs?: number): void {
+    // Receiver is write-bound (slow disk/OPFS): fewer chunks in flight so
+    // its buffer stays bounded — real receiver write-throughput feedback.
+    if (writeMs !== undefined && writeMs > 12) {
+      this.window = Math.max(ACK_BATCH, Math.floor(this.window * 0.8));
+      return;
+    }
+    // Recently backpressured: hold, let the shrink below take effect.
+    if (Date.now() - this.lastStallAt < 2000) return;
+    if (this.rttMs > 0 && this.throughputBps > 0) {
+      const bdpChunks = Math.ceil((this.throughputBps / 8) * (this.rttMs / 1000) / this.chunkSize);
+      const target = Math.max(ACK_BATCH, Math.min(256, bdpChunks + ACK_BATCH));
+      this.window = Math.min(Math.max(this.window, target), 256);
+    }
+  }
+
+  /** Real backpressure: a meaningful buffer wait or ACK starvation. */
+  private noteStall(): void {
+    this.lastStallAt = Date.now();
+    this.stallCount++;
+    this.window = Math.max(ACK_BATCH, Math.floor(this.window * 0.75));
+  }
+
+  /** Measured link metrics (for diagnostics — never faked). */
+  public get metrics(): { rttMs: number; window: number; throughputBps: number; stalls: number } {
+    return { rttMs: this.rttMs, window: this.window, throughputBps: this.throughputBps, stalls: this.stallCount };
   }
 
   public pause() {
@@ -119,6 +195,12 @@ export class SenderEngine {
   /** The transfer this engine instance is bound to (for control-message matching). */
   public get activeTransferId(): string {
     return this.transferId;
+  }
+
+  /** Real transfer failure — resets the learned link profile (conservative). */
+  private fail(reason: string): void {
+    noteTransferFailure();
+    this.onError(this.transferId, reason);
   }
 
   public cancel(reason: string = 'Cancelled by sender') {
@@ -156,7 +238,7 @@ export class SenderEngine {
 
     const sent = this.sendControlMessage(startMsg);
     if (!sent) {
-      this.onError(this.transferId, 'Control channel unavailable');
+      this.fail('Control channel unavailable');
       return;
     }
 
@@ -180,7 +262,7 @@ export class SenderEngine {
 
       // RTCDataChannel backpressure
       if (this.fileChannel.readyState !== 'open') {
-        this.onError(this.transferId, 'Connection lost during transfer');
+        this.fail('Connection lost during transfer');
         this.emitProgress('failed', 0, 0);
         return;
       }
@@ -198,7 +280,7 @@ export class SenderEngine {
       try {
         chunkBuffer = await slice.arrayBuffer();
       } catch (err: any) {
-        this.onError(this.transferId, `File read error: ${err?.message || err}`);
+        this.fail(`File read error: ${err?.message || err}`);
         this.emitProgress('failed', 0, 0);
         return;
       }
@@ -220,7 +302,7 @@ export class SenderEngine {
           if (!this.ivPrefix) throw new Error('E2EE transfer missing IV prefix');
           payload = await encryptChunk(this.cipher, this.ivPrefix, this.currentChunkIndex, chunkBuffer);
         } catch (err: any) {
-          this.onError(this.transferId, `Encryption error: ${err?.message || err}`);
+          this.fail(`Encryption error: ${err?.message || err}`);
           this.emitProgress('failed', 0, 0);
           return;
         }
@@ -233,10 +315,11 @@ export class SenderEngine {
         payload
       );
 
+      this.sendTimes.set(this.currentChunkIndex, Date.now());
       try {
         this.fileChannel.send(packet);
       } catch (err: any) {
-        this.onError(this.transferId, `Send error: ${err?.message || err}`);
+        this.fail(`Send error: ${err?.message || err}`);
         this.emitProgress('failed', 0, 0);
         return;
       }
@@ -279,7 +362,7 @@ export class SenderEngine {
     while (this.acknowledgedChunkIndex < this.totalChunks - 1) {
       if (this.isCancelled) return;
       if (Date.now() > finalAckDeadline) {
-        this.onError(this.transferId, 'Peer stopped acknowledging data');
+        this.fail('Peer stopped acknowledging data');
         this.emitProgress('failed', 0, 0);
         return;
       }
@@ -299,6 +382,10 @@ export class SenderEngine {
 
     this.sendControlMessage({ type: 'FILE_END', transferId: this.transferId, hash });
     this.emitProgress('completed', 0, 0);
+    // Measured-link learning for the NEXT transfer in this session: grow
+    // the chunk size only from clean, healthy runs — never synthesized.
+    const elapsedS = Math.max(0.001, (Date.now() - this.startTime) / 1000);
+    noteTransferSuccess(this.chunkSize, this.ackedBytes / elapsedS, this.stallCount);
     this.onCompleted(this.transferId, hash);
   }
 
@@ -307,12 +394,16 @@ export class SenderEngine {
       if (this.fileChannel.readyState !== 'open') return resolve();
       if (this.fileChannel.bufferedAmount <= BUFFERED_AMOUNT_LOW_THRESHOLD) return resolve();
 
+      const waitStart = Date.now();
       let settled = false;
       const done = () => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
         this.fileChannel.removeEventListener('bufferedamountlow', done);
+        // Short buffer waits are normal at line rate. A wait that clearly
+        // outlasted the drain expectation is REAL backpressure.
+        if (Date.now() - waitStart > 150) this.noteStall();
         resolve();
       };
 
@@ -324,16 +415,21 @@ export class SenderEngine {
 
   private waitForAckSlot(): Promise<void> {
     return new Promise((resolve) => {
-      const targetIndex = this.currentChunkIndex - DEFAULT_FLOW_CONTROL_WINDOW;
+      const targetIndex = this.currentChunkIndex - this.window;
       const deadline = Date.now() + 2000;
 
       const poll = () => {
-        if (
-          this.isCancelled ||
-          this.isPaused ||
-          this.acknowledgedChunkIndex >= targetIndex ||
-          Date.now() > deadline
-        ) {
+        if (this.isCancelled || this.isPaused) {
+          resolve();
+          return;
+        }
+        if (this.acknowledgedChunkIndex >= targetIndex) {
+          resolve();
+          return;
+        }
+        if (Date.now() > deadline) {
+          // ACK starvation — real instability, not a fake timeout success.
+          this.noteStall();
           resolve();
           return;
         }

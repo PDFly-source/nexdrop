@@ -55,6 +55,8 @@ export class ReceiverEngine {
   private writer: StorageWriter | null = null;
   private hasher: IncrementalSha256 | null = null;
   private receivedChunksCount = 0;
+  /** EWMA ms per chunk write (receiver write throughput, honestly measured). */
+  private writeMsEwma = 0;
   private expectedTransferIdHash = 0;
   private nextExpectedChunkIndex = 0;
   private bytesReceived = 0;
@@ -211,6 +213,7 @@ export class ReceiverEngine {
         type: 'ACK',
         transferId: this.transferId,
         index: decoded.chunkIndex,
+        w: Math.round(this.writeMsEwma * 10) / 10,
       });
       return;
     }
@@ -242,7 +245,10 @@ export class ReceiverEngine {
         payload = await decryptChunk(cipher, this.ivPrefix, decoded.chunkIndex, decoded.payload);
       }
 
+      const wStart = Date.now();
       await this.writer.writeChunk(payload, decoded.chunkIndex);
+      const wSample = Date.now() - wStart;
+      this.writeMsEwma = this.writeMsEwma > 0 ? this.writeMsEwma * 0.8 + wSample * 0.2 : wSample;
 
       this.hasher?.update(new Uint8Array(payload));
       this.bytesReceived += payload.byteLength;
@@ -263,6 +269,7 @@ export class ReceiverEngine {
           type: 'ACK',
           transferId: this.transferId,
           index: decoded.chunkIndex,
+          w: Math.round(this.writeMsEwma * 10) / 10,
         });
       }
 
