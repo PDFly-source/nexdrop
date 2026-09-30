@@ -1,8 +1,8 @@
 /**
  * NexDrop REAL transfer benchmark (two-device, real WebRTC).
  *
- * Pairs two isolated browser contexts through the real one-scan signal
- * flow, then transfers real files of configurable sizes while sampling
+ * Pairs two isolated browser contexts over REAL WebRTC via the hermetic
+ * manual code path (signaling blocked — identical transport), then transfers real files of configurable sizes while sampling
  * the engines' live telemetry (window.__NEXDROP_TELEMETRY__) — real
  * measured values only: bytes, times, RTT, bufferedAmount, heap.
  *
@@ -52,19 +52,39 @@ function startServer(): Promise<http.Server> {
 async function decodeAllQrSegments(page: any): Promise<string[]> {
   const jsqrSource = fs.readFileSync(path.join(process.cwd(), 'node_modules/jsqr/dist/jsQR.js'), 'utf8');
   await page.evaluate(jsqrSource);
-  const text = await page.evaluate(() => {
-    const img = document.querySelector('img[alt*="QR code"]') as HTMLImageElement | null;
-    if (!img) return null;
-    const c = document.createElement('canvas');
-    c.width = img.naturalWidth; c.height = img.naturalHeight;
-    const ctx = c.getContext('2d', { willReadFrequently: true })!;
-    ctx.drawImage(img, 0, 0);
-    const d = ctx.getImageData(0, 0, c.width, c.height);
-    const code = (window as any).jsQR(d.data, d.width, d.height, { inversionAttempts: 'attemptBoth' });
-    return code ? code.data : null;
+
+  const decodeVisible = () =>
+    page.evaluate(() => {
+      const img = document.querySelector('img[alt*="QR code"]') as HTMLImageElement | null;
+      if (!img) return null;
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d', { willReadFrequently: true })!;
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height);
+      const code = (window as any).jsQR(d.data, d.width, d.height, { inversionAttempts: 'attemptBoth' });
+      return code ? code.data : null;
+    });
+
+  const totalMatch = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('span')].find(
+      (s) => /^Code \d+ \/ \d+$/.test(s.textContent?.trim() || '')
+    );
+    return el?.textContent?.trim() || null;
   });
-  if (!text) throw new Error('host QR could not be decoded');
-  return [text];
+  const total = totalMatch ? parseInt(totalMatch.split('/')[1], 10) : 1;
+
+  const segments: string[] = [];
+  for (let i = 0; i < total; i++) {
+    if (i > 0) {
+      await page.getByLabel('Next QR code').click();
+      await page.waitForTimeout(150);
+    }
+    const text = await decodeVisible();
+    if (!text) throw new Error(`QR segment ${i + 1}/${total} could not be decoded`);
+    segments.push(text);
+  }
+  return segments;
 }
 
 async function submitViaPaste(page: any, pieces: string[]) {
@@ -108,22 +128,35 @@ async function main() {
   pageB.on('pageerror', (e) => console.log('  [B pageerror]', String(e).slice(0, 200)));
 
   const url = `http://localhost:${PORT}/nexdrop/`;
+  // HERMETIC: block the signaling service on both pages and pair via the
+  // manual code path. The WebRTC DataChannel transport — the thing being
+  // measured — is identical to the one-scan flow, and no external service
+  // can flake the benchmark. (The regression e2e covers the signal path.)
+  const blockSignaling = (page: any) =>
+    page.route('**/functions/nexdropSignal*', (route: any) => route.abort());
+  await blockSignaling(pageA);
+  await blockSignaling(pageB);
   await pageA.goto(url, { waitUntil: 'domcontentloaded' });
   await pageB.goto(url, { waitUntil: 'domcontentloaded' });
   await pageA.waitForSelector('text=Create pairing', { timeout: 30000 });
   await pageB.waitForSelector('text=Create pairing', { timeout: 30000 });
 
-  // --- real one-scan pairing ---
+  // --- manual pairing (real SDP offer/answer over QR paste, real WebRTC) ---
   await pageA.getByRole('button', { name: /create pairing/i }).first().click();
+  await pageA.waitForSelector('text=Automatic pairing unavailable', { timeout: 30000 });
+  await pageA.getByRole('button', { name: /use manual pairing code/i }).first().click();
   await pageA.waitForSelector('img[alt*="QR code"]', { timeout: 30000 });
   const offerSegments = await decodeAllQrSegments(pageA);
   await pageB.getByRole('button', { name: /join pairing/i }).first().click();
   await submitViaPaste(pageB, offerSegments);
-  await pageB.waitForSelector('text=Join request sent', { timeout: 20000 });
-  await pageA.waitForSelector('text=New connection request', { timeout: 20000 });
-  await pageA.getByRole('button', { name: /^Accept$/ }).click();
-  await pageA.waitForSelector('text=Connected', { timeout: 60000, state: 'attached' });
-  await pageB.waitForSelector('text=Connected', { timeout: 60000, state: 'attached' });
+  await pageB.waitForSelector('text=NexDrop wants to connect', { timeout: 20000 });
+  await pageB.getByRole('button', { name: /accept & connect/i }).click();
+  await pageB.waitForSelector('text=Return this connection code to the sender', { timeout: 30000 });
+  const answerSegments = await decodeAllQrSegments(pageB);
+  await pageA.getByRole('button', { name: /scan answer qr/i }).click();
+  await submitViaPaste(pageA, answerSegments);
+  await pageA.waitForSelector('text=Connected', { timeout: 45000 });
+  await pageB.waitForSelector('text=Connected', { timeout: 45000 });
   console.log('[benchmark] connected — starting transfer matrix');
 
   const patternBuffer = (bytes: number) => {
