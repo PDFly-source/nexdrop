@@ -42,6 +42,7 @@ export const COMPACT_PREFIX = 'NDP2.'; // NexDrop Pairing v2 (binary compact)
 // 32 bytes  DTLS fingerprint (binary)
 // u8        setupRole: 0 actpass, 1 active, 2 passive
 // u16       sctpPort
+// u32       maxMessageSize (0 = absent from the source SDP)
 // u8        candidateCount (<= 8)
 //   per candidate:
 //     u8  type: 0 host, 1 srflx, 2 relay
@@ -109,6 +110,7 @@ interface SdpEssentials {
   fingerprintHex: string; // colon-separated hex, sha-256
   setup: 'actpass' | 'active' | 'passive';
   sctpPort: number;
+  maxMessageSize?: number;
   candidates: ParsedCandidate[];
 }
 
@@ -120,6 +122,7 @@ export function extractSdpEssentials(sdp: string): SdpEssentials | null {
   let fingerprintHex: string | null = null;
   let setup: SdpEssentials['setup'] | null = null;
   let sctpPort = 5000;
+  let maxMessageSize: number | undefined;
   const candidates: ParsedCandidate[] = [];
 
   for (const rawLine of sdp.split(/\r?\n/)) {
@@ -140,6 +143,9 @@ export function extractSdpEssentials(sdp: string): SdpEssentials | null {
     } else if (line.startsWith('a=sctp-port:')) {
       const p = parseInt(line.slice('a=sctp-port:'.length), 10);
       if (Number.isFinite(p) && p > 0) sctpPort = p;
+    } else if (line.startsWith('a=max-message-size:')) {
+      const m = parseInt(line.slice('a=max-message-size:'.length), 10);
+      if (Number.isFinite(m) && m >= 0) maxMessageSize = m;
     } else if (line.startsWith('a=candidate:')) {
       const parts = line.slice('a=candidate:'.length).split(/\s+/);
       // candidate:<foundation> <component-id> <transport> <priority> <address> <port> typ <type> ...
@@ -169,7 +175,7 @@ export function extractSdpEssentials(sdp: string): SdpEssentials | null {
   const hex = fingerprintHex.replace(/:/g, '');
   if (!/^[0-9A-F]{64}$/.test(hex)) return null;
 
-  return { ufrag, pwd, fingerprintHex, setup, sctpPort, candidates };
+  return { ufrag, pwd, fingerprintHex, setup, sctpPort, maxMessageSize, candidates };
 }
 
 function hexToBytes(hex: string): number[] {
@@ -222,6 +228,9 @@ export function buildCompactCode(input: CompactPackInput): string | null {
   w.bytes(hexToBytes(essentials.fingerprintHex.replace(/:/g, '')));
   w.u8(essentials.setup === 'actpass' ? 0 : essentials.setup === 'active' ? 1 : 2);
   w.u16(essentials.sctpPort);
+  // Preserve the offer's SCTP max-message-size — dropping it would silently
+  // re-negotiate a 64 KiB ceiling and break 64 KiB framed file chunks.
+  w.u32(essentials.maxMessageSize ?? 0);
   w.u8(essentials.candidates.length);
   for (const c of essentials.candidates) {
     w.u8(c.type === 'host' ? 0 : c.type === 'srflx' ? 1 : 2);
@@ -325,6 +334,7 @@ export function parseCompactCode(code: string): ParsedPairingPayload {
   const setup = setupByte === 0 ? 'actpass' : setupByte === 1 ? 'active' : 'passive';
   const sctpPort = r.u16();
   if (sctpPort === 0) throw new Error('invalid-format');
+  const maxMessageSize = r.u32();
   const candCount = r.u8();
   if (candCount === 0 || candCount > MAX_CANDIDATES) throw new Error('invalid-format');
 
@@ -370,6 +380,7 @@ export function parseCompactCode(code: string): ParsedPairingPayload {
     fingerprintHex: bytesToHexColon(Array.from(fingerprint)),
     setup,
     sctpPort,
+    maxMessageSize,
     candidates,
   });
 
@@ -393,6 +404,8 @@ function buildCanonicalSdp(e: {
   fingerprintHex: string;
   setup: 'actpass' | 'active' | 'passive';
   sctpPort: number;
+  /** 0 = the source SDP had no a=max-message-size attribute. */
+  maxMessageSize: number;
   candidates: string[];
 }): string {
   // Session id: derived from the fingerprint (any large number is valid —
@@ -415,6 +428,7 @@ function buildCanonicalSdp(e: {
     `a=setup:${e.setup}`,
     'a=mid:0',
     `a=sctp-port:${e.sctpPort}`,
+    ...(e.maxMessageSize > 0 ? [`a=max-message-size:${e.maxMessageSize}`] : []),
     ...e.candidates,
     'a=end-of-candidates',
   ];

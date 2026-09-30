@@ -315,6 +315,7 @@ export function useTransferEngine(
         transferId: targetItem.id,
         fileChannel,
         sendControlMessage: (msg: any) => peerManager.sendControl(msg),
+        maxMessageSize: peerManager.getMaxMessageSize(),
         cipher: cipherRef.current,
         onProgress: (p: SenderProgress) => {
           console.debug('[nexdrop] sender progress:', p.transferId.slice(0, 8), p.status, p.percentage + '%');

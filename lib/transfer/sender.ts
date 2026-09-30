@@ -44,6 +44,8 @@ export interface SenderOptions {
   onError: (transferId: string, err: string) => void;
   /** Session AES-GCM cipher for app-layer encryption. Null = transport-only. */
   cipher?: ChunkCipher | null;
+  /** Negotiated SCTP max message size (pc.sctp.maxMessageSize). 0/undefined = unknown. */
+  maxMessageSize?: number;
 }
 
 export class SenderEngine {
@@ -59,6 +61,7 @@ export class SenderEngine {
   private ivPrefix: Uint8Array | null = null;
 
   private totalChunks: number;
+  private readonly chunkSize: number;
   private currentChunkIndex = 0;
   private acknowledgedChunkIndex = -1;
   private isPaused = false;
@@ -80,7 +83,14 @@ export class SenderEngine {
     this.onError = options.onError;
     this.cipher = options.cipher ?? null;
 
-    this.totalChunks = Math.max(1, Math.ceil(this.file.size / CHUNK_SIZE));
+    // Never send a frame larger than the negotiated SCTP limit. Chrome
+    // offers 262144, but some paths negotiate exactly 64 KiB — a raw
+    // 64 KiB chunk plus the crypto envelope would exceed it and the
+    // channel throws. Headroom covers header + IV prefix + GCM tag.
+    const negotiated = options.maxMessageSize && options.maxMessageSize > 0 ? options.maxMessageSize : 65536;
+    this.chunkSize = Math.max(16 * 1024, Math.min(CHUNK_SIZE, negotiated - 256));
+
+    this.totalChunks = Math.max(1, Math.ceil(this.file.size / this.chunkSize));
     this.fileChannel.bufferedAmountLowThreshold = BUFFERED_AMOUNT_LOW_THRESHOLD;
   }
 
@@ -136,7 +146,7 @@ export class SenderEngine {
       name: this.file.name,
       size: this.file.size,
       mime: this.file.type || 'application/octet-stream',
-      chunkSize: CHUNK_SIZE,
+      chunkSize: this.chunkSize,
       totalChunks: this.totalChunks,
       e2eeEnabled: !!this.cipher,
       ...(this.cipher && this.ivPrefix
@@ -154,7 +164,7 @@ export class SenderEngine {
   }
 
   private async pump(): Promise<void> {
-    let lastBytes = this.currentChunkIndex * CHUNK_SIZE;
+    let lastBytes = this.currentChunkIndex * this.chunkSize;
     let lastTime = Date.now();
 
     while (this.currentChunkIndex < this.totalChunks) {
@@ -179,9 +189,9 @@ export class SenderEngine {
         if (this.isCancelled || this.isPaused) return;
       }
 
-      // Stream a 64 KiB slice — never the whole file.
-      const start = this.currentChunkIndex * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, this.file.size);
+      // Stream one bounded slice — never the whole file.
+      const start = this.currentChunkIndex * this.chunkSize;
+      const end = Math.min(start + this.chunkSize, this.file.size);
       const slice = this.file.slice(start, end);
 
       let chunkBuffer: ArrayBuffer;
@@ -228,7 +238,7 @@ export class SenderEngine {
       // Real speed & ETA from actual transfer counters, throttled to 100ms
       const now = Date.now();
       if (now - this.lastProgressEmit >= 100 || this.currentChunkIndex === this.totalChunks) {
-        const bytesSent = Math.min(this.file.size, this.currentChunkIndex * CHUNK_SIZE);
+        const bytesSent = Math.min(this.file.size, this.currentChunkIndex * this.chunkSize);
         const timeDiff = Math.max(0.001, (now - lastTime) / 1000);
         const bytesDiff = bytesSent - lastBytes;
         const currentSpeed = bytesDiff / timeDiff;
@@ -322,7 +332,7 @@ export class SenderEngine {
     speedBps: number,
     etaSeconds: number
   ) {
-    const bytesTransferred = Math.min(this.file.size, this.currentChunkIndex * CHUNK_SIZE);
+    const bytesTransferred = Math.min(this.file.size, this.currentChunkIndex * this.chunkSize);
     const percentage = this.file.size > 0 ? (bytesTransferred / this.file.size) * 100 : 100;
 
     this.onProgress({

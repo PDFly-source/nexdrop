@@ -55,6 +55,11 @@ export class PeerConnectionManager {
     return this.rtt;
   }
 
+  /** Negotiated SCTP max message size in bytes, or 0 when unknown. */
+  public getMaxMessageSize(): number {
+    return this.pc?.sctp?.maxMessageSize ?? 0;
+  }
+
   public getState(): WebRTCConnectionState {
     return this.state;
   }

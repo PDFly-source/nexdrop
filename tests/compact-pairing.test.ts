@@ -55,6 +55,7 @@ const REAL_OFFER_SDP = [
   'c=IN IP4 0.0.0.0',
   'a=mid:0',
   'a=sctp-port:5000',
+  'a=max-message-size:262144',
   'a=fingerprint:sha-256 AB:CD:EF:01:02:03:04:05:06:07:08:09:0A:0B:0C:0D:0E:0F:10:11:12:13:14:15:16:17:18:19:1A:1B:1C:1D',
   'a=candidate:1 1 UDP 2122252543 192.168.1.42 54321 typ host',
   'a=candidate:2 1 UDP 2122252543 fd42::a1b2:c3d4 54322 typ host',
@@ -101,6 +102,12 @@ async function main() {
     'DTLS fingerprint survives reconstruction'
   );
   assert(parsed.sdp.includes('a=setup:actpass'), 'setup role survives reconstruction');
+  // max-message-size must survive: dropping it re-negotiates a 64 KiB
+  // ceiling and framed 64 KiB file chunks blow past it.
+  assert(
+    parsed.sdp.includes('a=max-message-size:262144'),
+    'max-message-size survives reconstruction'
+  );
   assert(
     parsed.sdp.includes('192.168.1.42 54321 typ host') &&
       parsed.sdp.includes('typ srflx raddr 10.0.0.1 rport 54324'),
@@ -111,6 +118,23 @@ async function main() {
     'datachannel m-line reconstructed'
   );
   assert(parsed.sdp.endsWith('\r\n'), 'canonical SDP ends with CRLF');
+
+  // A source SDP WITHOUT a=max-message-size must not invent one.
+  {
+    const ess = extractSdpEssentials(REAL_OFFER_SDP.replace('a=max-message-size:262144\r\n', ''));
+    assert(ess !== null, 'SDP without max-message-size still extracts');
+    const packed = await parsePairingCode(
+      (await buildPairingCode({
+        kind: 'offer',
+        sdp: REAL_OFFER_SDP.replace('a=max-message-size:262144\r\n', ''),
+        publicKey: pkRaw.buffer.slice(0, 65) as ArrayBuffer,
+      }))
+    );
+    assert(
+      !packed.sdp.includes('a=max-message-size'),
+      'no invented max-message-size when the source had none'
+    );
+  }
   assert(parsed.sdp.split('\r\n').slice(0, -1).every((l) => l.length > 0), 'no empty SDP lines');
 
   // ECDH key: the parsed public key must be usable for a real key agreement
