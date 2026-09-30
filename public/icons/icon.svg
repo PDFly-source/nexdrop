@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0B0D0F"/>
-      <stop offset="50%" stop-color="#111418"/>
-      <stop offset="100%" stop-color="#15191E"/>
+      <stop offset="0%" stop-color="#070B0C"/>
+      <stop offset="50%" stop-color="#0C1415"/>
+      <stop offset="100%" stop-color="#111C1D"/>
     </linearGradient>
-    <linearGradient id="dropGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#3DD6A0"/>
-      <stop offset="100%" stop-color="#19C37D"/>
+    <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18B8A6"/>
+      <stop offset="100%" stop-color="#22D3C1"/>
     </linearGradient>
     <linearGradient id="nodeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#F5F7F8" stop-opacity="0.9"/>
-      <stop offset="100%" stop-color="#9AA3AD" stop-opacity="0.5"/>
+      <stop offset="0%" stop-color="#F4F7F6" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#9BA9A8" stop-opacity="0.5"/>
     </linearGradient>
   </defs>
 
@@ -19,31 +19,32 @@
   <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
   <rect width="510" height="510" x="1" y="1" rx="127" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
 
-  <!-- Left Device Node -->
+  <!-- Left Device Node (neutral) -->
   <g transform="translate(110, 180)">
-    <rect width="72" height="120" rx="16" fill="#1B2026" stroke="rgba(255,255,255,0.15)" stroke-width="2.5"/>
-    <rect width="56" height="88" x="8" y="12" rx="8" fill="#111418"/>
-    <circle cx="36" cy="108" r="4" fill="#9AA3AD"/>
+    <rect width="72" height="120" rx="16" fill="#162324" stroke="rgba(255,255,255,0.15)" stroke-width="2.5"/>
+    <rect width="56" height="88" x="8" y="12" rx="8" fill="#0C1415"/>
+    <circle cx="36" cy="108" r="4" fill="#657473"/>
   </g>
 
-  <!-- Right Device Node -->
+  <!-- Right Device Node (teal - active peer) -->
   <g transform="translate(330, 212)">
-    <rect width="72" height="120" rx="16" fill="#1B2026" stroke="rgba(255,255,255,0.15)" stroke-width="2.5"/>
-    <rect width="56" height="88" x="8" y="12" rx="8" fill="#111418"/>
-    <circle cx="36" cy="108" r="4" fill="#19C37D"/>
+    <rect width="72" height="120" rx="16" fill="#162324" stroke="rgba(24,184,166,0.45)" stroke-width="2.5"/>
+    <rect width="56" height="88" x="8" y="12" rx="8" fill="#0C1415"/>
+    <circle cx="36" cy="108" r="4" fill="#18B8A6"/>
   </g>
 
-  <!-- Forward Drop/Flow Arrow (Left to Right) -->
-  <path d="M 195 210 Q 256 185 315 230" fill="none" stroke="url(#dropGrad)" stroke-width="6" stroke-linecap="round"/>
-  <polygon points="322,232 308,222 312,238" fill="#19C37D"/>
-  <circle cx="215" cy="206" r="4.5" fill="#3DD6A0"/>
+  <!-- Forward Drop/Flow Arrow (Left to Right) — teal -->
+  <path d="M 195 210 Q 256 185 315 230" fill="none" stroke="url(#tealGrad)" stroke-width="6" stroke-linecap="round"/>
+  <polygon points="322,232 308,222 312,238" fill="#18B8A6"/>
+  <circle cx="215" cy="206" r="4.5" fill="#22D3C1"/>
 
-  <!-- Return Drop/Flow Arrow (Right to Left) -->
+  <!-- Return Drop/Flow Arrow (Right to Left) — neutral -->
   <path d="M 315 290 Q 256 325 195 280" fill="none" stroke="url(#nodeGrad)" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="6 4"/>
-  <polygon points="188,278 202,288 198,272" fill="#F5F7F8"/>
-  <circle cx="295" cy="302" r="3.5" fill="#9AA3AD"/>
+  <polygon points="188,278 202,288 198,272" fill="#F4F7F6"/>
+  <circle cx="295" cy="302" r="3.5" fill="#9BA9A8"/>
 
-  <!-- Center Security Lock Ring dot -->
-  <circle cx="256" cy="256" r="16" fill="#15191E" stroke="#19C37D" stroke-width="2.5"/>
-  <circle cx="256" cy="256" r="5" fill="#3DD6A0"/>
+  <!-- Center security ring — teal with tiny coral brand accent -->
+  <circle cx="256" cy="256" r="16" fill="#111C1D" stroke="#18B8A6" stroke-width="2.5"/>
+  <circle cx="256" cy="256" r="5" fill="#22D3C1"/>
+  <circle cx="267" cy="245" r="3" fill="#FF6B5B"/>
 </svg>

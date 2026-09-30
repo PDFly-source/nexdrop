@@ -50,14 +50,14 @@ export const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ file, onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-      <div className="w-full max-w-2xl rounded-xl border border-white/10 bg-[#11171B] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+      <div className="w-full max-w-2xl rounded-xl border border-white/10 bg-nd-surface shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.08]">
           <div className="min-w-0 text-left">
-            <h3 className="truncate text-sm font-semibold text-[#F5F7F8]">
+            <h3 className="truncate text-sm font-semibold text-nd-text-primary">
               {file.name}
             </h3>
-            <p className="text-[11px] text-[#9AA7AE]">
+            <p className="text-[11px] text-nd-text-secondary">
               {formatBytes(file.size)} · {file.type || 'Unknown MIME'}
             </p>
           </div>
@@ -66,7 +66,7 @@ export const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ file, onCl
             {file.blobUrl && (
               <button
                 onClick={handleDownload}
-                className="flex items-center gap-1.5 rounded-lg bg-[#00F5A0] px-3 py-1.5 text-xs font-semibold text-[#070A0D] hover:bg-[#00D9B5] transition-colors"
+                className="flex items-center gap-1.5 rounded-lg bg-nd-teal px-3 py-1.5 text-xs font-semibold text-nd-bg-0 hover:bg-nd-teal-bright transition-colors"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Save File</span>
@@ -74,7 +74,7 @@ export const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ file, onCl
             )}
             <button
               onClick={onClose}
-              className="text-[#9AA7AE] hover:text-[#F5F7F8] p-1.5"
+              className="text-nd-text-secondary hover:text-nd-text-primary p-1.5"
             >
               <X className="w-4 h-4" />
             </button>
@@ -82,7 +82,7 @@ export const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ file, onCl
         </div>
 
         {/* Preview Viewport */}
-        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-[#070A0D]">
+        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-nd-bg-0">
           {category === 'image' && file.blobUrl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -103,14 +103,14 @@ export const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ file, onCl
 
           {category === 'audio' && file.blobUrl && (
             <div className="w-full max-w-md p-6 text-center">
-              <Music className="w-12 h-12 text-[#00F5A0] mx-auto mb-4" />
+              <Music className="w-12 h-12 text-nd-teal mx-auto mb-4" />
               <p className="text-sm font-medium text-white mb-4">{file.name}</p>
               <audio src={file.blobUrl} controls className="w-full" />
             </div>
           )}
 
           {(category === 'code' || category === 'document') && textContent !== null && (
-            <pre className="w-full max-h-[60vh] overflow-auto rounded bg-[#0B0F12] p-4 text-left font-mono text-xs text-[#F5F7F8] leading-relaxed">
+            <pre className="w-full max-h-[60vh] overflow-auto rounded bg-nd-bg-1 p-4 text-left font-mono text-xs text-nd-text-primary leading-relaxed">
               <code>{textContent}</code>
             </pre>
           )}
@@ -124,8 +124,8 @@ export const MediaPreviewModal: React.FC<MediaPreviewModalProps> = ({ file, onCl
           )}
 
           {!['image', 'video', 'audio', 'code', 'document', 'pdf'].includes(category) && (
-            <div className="p-8 text-center text-xs text-[#9AA7AE]">
-              <FileText className="w-10 h-10 text-[#9AA7AE]/40 mx-auto mb-2" />
+            <div className="p-8 text-center text-xs text-nd-text-secondary">
+              <FileText className="w-10 h-10 text-nd-text-secondary/40 mx-auto mb-2" />
               <p>Direct inline preview is not supported for this file format.</p>
               <p className="mt-1 text-[11px]">Click &quot;Save File&quot; to inspect it on your local system.</p>
             </div>

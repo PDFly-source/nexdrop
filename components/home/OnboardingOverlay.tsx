@@ -52,7 +52,7 @@ export const OnboardingOverlay: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-[#070A0D]"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-nd-bg-0"
       role="dialog"
       aria-modal="true"
       aria-label="Welcome to NexDrop"
@@ -61,14 +61,14 @@ export const OnboardingOverlay: React.FC = () => {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-[0.12]"
         style={{
-          background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 245, 160, 0.6), transparent 70%)',
+          background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(24, 184, 166, 0.6), transparent 70%)',
         }}
       />
 
       <div className="relative mx-6 flex max-w-sm flex-col items-center text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
         {/* Logo */}
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#11171B] border border-white/10 animate-in zoom-in duration-500">
-          <svg viewBox="0 0 24 24" className="w-8 h-8 fill-none stroke-[#00F5A0] stroke-[2]">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-nd-surface border border-white/10 animate-in zoom-in duration-500">
+          <svg viewBox="0 0 24 24" className="w-8 h-8 fill-none stroke-nd-teal stroke-[2]">
             <path d="M7 10l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M12 5v14" strokeLinecap="round" />
             <path d="M17 14l-5 5-5-5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 3" />
@@ -76,25 +76,25 @@ export const OnboardingOverlay: React.FC = () => {
         </div>
 
         {/* Brand */}
-        <h2 className="mt-5 text-2xl font-semibold tracking-tight text-[#F5F7F8] animate-in fade-in duration-700">
+        <h2 className="mt-5 text-2xl font-semibold tracking-tight text-nd-text-primary animate-in fade-in duration-700">
           NexDrop
         </h2>
-        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#00F5A0] animate-in fade-in duration-700">
+        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-nd-teal animate-in fade-in duration-700">
           Private · Direct · Fast
         </p>
 
         {/* Statement */}
-        <p className="mt-4 text-sm text-[#F5F7F8]/90 leading-relaxed animate-in fade-in duration-700">
+        <p className="mt-4 text-sm text-nd-text-primary/90 leading-relaxed animate-in fade-in duration-700">
           Share files &amp; text directly between your devices.
         </p>
-        <p className="mt-1.5 text-xs text-[#9AA7AE] leading-relaxed animate-in fade-in duration-700">
+        <p className="mt-1.5 text-xs text-nd-text-secondary leading-relaxed animate-in fade-in duration-700">
           Private by design. No cloud file uploads — transfers travel directly over encrypted WebRTC DataChannels.
         </p>
 
         {/* CTA */}
         <button
           onClick={handleGetStarted}
-          className="mt-7 w-full rounded-xl bg-[#00F5A0] px-6 py-3 text-sm font-semibold text-[#070A0D] hover:bg-[#00D9B5] active:scale-[0.98] transition-all min-h-[44px] shadow-sm animate-in fade-in duration-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070A0D]"
+          className="mt-7 w-full rounded-xl bg-nd-teal px-6 py-3 text-sm font-semibold text-nd-bg-0 hover:bg-nd-teal-bright active:scale-[0.98] transition-all min-h-[44px] shadow-sm animate-in fade-in duration-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal focus-visible:ring-offset-2 focus-visible:ring-offset-nd-bg-0"
         >
           Get Started
         </button>

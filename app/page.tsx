@@ -181,13 +181,13 @@ function NexDropMainContent() {
   }, [hasActiveTransfer]);
 
   return (
-    <div className="min-h-screen bg-[#070A0D] text-[#F5F7F8] selection:bg-[#00F5A0]/20 selection:text-[#00D9B5] flex flex-col justify-between">
+    <div className="min-h-screen bg-nd-bg-0 text-nd-text-primary selection:bg-nd-teal/20 selection:text-nd-teal-bright flex flex-col justify-between">
       {/* LAYER 1 — first-launch onboarding (shows once per browser) */}
       <OnboardingOverlay />
 
       {/* Offline Banner */}
       {isMounted && !isOnline && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center text-xs text-[#FFB84D] flex items-center justify-center gap-2">
+        <div className="bg-nd-warning/10 border-b border-nd-warning/20 px-4 py-2 text-center text-xs text-nd-warning flex items-center justify-center gap-2">
           <WifiOff className="w-3.5 h-3.5" aria-hidden="true" />
           <span>You are currently offline. Local P2P features remain cached and functional.</span>
         </div>
@@ -351,9 +351,9 @@ export default function HomePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#070A0D] flex items-center justify-center">
-          <div className="flex items-center gap-3 text-xs text-[#9AA7AE]">
-            <div className="h-4 w-4 rounded-full border-2 border-[#00F5A0] border-t-transparent animate-spin" aria-hidden="true" />
+        <div className="min-h-screen bg-nd-bg-0 flex items-center justify-center">
+          <div className="flex items-center gap-3 text-xs text-nd-text-secondary">
+            <div className="h-4 w-4 rounded-full border-2 border-nd-teal border-t-transparent animate-spin" aria-hidden="true" />
             <span>Loading NexDrop workspace…</span>
           </div>
         </div>

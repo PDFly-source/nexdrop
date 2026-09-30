@@ -97,43 +97,43 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
       {/* ------------------------------------------------------------- */}
       {/* HERO — primary actions + live connection state                 */}
       {/* ------------------------------------------------------------- */}
-      <section className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0B0F12] p-6 sm:p-8">
+      <section className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-nd-bg-1 p-6 sm:p-8">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 opacity-[0.14]"
           style={{
-            background: 'radial-gradient(ellipse 55% 45% at 50% -10%, rgba(0, 245, 160, 0.5), transparent 70%)',
+            background: 'radial-gradient(ellipse 55% 45% at 50% -10%, rgba(24, 184, 166, 0.5), transparent 70%)',
           }}
         />
 
         <div className="relative">
           {/* Brand + live status */}
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[10px] font-semibold tracking-[0.22em] uppercase text-[#00F5A0] animate-in fade-in duration-300">
+            <p className="text-[10px] font-semibold tracking-[0.22em] uppercase text-nd-teal animate-in fade-in duration-300">
               Private · Direct · Fast
             </p>
             <span
               aria-live="polite"
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
                 isPaired
-                  ? 'border-emerald-400/30 bg-emerald-400/10 text-[#00D9B5]'
-                  : 'border-white/[0.1] bg-[#11171B] text-[#9AA7AE]'
+                  ? 'border-nd-success/30 bg-nd-success/10 text-nd-teal-bright'
+                  : 'border-white/[0.1] bg-nd-surface text-nd-text-secondary'
               }`}
             >
               <span
                 aria-hidden="true"
-                className={`h-1.5 w-1.5 rounded-full ${isPaired ? 'bg-[#00F5A0] animate-pulse' : 'bg-white/30'}`}
+                className={`h-1.5 w-1.5 rounded-full ${isPaired ? 'bg-nd-teal animate-pulse' : 'bg-white/30'}`}
               />
               {isPaired ? peerName || 'Connected' : 'No device connected'}
             </span>
           </div>
 
-          <h2 className="mt-3 text-2xl sm:text-3xl font-semibold tracking-tight text-[#F5F7F8] text-balance animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <h2 className="mt-3 text-2xl sm:text-3xl font-semibold tracking-tight text-nd-text-primary text-balance animate-in fade-in slide-in-from-bottom-2 duration-500">
             Send directly.
             <br />
-            <span className="text-[#9AA7AE]">Keep it private.</span>
+            <span className="text-nd-text-secondary">Keep it private.</span>
           </h2>
-          <p className="mt-2 text-xs sm:text-sm text-[#9AA7AE] max-w-md leading-relaxed animate-in fade-in duration-700">
+          <p className="mt-2 text-xs sm:text-sm text-nd-text-secondary max-w-md leading-relaxed animate-in fade-in duration-700">
             Share files &amp; text directly between your devices. Private by design — no cloud file uploads.
           </p>
 
@@ -141,25 +141,25 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
           <div className="mt-6 grid grid-cols-2 gap-3 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-500">
             <button
               onClick={() => openPicker('')}
-              className="nd-press group flex flex-col items-center justify-center gap-1 rounded-xl bg-[#00F5A0] px-5 py-3.5 text-sm font-semibold text-[#070A0D] hover:bg-[#00D9B5] transition-colors min-h-[56px] shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F12]"
+              className="nd-press group flex flex-col items-center justify-center gap-1 rounded-xl bg-nd-teal px-5 py-3.5 text-sm font-semibold text-nd-bg-0 hover:bg-nd-teal-bright transition-colors min-h-[56px] shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal focus-visible:ring-offset-2 focus-visible:ring-offset-nd-bg-0"
             >
               <span className="flex items-center gap-2">
                 <ArrowUpFromLine className="w-4 h-4" aria-hidden="true" />
                 <span>Send</span>
               </span>
-              <span className="text-[10px] font-medium text-[#070A0D]/70">
+              <span className="text-[10px] font-medium text-nd-bg-0/70">
                 Pick files &amp; send to peer
               </span>
             </button>
             <button
               onClick={() => onNavigate('devices')}
-              className="nd-press group flex flex-col items-center justify-center gap-1 rounded-xl border border-white/[0.12] bg-[#11171B] px-5 py-3.5 text-sm font-semibold text-[#F5F7F8] hover:bg-[#172027] transition-colors min-h-[56px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F12]"
+              className="nd-press group flex flex-col items-center justify-center gap-1 rounded-xl border border-white/[0.12] bg-nd-surface px-5 py-3.5 text-sm font-semibold text-nd-text-primary hover:bg-nd-surface-elevated transition-colors min-h-[56px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal focus-visible:ring-offset-2 focus-visible:ring-offset-nd-bg-0"
             >
               <span className="flex items-center gap-2">
-                <ArrowDownToLine className="w-4 h-4 text-[#00D9B5]" aria-hidden="true" />
+                <ArrowDownToLine className="w-4 h-4 text-nd-teal-bright" aria-hidden="true" />
                 <span>Receive</span>
               </span>
-              <span className="text-[10px] font-medium text-[#9AA7AE]">
+              <span className="text-[10px] font-medium text-nd-text-secondary">
                 Connect via QR pairing
               </span>
             </button>
@@ -169,7 +169,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
           {!isPaired && (
             <button
               onClick={() => onNavigate('devices')}
-              className="mt-4 inline-flex items-center gap-2 text-xs text-[#00D9B5] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] rounded px-1 animate-in fade-in duration-700"
+              className="mt-4 inline-flex items-center gap-2 text-xs text-nd-teal-bright hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal rounded px-1 animate-in fade-in duration-700"
             >
               <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Connect a device — one-scan QR pairing</span>
@@ -183,13 +183,13 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
       {/* ------------------------------------------------------------- */}
       <section aria-labelledby="quick-actions-heading">
         <div className="flex items-center justify-between mb-3">
-          <h3 id="quick-actions-heading" className="text-sm font-semibold text-[#F5F7F8]">
+          <h3 id="quick-actions-heading" className="text-sm font-semibold text-nd-text-primary">
             Quick Actions
           </h3>
           {sendQueueCount + incomingCount > 0 && (
             <button
               onClick={() => onNavigate('transfers')}
-              className="text-[11px] text-[#00D9B5] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] rounded px-1"
+              className="text-[11px] text-nd-teal-bright hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal rounded px-1"
             >
               {sendQueueCount} queued · {incomingCount} received
             </button>
@@ -204,12 +204,12 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 key={action.id}
                 onClick={() => openPicker(action.accept)}
                 style={{ animationDelay: `${index * 40}ms` }}
-                className="nd-press flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-[#11171B] px-2 py-4 text-center hover:bg-[#172027] hover:border-white/[0.12] transition-colors min-h-[44px] animate-in fade-in slide-in-from-bottom-2 duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+                className="nd-press flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-nd-surface px-2 py-4 text-center hover:bg-nd-surface-elevated hover:border-white/[0.12] transition-colors min-h-[44px] animate-in fade-in slide-in-from-bottom-2 duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0B0F12] border border-white/[0.06] text-[#00D9B5]">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-nd-bg-1 border border-white/[0.06] text-nd-teal-bright">
                   <Icon className="w-4 h-4" aria-hidden="true" />
                 </span>
-                <span className="text-[11px] font-medium text-[#F5F7F8]">{action.label}</span>
+                <span className="text-[11px] font-medium text-nd-text-primary">{action.label}</span>
               </button>
             );
           })}
@@ -218,24 +218,24 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
           <button
             onClick={onOpenText}
             style={{ animationDelay: '160ms' }}
-            className="nd-press flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-[#11171B] px-2 py-4 text-center hover:bg-[#172027] hover:border-white/[0.12] transition-colors min-h-[44px] animate-in fade-in slide-in-from-bottom-2 duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+            className="nd-press flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-nd-surface px-2 py-4 text-center hover:bg-nd-surface-elevated hover:border-white/[0.12] transition-colors min-h-[44px] animate-in fade-in slide-in-from-bottom-2 duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0B0F12] border border-white/[0.06] text-[#39D9FF]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-nd-bg-1 border border-white/[0.06] text-nd-teal">
               <FileText className="w-4 h-4" aria-hidden="true" />
             </span>
-            <span className="text-[11px] font-medium text-[#F5F7F8]">Text</span>
+            <span className="text-[11px] font-medium text-nd-text-primary">Text</span>
           </button>
 
           {/* Clipboard */}
           <button
             onClick={onOpenText}
             style={{ animationDelay: '200ms' }}
-            className="nd-press flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-[#11171B] px-2 py-4 text-center hover:bg-[#172027] hover:border-white/[0.12] transition-colors min-h-[44px] animate-in fade-in slide-in-from-bottom-2 duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+            className="nd-press flex flex-col items-center gap-2 rounded-xl border border-white/[0.07] bg-nd-surface px-2 py-4 text-center hover:bg-nd-surface-elevated hover:border-white/[0.12] transition-colors min-h-[44px] animate-in fade-in slide-in-from-bottom-2 duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0B0F12] border border-white/[0.06] text-[#A78BFA]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-nd-bg-1 border border-white/[0.06] text-nd-coral">
               <ClipboardList className="w-4 h-4" aria-hidden="true" />
             </span>
-            <span className="text-[11px] font-medium text-[#F5F7F8]">Clipboard</span>
+            <span className="text-[11px] font-medium text-nd-text-primary">Clipboard</span>
           </button>
         </div>
       </section>
@@ -245,13 +245,13 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
       {/* ------------------------------------------------------------- */}
       <section aria-labelledby="recent-heading">
         <div className="flex items-center justify-between mb-3">
-          <h3 id="recent-heading" className="text-sm font-semibold text-[#F5F7F8]">
+          <h3 id="recent-heading" className="text-sm font-semibold text-nd-text-primary">
             Recent Transfers
           </h3>
           {historyItems.length > 0 && (
             <button
               onClick={() => onNavigate('transfers')}
-              className="inline-flex items-center gap-0.5 text-[11px] text-[#00D9B5] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] rounded px-1"
+              className="inline-flex items-center gap-0.5 text-[11px] text-nd-teal-bright hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal rounded px-1"
             >
               <span>View all</span>
               <ChevronRight className="w-3 h-3" aria-hidden="true" />
@@ -260,17 +260,17 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
         </div>
 
         <Reveal>
-        <div className="rounded-2xl border border-white/[0.08] bg-[#11171B]">
+        <div className="rounded-2xl border border-white/[0.08] bg-nd-surface">
           {recentItems.length === 0 ? (
             <div className="py-10 px-5 text-center">
-              <ShieldCheck className="w-8 h-8 mx-auto mb-2 text-[#9AA7AE]/30" aria-hidden="true" />
-              <p className="text-xs font-medium text-[#9AA7AE]">No transfers yet</p>
-              <p className="text-[11px] mt-1 text-[#9AA7AE]/80">
+              <ShieldCheck className="w-8 h-8 mx-auto mb-2 text-nd-text-secondary/30" aria-hidden="true" />
+              <p className="text-xs font-medium text-nd-text-secondary">No transfers yet</p>
+              <p className="text-[11px] mt-1 text-nd-text-secondary/80">
                 When you send or receive files, they appear here — stored only on this device.
               </p>
               <button
                 onClick={() => openPicker('')}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#00F5A0] px-4 py-2 text-xs font-semibold text-[#070A0D] hover:bg-[#00D9B5] transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-nd-teal px-4 py-2 text-xs font-semibold text-nd-bg-0 hover:bg-nd-teal-bright transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
               >
                 <ArrowUpFromLine className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Send your first file</span>
@@ -285,8 +285,8 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                       aria-hidden="true"
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
                         item.direction === 'sent'
-                          ? 'bg-sky-500/10 text-sky-400 border-sky-500/20'
-                          : 'bg-emerald-500/10 text-[#00D9B5] border-emerald-500/20'
+                          ? 'bg-nd-teal-bright/10 text-nd-teal-bright border-nd-teal-bright/20'
+                          : 'bg-nd-success/10 text-nd-teal-bright border-nd-success/20'
                       }`}
                     >
                       {item.direction === 'sent' ? (
@@ -296,17 +296,17 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                       )}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-[#F5F7F8] max-w-[45vw] sm:max-w-xs">
+                      <p className="truncate font-medium text-nd-text-primary max-w-[45vw] sm:max-w-xs">
                         {item.name}
                       </p>
-                      <div className="flex items-center gap-1.5 text-[11px] text-[#9AA7AE] mt-0.5">
+                      <div className="flex items-center gap-1.5 text-[11px] text-nd-text-secondary mt-0.5">
                         <span>{formatBytes(item.size)}</span>
                         <span aria-hidden="true">·</span>
                         <span>{formatTimestamp(item.timestamp)}</span>
                         {item.hashVerified === true && (
                           <>
                             <span aria-hidden="true">·</span>
-                            <span className="text-[#00F5A0] inline-flex items-center gap-0.5">
+                            <span className="text-nd-teal inline-flex items-center gap-0.5">
                               <FileCheck className="w-3 h-3" aria-hidden="true" />
                               Verified
                             </span>
@@ -318,8 +318,8 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                   <span
                     className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-medium uppercase border ${
                       item.status === 'completed'
-                        ? 'bg-emerald-500/10 text-[#00D9B5] border-emerald-500/20'
-                        : 'bg-red-500/10 text-[#FF5C5C] border-red-500/20'
+                        ? 'bg-nd-success/10 text-nd-teal-bright border-nd-success/20'
+                        : 'bg-nd-error/10 text-nd-error border-nd-error/20'
                     }`}
                   >
                     {item.status}

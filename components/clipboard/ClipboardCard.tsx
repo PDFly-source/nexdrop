@@ -77,17 +77,17 @@ export const ClipboardCard: React.FC<ClipboardCardProps> = ({
   ].sort((a, b) => b.timestamp - a.timestamp);
 
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#11171B] p-5 shadow-sm flex flex-col h-full">
+    <div className="rounded-xl border border-white/[0.08] bg-nd-surface p-5 shadow-sm flex flex-col h-full">
       <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
         <div className="flex items-center gap-2">
-          <Clipboard className="w-4 h-4 text-[#00F5A0]" />
-          <h2 className="text-sm font-semibold text-[#F5F7F8]">Instant Clipboard & Text</h2>
+          <Clipboard className="w-4 h-4 text-nd-teal" />
+          <h2 className="text-sm font-semibold text-nd-text-primary">Instant Clipboard & Text</h2>
         </div>
 
         <button
           onClick={handlePasteFromDevice}
           disabled={!isConnected}
-          className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-[#1B2026] px-2.5 py-1 text-xs text-[#F5F7F8] hover:bg-white/10 disabled:opacity-40 transition-colors"
+          className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-nd-surface-elevated px-2.5 py-1 text-xs text-nd-text-primary hover:bg-white/10 disabled:opacity-40 transition-colors"
           title="Push your current system clipboard to peer"
         >
           <span>Sync My Clipboard</span>
@@ -102,12 +102,12 @@ export const ClipboardCard: React.FC<ClipboardCardProps> = ({
           onChange={(e) => setInputText(e.target.value)}
           placeholder={isConnected ? 'Type message, URL, or paste code snippet...' : 'Connect a device to share text...'}
           disabled={!isConnected}
-          className="flex-1 rounded-lg border border-white/[0.1] bg-[#0B0F12] px-3.5 py-2 text-xs text-[#F5F7F8] placeholder:text-[#9AA7AE]/40 focus:border-[#00F5A0] focus:outline-none disabled:opacity-40"
+          className="flex-1 rounded-lg border border-white/[0.1] bg-nd-bg-1 px-3.5 py-2 text-xs text-nd-text-primary placeholder:text-nd-text-secondary/40 focus:border-nd-teal focus:outline-none disabled:opacity-40"
         />
         <button
           type="submit"
           disabled={!isConnected || !inputText.trim()}
-          className="flex items-center justify-center rounded-lg bg-[#00F5A0] px-3.5 py-2 text-xs font-semibold text-[#070A0D] hover:bg-[#00D9B5] disabled:opacity-40 transition-colors shrink-0"
+          className="flex items-center justify-center rounded-lg bg-nd-teal px-3.5 py-2 text-xs font-semibold text-nd-bg-0 hover:bg-nd-teal-bright disabled:opacity-40 transition-colors shrink-0"
         >
           <Send className="w-3.5 h-3.5" />
         </button>
@@ -116,7 +116,7 @@ export const ClipboardCard: React.FC<ClipboardCardProps> = ({
       {/* Received Items Feed */}
       <div className="mt-4 flex-1 flex flex-col min-h-36">
         {allItems.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.04] p-6 text-center text-xs text-[#9AA7AE]/60">
+          <div className="flex-1 flex flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.04] p-6 text-center text-xs text-nd-text-secondary/60">
             <span>No text or clipboard items synced yet</span>
             <span className="text-[11px] mt-0.5">
               Copy something on your phone or laptop to transfer instantly
@@ -130,14 +130,14 @@ export const ClipboardCard: React.FC<ClipboardCardProps> = ({
               return (
                 <div
                   key={item.id}
-                  className="rounded-lg border border-white/[0.06] bg-[#0B0F12] p-3 text-xs text-left"
+                  className="rounded-lg border border-white/[0.06] bg-nd-bg-1 p-3 text-xs text-left"
                 >
-                  <div className="flex items-center justify-between pb-1.5 border-b border-white/[0.04] text-[11px] text-[#9AA7AE]">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-white/[0.04] text-[11px] text-nd-text-secondary">
                     <div className="flex items-center gap-1.5">
                       {category === 'code' ? (
-                        <span className="text-blue-400 font-mono">Code {language ? `(${language})` : ''}</span>
+                        <span className="text-nd-teal font-mono">Code {language ? `(${language})` : ''}</span>
                       ) : category === 'url' ? (
-                        <span className="text-emerald-400">URL Link</span>
+                        <span className="text-nd-success">URL Link</span>
                       ) : (
                         <span>Text</span>
                       )}
@@ -145,13 +145,13 @@ export const ClipboardCard: React.FC<ClipboardCardProps> = ({
 
                     <button
                       onClick={() => handleCopyItem(item.id, item.text)}
-                      className="flex items-center gap-1 text-[#9AA7AE] hover:text-[#F5F7F8] transition-colors"
+                      className="flex items-center gap-1 text-nd-text-secondary hover:text-nd-text-primary transition-colors"
                       title="Copy to clipboard"
                     >
                       {copiedId === item.id ? (
                         <>
-                          <Check className="w-3 h-3 text-[#22C55E]" />
-                          <span className="text-[10px] text-[#22C55E]">Copied</span>
+                          <Check className="w-3 h-3 text-nd-success" />
+                          <span className="text-[10px] text-nd-success">Copied</span>
                         </>
                       ) : (
                         <>
@@ -168,7 +168,7 @@ export const ClipboardCard: React.FC<ClipboardCardProps> = ({
                         href={item.text}
                         target="_blank"
                         rel="noreferrer noopener"
-                        className="truncate text-[#00F5A0] hover:underline"
+                        className="truncate text-nd-teal hover:underline"
                       >
                         {item.text}
                       </a>
@@ -176,17 +176,17 @@ export const ClipboardCard: React.FC<ClipboardCardProps> = ({
                         href={item.text}
                         target="_blank"
                         rel="noreferrer noopener"
-                        className="text-[#9AA7AE] hover:text-white shrink-0"
+                        className="text-nd-text-secondary hover:text-white shrink-0"
                       >
                         <ArrowUpRight className="w-3.5 h-3.5" />
                       </a>
                     </div>
                   ) : category === 'code' ? (
-                    <pre className="mt-2 overflow-x-auto rounded bg-[#070A0D] p-2 font-mono text-[11px] text-[#F5F7F8]/90">
+                    <pre className="mt-2 overflow-x-auto rounded bg-nd-bg-0 p-2 font-mono text-[11px] text-nd-text-primary/90">
                       <code>{item.text}</code>
                     </pre>
                   ) : (
-                    <p className="mt-2 text-[#F5F7F8] whitespace-pre-wrap break-words">
+                    <p className="mt-2 text-nd-text-primary whitespace-pre-wrap break-words">
                       {item.text}
                     </p>
                   )}

@@ -53,12 +53,12 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-semibold text-[#F5F7F8]">Transfer History</h1>
-            <span className="text-[11px] font-medium text-emerald-400/90 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+            <h1 className="text-xl sm:text-2xl font-semibold text-nd-text-primary">Transfer History</h1>
+            <span className="text-[11px] font-medium text-nd-success/90 bg-nd-success/10 px-2.5 py-0.5 rounded-full border border-nd-success/20">
               Local Browser Only
             </span>
           </div>
-          <p className="text-xs text-[#9AA7AE] mt-1">
+          <p className="text-xs text-nd-text-secondary mt-1">
             Audit logs of completed peer-to-peer transfers. No file contents or logs are ever uploaded to any server.
           </p>
         </div>
@@ -67,19 +67,19 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
           <div className="flex items-center gap-2">
             {confirmClear ? (
               <div className="flex items-center gap-2 animate-in fade-in duration-150">
-                <span className="text-xs text-red-400">Clear all records?</span>
+                <span className="text-xs text-nd-error">Clear all records?</span>
                 <button
                   onClick={() => {
                     onClearHistory();
                     setConfirmClear(false);
                   }}
-                  className="px-2.5 py-1.5 rounded-lg bg-red-500 text-xs font-medium text-white hover:bg-red-600 transition-colors"
+                  className="px-2.5 py-1.5 rounded-lg bg-nd-error text-xs font-medium text-white hover:bg-nd-error transition-colors"
                 >
                   Yes, Clear
                 </button>
                 <button
                   onClick={() => setConfirmClear(false)}
-                  className="px-2.5 py-1.5 rounded-lg bg-white/[0.06] text-xs text-[#9AA7AE] hover:text-[#F5F7F8] transition-colors"
+                  className="px-2.5 py-1.5 rounded-lg bg-white/[0.06] text-xs text-nd-text-secondary hover:text-nd-text-primary transition-colors"
                 >
                   Cancel
                 </button>
@@ -87,7 +87,7 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
             ) : (
               <button
                 onClick={() => setConfirmClear(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/[0.1] bg-[#11171B] text-xs text-[#9AA7AE] hover:text-red-400 hover:border-red-500/30 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/[0.1] bg-nd-surface text-xs text-nd-text-secondary hover:text-nd-error hover:border-nd-error/30 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Clear History</span>
@@ -99,35 +99,35 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-white/[0.06] bg-[#11171B] p-4">
-          <span className="text-[11px] text-[#9AA7AE] font-medium">Total Transfers</span>
-          <div className="text-2xl font-bold text-[#F5F7F8] mt-1">{historyItems.length}</div>
-          <span className="text-[10px] text-[#9AA7AE]/80">Session lifetime records</span>
+        <div className="rounded-xl border border-white/[0.06] bg-nd-surface p-4">
+          <span className="text-[11px] text-nd-text-secondary font-medium">Total Transfers</span>
+          <div className="text-2xl font-bold text-nd-text-primary mt-1">{historyItems.length}</div>
+          <span className="text-[10px] text-nd-text-secondary/80">Session lifetime records</span>
         </div>
 
-        <div className="rounded-xl border border-white/[0.06] bg-[#11171B] p-4">
-          <span className="text-[11px] text-[#9AA7AE] font-medium">Total Volume</span>
-          <div className="text-2xl font-bold text-[#00F5A0] mt-1">{formatBytes(totalBytesTransferred)}</div>
-          <span className="text-[10px] text-[#9AA7AE]/80">Streamed peer-to-peer</span>
+        <div className="rounded-xl border border-white/[0.06] bg-nd-surface p-4">
+          <span className="text-[11px] text-nd-text-secondary font-medium">Total Volume</span>
+          <div className="text-2xl font-bold text-nd-teal mt-1">{formatBytes(totalBytesTransferred)}</div>
+          <span className="text-[10px] text-nd-text-secondary/80">Streamed peer-to-peer</span>
         </div>
 
-        <div className="rounded-xl border border-white/[0.06] bg-[#11171B] p-4">
-          <span className="text-[11px] text-[#9AA7AE] font-medium">Privacy Architecture</span>
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-[#F5F7F8] mt-2">
-            <Shield className="w-4 h-4 text-[#00F5A0]" />
+        <div className="rounded-xl border border-white/[0.06] bg-nd-surface p-4">
+          <span className="text-[11px] text-nd-text-secondary font-medium">Privacy Architecture</span>
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-nd-text-primary mt-2">
+            <Shield className="w-4 h-4 text-nd-teal" />
             <span>Local-Only Records</span>
           </div>
-          <span className="text-[10px] text-[#9AA7AE]/80">Stored only in this browser</span>
+          <span className="text-[10px] text-nd-text-secondary/80">Stored only in this browser</span>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-        <div className="flex items-center gap-1 rounded-xl bg-[#11171B] border border-white/[0.08] p-1 w-full sm:w-auto">
+        <div className="flex items-center gap-1 rounded-xl bg-nd-surface border border-white/[0.08] p-1 w-full sm:w-auto">
           <button
             onClick={() => setFilter('all')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              filter === 'all' ? 'bg-[#00F5A0] text-[#070A0D]' : 'text-[#9AA7AE] hover:text-[#F5F7F8]'
+              filter === 'all' ? 'bg-nd-teal text-nd-bg-0' : 'text-nd-text-secondary hover:text-nd-text-primary'
             }`}
           >
             All ({historyItems.length})
@@ -135,7 +135,7 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
           <button
             onClick={() => setFilter('sent')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              filter === 'sent' ? 'bg-[#00F5A0] text-[#070A0D]' : 'text-[#9AA7AE] hover:text-[#F5F7F8]'
+              filter === 'sent' ? 'bg-nd-teal text-nd-bg-0' : 'text-nd-text-secondary hover:text-nd-text-primary'
             }`}
           >
             Sent ({historyItems.filter((i) => i.direction === 'sent').length})
@@ -143,7 +143,7 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
           <button
             onClick={() => setFilter('received')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              filter === 'received' ? 'bg-[#00F5A0] text-[#070A0D]' : 'text-[#9AA7AE] hover:text-[#F5F7F8]'
+              filter === 'received' ? 'bg-nd-teal text-nd-bg-0' : 'text-nd-text-secondary hover:text-nd-text-primary'
             }`}
           >
             Received ({historyItems.filter((i) => i.direction === 'received').length})
@@ -153,7 +153,7 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
         <div
           role="group"
           aria-label="Filter by status"
-          className="flex items-center gap-1 rounded-xl bg-[#11171B] border border-white/[0.08] p-1 w-full sm:w-auto"
+          className="flex items-center gap-1 rounded-xl bg-nd-surface border border-white/[0.08] p-1 w-full sm:w-auto"
         >
           {(['all', 'completed', 'failed', 'cancelled'] as const).map((sf) => (
             <button
@@ -161,7 +161,7 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
               onClick={() => setStatusFilter(sf)}
               aria-pressed={statusFilter === sf}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${
-                statusFilter === sf ? 'bg-[#00F5A0] text-[#070A0D]' : 'text-[#9AA7AE] hover:text-[#F5F7F8]'
+                statusFilter === sf ? 'bg-nd-teal text-nd-bg-0' : 'text-nd-text-secondary hover:text-nd-text-primary'
               }`}
             >
               {sf === 'all' ? 'Any status' : `${sf} (${historyItems.filter((i) => i.status === sf).length})`}
@@ -170,32 +170,32 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
         </div>
 
         <div className="relative w-full sm:w-64">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#9AA7AE]" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-nd-text-secondary" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search transfer history..."
-            className="w-full rounded-xl border border-white/[0.08] bg-[#11171B] pl-9 pr-3 py-1.5 text-xs text-[#F5F7F8] placeholder:text-[#9AA7AE]/80 focus:border-[#00F5A0] focus:outline-none"
+            className="w-full rounded-xl border border-white/[0.08] bg-nd-surface pl-9 pr-3 py-1.5 text-xs text-nd-text-primary placeholder:text-nd-text-secondary/80 focus:border-nd-teal focus:outline-none"
           />
         </div>
       </div>
 
       {/* History Items List */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#11171B] p-5 shadow-sm">
+      <div className="rounded-2xl border border-white/[0.08] bg-nd-surface p-5 shadow-sm">
         {filteredItems.length === 0 ? (
-          <div className="py-16 text-center text-xs text-[#9AA7AE]/80">
-            <History className="w-9 h-9 mx-auto mb-2 text-[#9AA7AE]/30" />
-            <p className="font-medium text-[#9AA7AE]">
+          <div className="py-16 text-center text-xs text-nd-text-secondary/80">
+            <History className="w-9 h-9 mx-auto mb-2 text-nd-text-secondary/30" />
+            <p className="font-medium text-nd-text-secondary">
               {historyItems.length === 0 ? 'No transfers yet' : 'No transfers match your filter'}
             </p>
-            <p className="text-[11px] mt-1 text-[#9AA7AE]/80">
+            <p className="text-[11px] mt-1 text-nd-text-secondary/80">
               When you send or receive files, their metadata will be logged here locally.
             </p>
             {historyItems.length === 0 && (
               <button
                 onClick={onNavigateTransfer}
-                className="mt-4 px-4 py-2 rounded-xl bg-[#00F5A0] text-xs font-semibold text-[#070A0D] hover:bg-[#00D9B5] transition-colors"
+                className="mt-4 px-4 py-2 rounded-xl bg-nd-teal text-xs font-semibold text-nd-bg-0 hover:bg-nd-teal-bright transition-colors"
               >
                 Start a Transfer
               </button>
@@ -212,8 +212,8 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
                   <div
                     className={`flex h-8 w-8 items-center justify-center rounded-xl shrink-0 ${
                       item.direction === 'sent'
-                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                        : 'bg-emerald-500/10 text-[#00D9B5] border border-emerald-500/20'
+                        ? 'bg-nd-teal/10 text-nd-teal border border-nd-teal/20'
+                        : 'bg-nd-success/10 text-nd-teal-bright border border-nd-success/20'
                     }`}
                   >
                     {item.direction === 'sent' ? (
@@ -224,10 +224,10 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
                   </div>
 
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-[#F5F7F8] text-xs sm:text-sm">
+                    <p className="truncate font-medium text-nd-text-primary text-xs sm:text-sm">
                       {item.name}
                     </p>
-                    <div className="flex items-center gap-2 text-[11px] text-[#9AA7AE] mt-0.5">
+                    <div className="flex items-center gap-2 text-[11px] text-nd-text-secondary mt-0.5">
                       <span>{formatBytes(item.size)}</span>
                       <span>·</span>
                       <span className="capitalize">{item.direction}</span>
@@ -236,7 +236,7 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
                       {item.hashVerified === true && (
                         <>
                           <span>·</span>
-                          <span className="text-[#00F5A0] flex items-center gap-0.5">
+                          <span className="text-nd-teal flex items-center gap-0.5">
                             <FileCheck className="w-3 h-3 inline" />
                             SHA-256 Verified
                           </span>
@@ -245,7 +245,7 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
                       {item.status === 'completed' && item.hashVerified === false && (
                         <>
                           <span>·</span>
-                          <span className="text-[#FF5C5C] flex items-center gap-0.5">
+                          <span className="text-nd-error flex items-center gap-0.5">
                             <AlertCircle className="w-3 h-3 inline" />
                             Verification failed
                           </span>
@@ -259,8 +259,8 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
                   <span
                     className={`px-2 py-0.5 rounded text-[10px] font-medium uppercase ${
                       item.status === 'completed'
-                        ? 'bg-emerald-500/10 text-[#00D9B5] border border-emerald-500/20'
-                        : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        ? 'bg-nd-success/10 text-nd-teal-bright border border-nd-success/20'
+                        : 'bg-nd-error/10 text-nd-error border border-nd-error/20'
                     }`}
                   >
                     {item.status}

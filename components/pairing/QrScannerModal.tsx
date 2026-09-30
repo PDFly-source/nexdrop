@@ -265,18 +265,18 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
       aria-modal="true"
       aria-label={title}
     >
-      <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#11171B] p-5 shadow-2xl">
+      <div className="w-full max-w-sm rounded-xl border border-white/10 bg-nd-surface p-5 shadow-2xl">
         <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
           <div className="flex items-center gap-2">
-            <Camera className="w-4 h-4 text-[#00F5A0]" aria-hidden="true" />
-            <h3 className="text-sm font-semibold text-[#F5F7F8]">{title}</h3>
+            <Camera className="w-4 h-4 text-nd-teal" aria-hidden="true" />
+            <h3 className="text-sm font-semibold text-nd-text-primary">{title}</h3>
           </div>
           <button
             onClick={() => {
               stopCamera();
               onClose();
             }}
-            className="rounded-md p-1 text-[#9AA7AE] hover:text-[#F5F7F8] hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+            className="rounded-md p-1 text-nd-text-secondary hover:text-nd-text-primary hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
             aria-label="Close QR scanner"
           >
             <X className="w-4 h-4" />
@@ -286,14 +286,14 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
         <div className="relative mt-4 overflow-hidden rounded-lg bg-black aspect-square flex items-center justify-center border border-white/10">
           {error ? (
             <div className="p-4 text-center" role="alert">
-              <AlertCircle className="w-8 h-8 text-[#FF5C5C] mx-auto mb-2" aria-hidden="true" />
-              <p className="text-xs text-[#9AA7AE] leading-relaxed">{error}</p>
+              <AlertCircle className="w-8 h-8 text-nd-error mx-auto mb-2" aria-hidden="true" />
+              <p className="text-xs text-nd-text-secondary leading-relaxed">{error}</p>
               <button
                 onClick={() => {
                   setError(null);
                   startCamera();
                 }}
-                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1B2026] text-xs font-medium text-[#F5F7F8] hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-nd-surface-elevated text-xs font-medium text-nd-text-primary hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
               >
                 <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
                 Retry camera
@@ -304,19 +304,19 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
               <video ref={videoRef} className="w-full h-full object-cover" playsInline muted aria-label="Camera preview" />
               <canvas ref={canvasRef} className="hidden" />
 
-              <div className="pointer-events-none absolute inset-8 border-2 border-dashed border-[#00F5A0]/60 rounded-xl flex items-center justify-center">
-                <div className="w-full h-0.5 bg-[#00F5A0]/80 animate-pulse" />
+              <div className="pointer-events-none absolute inset-8 border-2 border-dashed border-nd-teal/60 rounded-xl flex items-center justify-center">
+                <div className="w-full h-0.5 bg-nd-teal/80 animate-pulse" />
               </div>
 
               {notice && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[90%] rounded-lg bg-black/75 px-3 py-1.5 text-xs text-[#F5F7F8] text-center" role="status">
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[90%] rounded-lg bg-black/75 px-3 py-1.5 text-xs text-nd-text-primary text-center" role="status">
                   {notice}
                 </div>
               )}
 
               {isDecodingImage && (
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                  <Loader2 className="w-6 h-6 text-[#00F5A0] animate-spin" aria-hidden="true" />
+                  <Loader2 className="w-6 h-6 text-nd-teal animate-spin" aria-hidden="true" />
                 </div>
               )}
             </>
@@ -326,7 +326,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
         {/* Multi-QR reassembly progress */}
         {segmentProgress && segmentProgress.total > 1 && (
           <div
-            className="mt-3 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-center text-xs text-[#00D9B5]"
+            className="mt-3 rounded-lg border border-nd-success/25 bg-nd-success/10 px-3 py-2 text-center text-xs text-nd-teal-bright"
             role="status"
             aria-live="polite"
           >
@@ -334,7 +334,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
           </div>
         )}
 
-        <p className="mt-3 text-center text-xs text-[#9AA7AE]">
+        <p className="mt-3 text-center text-xs text-nd-text-secondary">
           Point your camera at the QR code shown on the other device.
         </p>
 
@@ -343,9 +343,9 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
           <div className="flex gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-white/[0.1] bg-[#1B2026] text-xs font-medium text-[#F5F7F8] hover:bg-white/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-white/[0.1] bg-nd-surface-elevated text-xs font-medium text-nd-text-primary hover:bg-white/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
             >
-              <ImageIcon className="w-3.5 h-3.5 text-[#00F5A0]" aria-hidden="true" />
+              <ImageIcon className="w-3.5 h-3.5 text-nd-teal" aria-hidden="true" />
               Import QR image
             </button>
             <input
@@ -363,7 +363,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
           </div>
 
           <div>
-            <label htmlFor="qr-paste" className="text-[11px] text-[#9AA7AE]">
+            <label htmlFor="qr-paste" className="text-[11px] text-nd-text-secondary">
               Or paste the pairing code from the other device:
             </label>
             <div className="mt-1.5 flex gap-2">
@@ -373,12 +373,12 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
                 onChange={(e) => setPasteText(e.target.value)}
                 rows={2}
                 placeholder="NDP1.…"
-                className="flex-1 rounded-lg border border-white/[0.1] bg-[#0B0F12] px-3 py-2 text-xs font-mono text-[#F5F7F8] placeholder:text-[#9AA7AE]/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0] resize-none"
+                className="flex-1 rounded-lg border border-white/[0.1] bg-nd-bg-1 px-3 py-2 text-xs font-mono text-nd-text-primary placeholder:text-nd-text-secondary/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal resize-none"
               />
               <button
                 onClick={handlePasteSubmit}
                 disabled={!pasteText.trim()}
-                className="self-stretch inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#00F5A0] text-xs font-semibold text-[#070A0D] hover:bg-[#00D9B5] disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F5A0]"
+                className="self-stretch inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-nd-teal text-xs font-semibold text-nd-bg-0 hover:bg-nd-teal-bright disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
               >
                 <ClipboardPaste className="w-3.5 h-3.5" aria-hidden="true" />
                 Use

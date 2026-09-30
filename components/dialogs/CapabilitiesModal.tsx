@@ -25,7 +25,7 @@ export const CapabilitiesModal: React.FC<CapabilitiesModalProps> = ({
     },
     {
       name: 'RTCDataChannel',
-      desc: 'High-throughput binary streaming channels for 64 KiB chunks.',
+      desc: 'High-throughput binary streaming channels with adaptive 64-256 KiB chunk sizing.',
       active: capabilities.dataChannel,
     },
     {
@@ -63,30 +63,30 @@ export const CapabilitiesModal: React.FC<CapabilitiesModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-xl border border-white/10 bg-[#11171B] p-5 shadow-2xl text-left max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="w-full max-w-lg rounded-xl border border-white/10 bg-nd-surface p-5 shadow-2xl text-left max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
           <div className="flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-[#00F5A0]" />
-            <h3 className="text-sm font-semibold text-[#F5F7F8]">Browser Capability Center</h3>
+            <Cpu className="w-4 h-4 text-nd-teal" />
+            <h3 className="text-sm font-semibold text-nd-text-primary">Browser Capability Center</h3>
           </div>
-          <button onClick={onClose} className="text-[#9AA7AE] hover:text-[#F5F7F8]">
+          <button onClick={onClose} className="text-nd-text-secondary hover:text-nd-text-primary">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Highlight box */}
-        <div className="mt-4 rounded-lg bg-[#0B0F12] border border-white/[0.06] p-3 text-xs">
+        <div className="mt-4 rounded-lg bg-nd-bg-1 border border-white/[0.06] p-3 text-xs">
           <div className="flex items-start gap-2.5">
-            <Zap className="w-4 h-4 text-[#00F5A0] shrink-0 mt-0.5" />
+            <Zap className="w-4 h-4 text-nd-teal shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-[#F5F7F8]">
+              <p className="font-semibold text-nd-text-primary">
                 {capabilities.fileSystemAccess
                   ? 'High-Performance Disk Streaming Supported'
                   : capabilities.opfs
                   ? 'OPFS Storage Streaming Supported'
                   : 'Memory-Safe Fallback Active'}
               </p>
-              <p className="mt-1 text-[11px] text-[#9AA7AE] leading-relaxed">
+              <p className="mt-1 text-[11px] text-nd-text-secondary leading-relaxed">
                 {capabilities.fileSystemAccess
                   ? 'Your browser supports the File System Access API. Incoming files stream directly to disk without consuming heap RAM.'
                   : capabilities.opfs
@@ -102,23 +102,23 @@ export const CapabilitiesModal: React.FC<CapabilitiesModalProps> = ({
           {features.map((feat) => (
             <div
               key={feat.name}
-              className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.04] bg-[#0B0F12] p-2.5 text-xs"
+              className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.04] bg-nd-bg-1 p-2.5 text-xs"
             >
               <div className="min-w-0 text-left">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-[#F5F7F8]">{feat.name}</span>
+                  <span className="font-medium text-nd-text-primary">{feat.name}</span>
                   {feat.tag && (
-                    <span className="text-[10px] text-[#00D9B5] font-mono">{feat.tag}</span>
+                    <span className="text-[10px] text-nd-teal-bright font-mono">{feat.tag}</span>
                   )}
                 </div>
-                <p className="text-[11px] text-[#9AA7AE] mt-0.5">{feat.desc}</p>
+                <p className="text-[11px] text-nd-text-secondary mt-0.5">{feat.desc}</p>
               </div>
 
               <div className="shrink-0">
                 {feat.active ? (
-                  <CheckCircle2 className="w-4 h-4 text-[#22C55E]" />
+                  <CheckCircle2 className="w-4 h-4 text-nd-success" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 text-[#9AA7AE]/40" />
+                  <AlertCircle className="w-4 h-4 text-nd-text-secondary/40" />
                 )}
               </div>
             </div>
@@ -128,7 +128,7 @@ export const CapabilitiesModal: React.FC<CapabilitiesModalProps> = ({
         <div className="mt-4 pt-3 border-t border-white/[0.06] text-right">
           <button
             onClick={onClose}
-            className="rounded-lg bg-[#1B2026] px-4 py-1.5 text-xs font-medium text-[#F5F7F8] hover:bg-white/10 transition-colors"
+            className="rounded-lg bg-nd-surface-elevated px-4 py-1.5 text-xs font-medium text-nd-text-primary hover:bg-white/10 transition-colors"
           >
             Close
           </button>

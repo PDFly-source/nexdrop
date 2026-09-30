@@ -51,18 +51,18 @@ export const DevicesWorkspace: React.FC<DevicesWorkspaceProps> = (props) => {
       {/* This device identity card */}
       <section
         aria-labelledby="this-device-heading"
-        className="rounded-2xl border border-white/[0.08] bg-[#11171B] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        className="rounded-2xl border border-white/[0.08] bg-nd-surface p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
       >
         <div className="flex items-center gap-3.5">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0B0F12] border border-white/[0.08] text-[#00D9B5]">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-nd-bg-1 border border-white/[0.08] text-nd-teal-bright">
             <MonitorSmartphone className="w-5 h-5" aria-hidden="true" />
           </div>
           <div>
-            <h2 id="this-device-heading" className="text-sm font-semibold text-[#F5F7F8]">
+            <h2 id="this-device-heading" className="text-sm font-semibold text-nd-text-primary">
               This Device
             </h2>
-            <p className="text-xs text-[#9AA7AE] mt-0.5">{deviceInfo.name}</p>
-            <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-[#9AA7AE]">
+            <p className="text-xs text-nd-text-secondary mt-0.5">{deviceInfo.name}</p>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-nd-text-secondary">
               <span className="inline-flex items-center gap-1">
                 <Globe className="w-3 h-3" aria-hidden="true" />
                 {deviceInfo.os}

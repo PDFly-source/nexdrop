@@ -45,7 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#070A0D]/90 backdrop-blur-md">
+    <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-nd-bg-0/90 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
         {/* Zone 1: NexDrop Wordmark */}
         <div className="flex items-center gap-6">
@@ -54,20 +54,21 @@ export const Navbar: React.FC<NavbarProps> = ({
             aria-label="NexDrop home"
             className="flex items-center gap-2 group text-left"
           >
-            <div className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-[#11171B] border border-white/10 group-hover:border-emerald-400/40 transition-colors">
-              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-none stroke-[#00F5A0] stroke-[2.2]">
+            <div className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-nd-surface border border-white/10 group-hover:border-nd-teal/40 transition-colors">
+              <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-nd-coral/80" />
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-none stroke-nd-teal stroke-[2.2]">
                 <path d="M7 10l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M12 5v14" strokeLinecap="round" />
                 <path d="M17 14l-5 5-5-5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 3" />
               </svg>
             </div>
-            <span className="text-base font-semibold tracking-tight text-[#F5F7F8]">
+            <span className="text-base font-semibold tracking-tight text-nd-text-primary">
               NexDrop
             </span>
           </button>
 
           {/* Zone 2: Desktop Workspace Navigation Tabs */}
-          <nav aria-label="Workspace" className="hidden md:flex items-center gap-1 bg-[#11171B]/60 p-1 rounded-xl border border-white/[0.06]">
+          <nav aria-label="Workspace" className="hidden md:flex items-center gap-1 bg-nd-surface/60 p-1 rounded-xl border border-white/[0.06]">
             {DESKTOP_TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -78,8 +79,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   aria-current={isActive ? 'page' : undefined}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     isActive
-                      ? 'bg-[#00F5A0] text-[#070A0D] shadow-sm font-semibold'
-                      : 'text-[#9AA7AE] hover:text-[#F5F7F8] hover:bg-white/[0.04]'
+                      ? 'bg-nd-teal text-nd-bg-0 shadow-sm font-semibold'
+                      : 'text-nd-text-secondary hover:text-nd-text-primary hover:bg-white/[0.04]'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
@@ -97,25 +98,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={handleStatusBadgeClick}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
               isConnected
-                ? 'border-emerald-400/30 bg-emerald-400/10 text-[#00D9B5] hover:bg-emerald-400/15'
+                ? 'border-nd-success/30 bg-nd-success/10 text-nd-teal-bright hover:bg-nd-success/15'
                 : isConnecting
-                ? 'border-amber-500/30 bg-amber-500/10 text-[#FFB84D] hover:bg-amber-500/15'
+                ? 'border-nd-warning/30 bg-nd-warning/10 text-nd-warning hover:bg-nd-warning/15'
                 : isReconnecting
-                ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                ? 'border-nd-warning/30 bg-nd-warning/10 text-nd-warning'
                 : isPairing
-                ? 'border-[#00F5A0]/30 bg-[#00F5A0]/10 text-[#00F5A0]'
-                : 'border-white/[0.08] bg-[#11171B] text-[#9AA7AE] hover:text-[#F5F7F8] hover:border-white/20'
+                ? 'border-nd-teal/30 bg-nd-teal/10 text-nd-teal'
+                : 'border-white/[0.08] bg-nd-surface text-nd-text-secondary hover:text-nd-text-primary hover:border-white/20'
             }`}
           >
             <span
               aria-hidden="true"
               className={`h-1.5 w-1.5 rounded-full ${
                 isConnected
-                  ? 'bg-[#00F5A0] animate-pulse'
+                  ? 'bg-nd-teal animate-pulse'
                   : isConnecting
-                  ? 'bg-[#FFB84D] animate-ping'
+                  ? 'bg-nd-warning animate-ping'
                   : isPairing
-                  ? 'bg-[#00F5A0] animate-ping'
+                  ? 'bg-nd-teal animate-ping'
                   : 'bg-white/30'
               }`}
             />

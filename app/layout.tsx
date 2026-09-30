@@ -4,7 +4,7 @@ import './globals.css';
 const SITE_URL = 'https://pdfly-source.github.io/nexdrop/';
 
 export const viewport: Viewport = {
-  themeColor: '#070A0D',
+  themeColor: '#070B0C',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
@@ -48,8 +48,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark bg-[#070A0D] text-[#F5F7F8]">
-      <body className="bg-[#070A0D] text-[#F5F7F8] antialiased min-h-screen">
+    <html lang="en" className="dark bg-nd-bg-0 text-nd-text-primary">
+      <body className="bg-nd-bg-0 text-nd-text-primary antialiased min-h-screen">
         {children}
       </body>
     </html>
