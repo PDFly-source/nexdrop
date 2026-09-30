@@ -302,19 +302,22 @@ async function main() {
   // ---------------------------------------------------------------------
   console.log('[two-device e2e] A → B: file transfer size matrix with SHA-256 verification');
 
+  await pageA.getByRole('button', { name: /transfer/i }).first().click();
+  await pageB.getByRole('button', { name: /transfer/i }).first().click();
+  await pageA.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });
+  await pageB.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });
+
   // Device B runs as a mobile browser: received files live behind the
   // Send/Receive pill, and innerText excludes the hidden card. Switch B to
   // the Receive tab (as a real user would) so incoming items are visible.
+  // This must run AFTER the transfer-workspace tab is active — the pill
+  // only exists inside that workspace.
   const recvPill = pageB.getByRole('button', { name: /Receive \(\d+\)/ });
   if (await recvPill.count()) {
     await recvPill.first().click();
     await pageB.waitForTimeout(300);
     console.log('  ✓ B switched to the mobile Receive tab before transfers');
   }
-  await pageA.getByRole('button', { name: /transfer/i }).first().click();
-  await pageB.getByRole('button', { name: /transfer/i }).first().click();
-  await pageA.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });
-  await pageB.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });
   const patternBuffer = (bytes: number) => {
     const buf = Buffer.alloc(bytes);
     for (let i = 0; i < bytes; i += 4096) buf.fill((i / 4096) % 251, i, Math.min(i + 4096, bytes));
