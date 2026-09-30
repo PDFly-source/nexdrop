@@ -290,7 +290,12 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
         </div>
 
         <p className="text-xs text-[#9AA3AD]">
-          Real-time audit of local browser APIs used by NexDrop for P2P streaming and zero-heap persistence:
+          Real-time audit of local browser APIs used by NexDrop for P2P streaming and zero-heap persistence.
+          These are <strong className="text-[#F5F7F8]">browser capabilities</strong> — API support only, not
+          permissions. NexDrop requests <strong className="text-[#F5F7F8]">no permission up front</strong>;
+          the camera permission is requested only when you open the QR scanner and the camera stops
+          immediately after a scan or cancel. No location, Bluetooth, microphone, Wi-Fi or hotspot
+          permission is ever requested.
         </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">

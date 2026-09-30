@@ -247,7 +247,7 @@ async function main() {
   await pageB.getByRole('button', { name: /accept & connect/i }).click();
 
   console.log('[two-device e2e] B: real answer generated');
-  await pageB.waitForSelector('text=Show this answer QR', { timeout: 30000 });
+  await pageB.waitForSelector('text=Return this connection code to the sender', { timeout: 30000 });
   const answerSegments = await decodeAllQrSegments(pageB);
   check(answerSegments.every((s) => s.startsWith('NDQS2.') || s.startsWith('NDQS.') || s.startsWith('NDP1.') || s.startsWith('NDP2.')),
     'B rendered real answer QR image(s) decodable by jsQR');
@@ -478,9 +478,16 @@ async function main() {
     const buf = size === 10 * 1024 * 1024 ? buffer10mb : patternBuffer(size);
     await uploadFile(pageA, name, buf);
     try {
+      const t0 = Date.now();
       await waitForNameStatus(pageA, name, 'Completed', timeoutMs);
       await waitForNameStatus(pageB, name, 'Completed', timeoutMs);
       await waitForNameStatus(pageB, name, 'Verified', 30000);
+      const secs = (Date.now() - t0) / 1000;
+      // MEASURED throughput on this runner (loopback + UI detection overhead) —
+      // not a promise about real-network speeds, printed for the audit report.
+      if (size >= 10 * 1024 * 1024) {
+        console.log(`  [throughput] ${name}: ${(size / 1024 / 1024).toFixed(0)} MiB in ${secs.toFixed(1)}s ≈ ${(size / 1024 / 1024 / secs).toFixed(1)} MiB/s`);
+      }
       check(true, `${name} (${size} bytes): sent, received, SHA-256 verified end-to-end`);
     } catch {
       await dumpFailure(name);

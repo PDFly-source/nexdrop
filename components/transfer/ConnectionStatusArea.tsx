@@ -590,11 +590,14 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold text-[#19C37D]">
               <span className="h-2 w-2 rounded-full bg-[#19C37D] animate-pulse" aria-hidden="true" />
-              Almost there
+              Step 2 of 2 — Return the code
             </div>
-            <h2 className="text-base font-semibold text-[#F5F7F8] mt-0.5">Show this answer QR</h2>
+            <h2 className="text-base font-semibold text-[#F5F7F8] mt-0.5">
+              Return this connection code to the sender
+            </h2>
             <p className="text-xs text-[#9AA3AD] mt-0.5">
-              On the first device, tap <strong className="text-[#F5F7F8]">Scan answer QR</strong> and scan this code.
+              On the first device, tap <strong className="text-[#F5F7F8]">Scan answer QR</strong> and point it here —
+              the connection then opens automatically. No camera there? Send the copied answer code instead.
               Session <span className="font-mono text-[#F5F7F8]">{answerQr?.sessionId}</span>
             </p>
           </div>
@@ -644,7 +647,9 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
 
           <div className="flex-1 min-w-0 flex flex-col gap-2.5">
             <p className="text-xs text-[#9AA3AD]">
-              The connection opens automatically as soon as the first device scans this code — no camera there? Paste the answer code instead.
+              This code is the technical fallback of local pairing — WebRTC needs the answer
+              returned to the sender, and with no signaling server the return trip goes
+              through this QR or the copied code.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
