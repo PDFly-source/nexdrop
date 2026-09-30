@@ -102,43 +102,57 @@ async function testChunkCipher() {
   const bits = await deriveSharedBits(a.privateKey, b.publicKey);
   const key = await deriveSessionAesKey(bits);
 
-  const { deriveSessionCipherSalt } = await import('../lib/crypto');
-  const salt = await deriveSessionCipherSalt(bits);
-  const saltB = await deriveSessionCipherSalt(bits);
-  assert(salt.join(',') === saltB.join(','), 'both sides derive identical IV salt');
+  const cipherA = await createChunkCipher(key);
+  const cipherB = await createChunkCipher(key);
 
-  const cipherA = await createChunkCipher(key, salt);
-  const cipherB = await createChunkCipher(key, saltB);
+  const { generateIvPrefix } = await import('../lib/crypto');
+  const prefixA = generateIvPrefix();
+  const prefixB = new Uint8Array(prefixA); // receiver uses the prefix from FILE_START
+  assert(prefixA.byteLength === 6, 'IV prefix is 6 bytes');
 
   const chunk = stringToBytes('file chunk payload #0').buffer as ArrayBuffer;
-  const sealed = await encryptChunk(cipherA, 0, chunk);
-  assert(sealed.byteLength > chunk.byteLength, 'ciphertext includes IV + tag overhead');
+  const sealed = await encryptChunk(cipherA, prefixA, 0, chunk);
+  assert(sealed.byteLength > chunk.byteLength, 'ciphertext includes tag overhead');
 
-  const opened = await decryptChunk(cipherB, 0, sealed);
-  assert(hex(opened) === hex(chunk), 'receiver decrypts chunk with same session key');
+  const opened = await decryptChunk(cipherB, prefixB, 0, sealed);
+  assert(hex(opened) === hex(chunk), 'receiver decrypts chunk with same key + prefix');
 
-  // Deterministic IV per (salt, chunkIndex): same index yields same ciphertext,
-  // different indices differ — IVs are never reused within a session.
-  const sameIdx = await encryptChunk(cipherA, 0, chunk);
+  // Deterministic IV per (prefix, chunkIndex): same pair yields same ciphertext,
+  // different chunk indices differ — no IV reuse within a transfer.
+  const sameIdx = await encryptChunk(cipherA, prefixA, 0, chunk);
   assert(hex(sealed) === hex(sameIdx), 'IV is deterministic per chunk index');
-  const otherIdx = await encryptChunk(cipherA, 1, chunk);
+  const otherIdx = await encryptChunk(cipherA, prefixA, 1, chunk);
   assert(hex(sealed) !== hex(otherIdx), 'different chunk indices use different IVs');
 
-  // Wrong counter => decryption must fail (tag mismatch)
+  // CRITICAL: a SECOND transfer must never reuse the first transfer's IVs.
+  // (This was the per-transfer counter-restart bug: same key + same
+  // (prefix,index) pairs across files = GCM nonce reuse.)
+  const prefix2 = generateIvPrefix();
+  const secondFileChunk0 = await encryptChunk(cipherA, prefix2, 0, chunk);
+  const secondFileChunk1 = await encryptChunk(cipherA, prefix2, 1, chunk);
+  assert(hex(secondFileChunk0) !== hex(sealed), 'new transfer chunk #0 gets a fresh IV');
+  assert(
+    hex(secondFileChunk1) !== hex(otherIdx),
+    'new transfer chunk #1 gets a fresh IV'
+  );
+  const reopened = await decryptChunk(cipherB, prefix2, 0, secondFileChunk0);
+  assert(hex(reopened) === hex(chunk), 'second transfer decrypts with its own prefix');
+
+  // Wrong prefix (wrong key/context) => decryption must fail (tag mismatch)
   let threw = false;
   try {
-    await decryptChunk(cipherB, 999, sealed);
+    await decryptChunk(cipherB, generateIvPrefix(), 0, sealed);
   } catch {
     threw = true;
   }
-  assert(threw, 'wrong chunk counter fails authentication');
+  assert(threw, 'wrong IV prefix fails authentication');
 
   // Tampered ciphertext fails
   const tampered = new Uint8Array(sealed.slice(0));
   tampered[tampered.length - 1] ^= 0xff;
   threw = false;
   try {
-    await decryptChunk(cipherB, 0, tampered.buffer as ArrayBuffer);
+    await decryptChunk(cipherB, prefixB, 0, tampered.buffer as ArrayBuffer);
   } catch {
     threw = true;
   }
@@ -206,6 +220,36 @@ async function testPairingPayload() {
   const expired =
     'NDP1.' + bytesToBase64Url(stringToBytes(JSON.stringify(envelope)));
   await expectError(() => parsePairingCode(expired), 'expired payload rejected', 'expired');
+
+  // Adversarial: envelope with the expiry STRIPPED must be rejected outright —
+  // a stale pairing must not be resurrected as "never expiring".
+  const noExp = { ...JSON.parse(Buffer.from(inner).toString('utf8')) };
+  delete noExp.exp;
+  await expectError(
+    () => parsePairingCode('NDP1.' + bytesToBase64Url(stringToBytes(JSON.stringify(noExp)))),
+    'envelope without expiry rejected',
+    'invalid-format'
+  );
+
+  // Adversarial: non-finite / string expiry metadata rejected
+  const strExp = { ...JSON.parse(Buffer.from(inner).toString('utf8')), exp: '99999999999999' };
+  await expectError(
+    () => parsePairingCode('NDP1.' + bytesToBase64Url(stringToBytes(JSON.stringify(strExp)))),
+    'string expiry rejected',
+    'invalid-format'
+  );
+  const noTs = { ...JSON.parse(Buffer.from(inner).toString('utf8')) };
+  delete noTs.ts;
+  await expectError(
+    () => parsePairingCode('NDP1.' + bytesToBase64Url(stringToBytes(JSON.stringify(noTs)))),
+    'envelope without timestamp rejected',
+    'invalid-format'
+  );
+
+  // Adversarial: an offer must not parse as an answer
+  const asAnswer = { ...JSON.parse(Buffer.from(inner).toString('utf8')), k: 'a' };
+  const flipped = await parsePairingCode('NDP1.' + bytesToBase64Url(stringToBytes(JSON.stringify(asAnswer))));
+  assert(flipped.kind === 'answer', 'role is read from the envelope, not assumed');
 }
 
 async function testSegmentation() {

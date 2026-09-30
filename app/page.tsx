@@ -75,6 +75,9 @@ function NexDropMainContent() {
     createPairing,
     submitAnswer,
     joinWithOffer,
+    acceptPendingOffer,
+    declinePendingOffer,
+    pendingOfferInfo,
     verifySasSecurityCode,
     sendTextMessage,
     sendClipboardItem,
@@ -183,6 +186,10 @@ function NexDropMainContent() {
               onCreatePairing={() => void createPairing()}
               onSubmitAnswer={submitAnswer}
               onJoinWithOffer={joinWithOffer}
+              onAcceptPendingOffer={acceptPendingOffer}
+              onDeclinePendingOffer={declinePendingOffer}
+              onStartOver={declinePendingOffer}
+              pendingOfferInfo={pendingOfferInfo}
               onClearPairingError={() => setPairingError(null)}
               onDisconnect={disconnect}
               onOpenSecurityModal={() => setIsSecurityModalOpen(true)}

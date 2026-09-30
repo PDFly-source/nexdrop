@@ -17,6 +17,7 @@ import {
   stringToBytes,
 } from '@/lib/crypto';
 import { PairingError, ParsedPairingPayload } from '@/types/session';
+import { buildCompactCode, COMPACT_PREFIX, parseCompactCode } from '@/lib/pairing/compact';
 
 export const PAIRING_TTL_MS = 10 * 60 * 1000; // pairing payloads expire after 10 minutes
 const ENVELOPE_PREFIX = 'NDP1.'; // NexDrop Pairing v1
@@ -156,10 +157,25 @@ export interface BuildPayloadInput {
   publicKey: ArrayBuffer;
   /** SHA-256 (base64url) of the offer code — answers only. */
   ackOfOffer?: string;
+  /** Short label of the sending device (shows on the accept screen). */
+  device?: string;
 }
 
 /** Build the compact one-line pairing code. */
 export async function buildPairingCode(input: BuildPayloadInput): Promise<string> {
+  // Preferred: the v2 binary format packs only the essential SDP fields so
+  // the whole pairing fits ONE low-density QR. Falls back to the v1 JSON
+  // path (deflate + multi-QR segmentation) whenever something the binary
+  // format cannot faithfully represent is present — never a wrong session.
+  const compact = buildCompactCode({
+    kind: input.kind,
+    sdp: input.sdp,
+    publicKey: new Uint8Array(input.publicKey),
+    ackOfOffer: input.ackOfOffer,
+    device: input.device,
+  });
+  if (compact) return compact;
+
   const trimmed = trimSdp(input.sdp);
   const rawBytes = stringToBytes(trimmed);
   const deflated = await deflateRaw(rawBytes);
@@ -189,6 +205,9 @@ export async function buildPairingCode(input: BuildPayloadInput): Promise<string
 /** Parse a pairing code. Throws PairingError on any problem. */
 export async function parsePairingCode(code: string): Promise<ParsedPairingPayload> {
   const trimmed = code.trim();
+  if (trimmed.startsWith(COMPACT_PREFIX)) {
+    return parseCompactCode(trimmed);
+  }
   if (!trimmed.startsWith(ENVELOPE_PREFIX)) {
     throw new Error('invalid-format');
   }
@@ -207,10 +226,21 @@ export async function parsePairingCode(code: string): Promise<ParsedPairingPaylo
   if (typeof envelope.d !== 'string' || typeof envelope.pk !== 'string') {
     throw new Error('invalid-format');
   }
+  // Freshness metadata is MANDATORY: a hand-crafted envelope without a real
+  // expiry must not be silently treated as never-expiring. This closes the
+  // "strip exp to make a stale pairing replayable forever" path.
+  if (
+    typeof envelope.ts !== 'number' ||
+    !Number.isFinite(envelope.ts) ||
+    typeof envelope.exp !== 'number' ||
+    !Number.isFinite(envelope.exp)
+  ) {
+    throw new Error('invalid-format');
+  }
 
   const now = Date.now();
   // Allow 2 min clock skew between devices
-  if (envelope.exp && envelope.exp + 2 * 60 * 1000 < now) {
+  if (envelope.exp + 2 * 60 * 1000 < now) {
     throw new Error('expired');
   }
 
@@ -321,8 +351,8 @@ export class QrSegmentAssembler {
       return { error: 'timeout', received: this.parts.size, total: this.total };
     }
 
-    if (scanned.startsWith(ENVELOPE_PREFIX)) {
-      // A complete single-QR code scanned directly
+    if (scanned.startsWith(ENVELOPE_PREFIX) || scanned.startsWith(COMPACT_PREFIX)) {
+      // A complete single-QR code scanned directly (v1 JSON or v2 compact)
       return { code: scanned, received: 1, total: 1 };
     }
 

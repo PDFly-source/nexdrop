@@ -63,6 +63,8 @@ export interface FileStartMessage {
   totalChunks: number;
   /** True when chunks are AES-GCM encrypted with the session E2EE key. */
   e2eeEnabled?: boolean;
+  /** base64url 6-byte per-transfer IV prefix (E2EE transfers only). */
+  ivPrefix?: string;
 }
 
 export interface ChunkAckMessage {

@@ -227,7 +227,8 @@ async function main() {
     const asm = new QrSegmentAssembler();
     check(asm.feed('https://example.com').error === 'invalid-format', 'random URL rejected as invalid-format');
     check(asm.feed('NDQS2.abc.x.y.z').error === 'invalid-format', 'malformed segment metadata rejected');
-    check(asm.feed('NDP2.somethingnew').error === 'invalid-format', 'unknown envelope version rejected');
+    check(asm.feed('NDP2.somethingnew').code === 'NDP2.somethingnew', 'complete NDP2 compact code accepted directly by the scanner');
+    check(asm.feed('NDP3.somethingnew').error === 'invalid-format', 'unknown envelope version rejected');
   }
 
   console.log(`[qr-pairing tests] ${passed} passed, ${failed} failed`);

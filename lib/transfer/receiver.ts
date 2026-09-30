@@ -14,7 +14,7 @@ import {
 } from '@/types/transfer';
 import { createOptimalStorageWriter, StorageWriter } from './writer';
 import { decodeBinaryChunk, simpleStringHash } from './protocol';
-import { ChunkCipher, decryptChunk, IncrementalSha256 } from '@/lib/crypto';
+import { base64UrlToBytes, ChunkCipher, decryptChunk, IncrementalSha256 } from '@/lib/crypto';
 
 export interface ReceiverProgress {
   transferId: string;
@@ -48,6 +48,8 @@ export class ReceiverEngine {
   private totalChunks = 0;
   private chunkSize = 64 * 1024;
   private e2eeEnabled = false;
+  /** Per-transfer IV prefix (from FILE_START) — required for chunk decryption. */
+  private ivPrefix: Uint8Array | null = null;
 
   private writer: StorageWriter | null = null;
   private hasher: IncrementalSha256 | null = null;
@@ -104,6 +106,24 @@ export class ReceiverEngine {
     this.totalChunks = meta.totalChunks;
     this.chunkSize = meta.chunkSize || 64 * 1024;
     this.e2eeEnabled = !!meta.e2eeEnabled && !!this.callbacks.getCipher?.();
+    if (this.e2eeEnabled) {
+      // Fail closed: an E2EE transfer without a usable IV prefix cannot be
+      // decrypted — never fall back to plaintext acceptance.
+      if (!meta.ivPrefix) {
+        this.callbacks.onError(meta.transferId, 'Protocol error: missing encryption IV prefix');
+        void this.cancel('Protocol error: missing encryption IV prefix');
+        return;
+      }
+      try {
+        const prefixBytes = base64UrlToBytes(meta.ivPrefix);
+        if (prefixBytes.byteLength !== 6) throw new Error('bad prefix length');
+        this.ivPrefix = prefixBytes;
+      } catch {
+        this.callbacks.onError(meta.transferId, 'Protocol error: malformed encryption IV prefix');
+        void this.cancel('Protocol error: malformed encryption IV prefix');
+        return;
+      }
+    }
 
     this.bytesReceived = 0;
     this.receivedChunksCount = 0;
@@ -217,7 +237,8 @@ export class ReceiverEngine {
       let payload: ArrayBuffer = decoded.payload;
       const cipher = this.callbacks.getCipher?.();
       if (this.e2eeEnabled && cipher) {
-        payload = await decryptChunk(cipher, decoded.chunkIndex, decoded.payload);
+        if (!this.ivPrefix) throw new Error('E2EE transfer missing IV prefix');
+        payload = await decryptChunk(cipher, this.ivPrefix, decoded.chunkIndex, decoded.payload);
       }
 
       await this.writer.writeChunk(payload, decoded.chunkIndex);
@@ -297,6 +318,34 @@ export class ReceiverEngine {
     }
     this.isCompleted = true;
 
+    // Byte-count honesty check: FILE_END only counts as complete when the
+    // number of plaintext bytes actually written equals the size announced
+    // in FILE_START. A truncated stream must never be reported as complete.
+    const byteCountOk = this.bytesReceived === this.size;
+    if (!byteCountOk) {
+      this.callbacks.sendControlMessage({
+        type: 'VERIFY',
+        transferId: this.transferId,
+        match: false,
+      });
+      const id = this.transferId;
+      const size = this.size;
+      const received = this.bytesReceived;
+      this.transferId = '';
+      this.ivPrefix = null;
+      if (this.writer) {
+        try {
+          await this.writer.abort();
+        } catch {
+          // best-effort cleanup
+        }
+        this.writer = null;
+      }
+      this.emitProgress('failed', 0, 0, id);
+      this.callbacks.onError(id, `Transfer truncated: received ${received} of ${size} bytes`);
+      return;
+    }
+
     try {
       const finishRes = await this.writer.finish();
 
@@ -339,6 +388,7 @@ export class ReceiverEngine {
       // messages can never act on (or be attributed to) a finished transfer.
       this.transferId = '';
       this.writer = null;
+      this.ivPrefix = null;
     } catch (err: any) {
       this.callbacks.onError(this.transferId, `Failed to finalize file: ${err?.message || err}`);
     }
@@ -348,6 +398,7 @@ export class ReceiverEngine {
     this.pendingChunks = [];
     this.pendingFinish = null;
     this.pendingPauseId = null;
+    this.ivPrefix = null;
     if (this.isCompleted) return;
     if (!this.transferId) return; // nothing active — never emit or notify
     this.isCancelled = true;

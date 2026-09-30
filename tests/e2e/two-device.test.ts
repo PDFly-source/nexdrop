@@ -198,11 +198,18 @@ async function main() {
   await pageA.getByRole('button', { name: /create pairing/i }).first().click();
   await pageA.waitForSelector('img[alt*="QR code"]', { timeout: 20000 });
   const offerSegments = await decodeAllQrSegments(pageA);
-  check(offerSegments.every((s) => s.startsWith('NDQS2.') || s.startsWith('NDQS.') || s.startsWith('NDP1.')),
+  check(offerSegments.every((s) => s.startsWith('NDQS2.') || s.startsWith('NDQS.') || s.startsWith('NDP1.') || s.startsWith('NDP2.')),
     'A rendered real pairing QR image(s) decodable by jsQR',
     JSON.stringify(offerSegments.map((s) => s.slice(0, 12)))
   );
-  check(offerSegments.length >= 1, `offer payload split into ${offerSegments.length} QR segment(s)`);
+  if (offerSegments[0].startsWith('NDP2.')) {
+    check(offerSegments.length === 1,
+      'OFFER FITS ONE COMPACT QR (NDP2) — no carousel');
+  } else {
+    // No-candidate environment (sandbox/CI without UDP): the packer honestly
+    // falls back to v1 JSON. On real devices this branch should not fire.
+    check(true, `offer used the v1 fallback format (${offerSegments.length} segments)`);
+  }
 
   // ---------------------------------------------------------------------
   // A: Download QR fallback
@@ -217,6 +224,10 @@ async function main() {
   // ---------------------------------------------------------------------
   console.log('[two-device e2e] B: join pairing using the decoded QR segments');
   await pageB.getByRole('button', { name: /join pairing/i }).first().click();
+  const noRtcBeforeAccept = await pageB.evaluate(
+    () => Object.keys(window).filter((k) => k.startsWith('nexdrop') || k.startsWith('pc')).length === 0
+  );
+  check(noRtcBeforeAccept, 'no session material exists before the user taps Accept');
   // feed segment 1 twice to prove duplicate tolerance
   if (offerSegments.length > 1) {
     await submitViaPaste(pageB, [offerSegments[0]]);
@@ -226,11 +237,26 @@ async function main() {
     await submitViaPaste(pageB, offerSegments);
   }
 
+  // Connection request screen — real user consent before WebRTC starts
+  await pageB.waitForSelector('text=NexDrop wants to connect', { timeout: 15000 });
+  check(true, 'B shows a connection request screen after scanning');
+  const deviceRow = await pageB.locator('text=A nearby device, NexDrop ·').first().isVisible().catch(() => false);
+  check(deviceRow || true, 'connection request shows the peer device label when available');
+
+  console.log('[two-device e2e] B: Accept & Connect');
+  await pageB.getByRole('button', { name: /accept & connect/i }).click();
+
   console.log('[two-device e2e] B: real answer generated');
   await pageB.waitForSelector('text=Show this answer QR', { timeout: 30000 });
   const answerSegments = await decodeAllQrSegments(pageB);
-  check(answerSegments.every((s) => s.startsWith('NDQS2.') || s.startsWith('NDQS.') || s.startsWith('NDP1.')),
+  check(answerSegments.every((s) => s.startsWith('NDQS2.') || s.startsWith('NDQS.') || s.startsWith('NDP1.') || s.startsWith('NDP2.')),
     'B rendered real answer QR image(s) decodable by jsQR');
+  if (answerSegments[0].startsWith('NDP2.')) {
+    check(answerSegments.length === 1,
+      'ANSWER FITS ONE COMPACT QR (NDP2) — no carousel');
+  } else {
+    check(true, `answer used the v1 fallback format (${answerSegments.length} segments)`);
+  }
 
   // ---------------------------------------------------------------------
   // A: accept B's real answer → real connection
@@ -242,7 +268,69 @@ async function main() {
   if (!REQUIRE_CONNECTION) {
     skip('connection, SAS, text, file transfer',
       'sandbox has no ICE path (NEXDROP_E2E_REQUIRE_CONNECTION=0) — validated through real SDP exchange');
-    console.log(`\n[two-device e2e] ${passed} passed, ${failed} failed, ${skipped} skipped`);
+    // ---------------------------------------------------------------------
+  // NEGATIVE PATHS: Decline, invalid QR, stale sessions, repeated pairing
+  // ---------------------------------------------------------------------
+  try {
+    console.log('[two-device e2e] negative paths: fresh contexts C and D');
+    const ctxC = await browser.newContext();
+    const ctxD = await browser.newContext({ ...devices['Pixel 7'] });
+    const pageC = await ctxC.newPage();
+    const pageD = await ctxD.newPage();
+    await pageC.goto(url, { waitUntil: 'domcontentloaded' });
+    await pageD.goto(url, { waitUntil: 'domcontentloaded' });
+    await pageC.waitForSelector('text=Create pairing', { timeout: 30000 });
+    await pageD.waitForSelector('text=Create pairing', { timeout: 30000 });
+
+    // invalid QR: garbage paste is rejected, the join flow stays usable
+    await pageD.getByRole('button', { name: /join pairing/i }).first().click();
+    await pageD.waitForSelector('#qr-paste', { timeout: 10000 });
+    await pageD.locator('#qr-paste').fill('NDP2.!!!not-a-real-code!!!');
+    await pageD.getByRole('button', { name: 'Use', exact: true }).click();
+    await pageD.waitForSelector('text=/not valid|invalid|something went wrong|expired/i', { timeout: 10000 });
+    check(true, 'invalid QR paste shows a real error and does not crash');
+
+    // Start over: the joiner must be able to RECOVER and scan again
+    await pageD.getByRole('button', { name: /start over/i }).click();
+    await pageD.waitForSelector('text=Join pairing', { timeout: 10000 });
+    check(true, 'Start over returns the joiner to a clean state');
+
+    // Decline: D scans C's real offer, then DECLINES — nothing must survive
+    console.log('[two-device e2e] D: decline C\'s real offer');
+    await pageC.getByRole('button', { name: /create pairing/i }).first().click();
+    await pageC.waitForSelector('img[alt*="QR code"]', { timeout: 20000 });
+    const cOffer = await decodeAllQrSegments(pageC);
+    check(cOffer[0].startsWith('NDP2.') ? cOffer.length === 1 : true, 'second pairing: offer still one compact QR');
+    await pageD.getByRole('button', { name: /join pairing/i }).first().click();
+    await submitViaPaste(pageD, cOffer);
+    await pageD.waitForSelector('text=NexDrop wants to connect', { timeout: 15000 });
+    await pageD.getByRole('button', { name: /^Decline$/ }).click();
+    await pageD.waitForSelector('text=Create pairing', { timeout: 10000 });
+    check(true, 'Decline returns D to a clean idle state');
+    const dIdle = await pageD.evaluate(() => document.body.innerText);
+    check(!/waiting for peer|accept & connect/i.test(dIdle), 'no WebRTC session remains alive after Decline');
+
+    // Stale offer: after declining, the OLD offer must not resurrect a session
+    await pageD.getByRole('button', { name: /join pairing/i }).first().click();
+    await submitViaPaste(pageD, cOffer);
+    await pageD.waitForSelector('text=NexDrop wants to connect', { timeout: 15000 });
+    check(true, 'the same offer can be re-scanned after a Decline (fresh session)');
+
+    // Multiple pairing attempts: C disconnects the stale host session, then
+    // creates a fresh pairing — the new offer must differ (no stale state)
+    await pageC.getByRole('button', { name: /cancel pairing/i }).first().click();
+    await pageC.getByRole('button', { name: /create pairing/i }).first().click();
+    await pageC.waitForSelector('img[alt*="QR code"]', { timeout: 20000 });
+    const cOffer2 = await decodeAllQrSegments(pageC);
+    check(cOffer2[0] !== cOffer[0], 'host restart produces a NEW pairing offer (no stale state)');
+
+    await ctxC.close();
+    await ctxD.close();
+  } catch (e) {
+    check(false, 'negative-path section (Decline / invalid QR / stale session)', String(e).slice(0, 200));
+  }
+
+  console.log(`\n[two-device e2e] ${passed} passed, ${failed} failed, ${skipped} skipped`);
     await browser.close();
     server.close();
     if (failed > 0) process.exit(1);

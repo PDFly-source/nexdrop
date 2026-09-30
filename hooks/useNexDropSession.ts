@@ -28,7 +28,6 @@ import { BrowserCapabilities, DeviceInfo } from '@/lib/detection/capabilities';
 import { useBrowserCapabilities, useDeviceInfo } from '@/hooks/useCapabilities';
 import {
   createChunkCipher,
-  deriveSessionCipherSalt,
   deriveSasCode,
   deriveSessionAesKey,
   deriveSharedBits,
@@ -72,6 +71,14 @@ export interface PairingQr {
   segments: { index: number; total: number; text: string }[];
 }
 
+/** Short, honest label of this device for the remote accept screen.
+ * Only what the browser actually reports — no invented model info. */
+function buildDeviceLabel(info: DeviceInfo): string {
+  const uaData = typeof navigator !== 'undefined' ? (navigator as any).userAgentData : null;
+  const platform = (uaData?.platform as string) || info.os || 'Unknown device';
+  return `NexDrop · ${platform}`.slice(0, 48);
+}
+
 export function useNexDropSession() {
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   const detectedDeviceInfo = useDeviceInfo();
@@ -95,6 +102,9 @@ export function useNexDropSession() {
   const [sasCode, setSasCode] = useState<string | null>(null);
   const [isSecurityVerified, setIsSecurityVerified] = useState<boolean>(false);
   const [offerQr, setOfferQr] = useState<PairingQr | null>(null);
+  /** Joiner side: the scanned, validated offer awaiting the user's Accept. */
+  const [pendingOfferInfo, setPendingOfferInfo] = useState<{ device?: string; expiresAt: number } | null>(null);
+  const pendingOfferRef = useRef<{ code: string; peerPublicKey: ArrayBuffer; sdp: string; expiresAt: number } | null>(null);
   const [answerQr, setAnswerQr] = useState<PairingQr | null>(null);
   const [pairingError, setPairingError] = useState<PairingError | string | null>(null);
   const [rttMs, setRttMs] = useState<number | null>(null);
@@ -193,6 +203,8 @@ export function useNexDropSession() {
     setActivePeerManager(null);
     keyPairRef.current = null;
     offerCodeRef.current = null;
+    pendingOfferRef.current = null;
+    setPendingOfferInfo(null);
     cipherRef.current = null;
     setSessionState('idle');
     setPeerInfo(null);
@@ -327,8 +339,7 @@ export function useNexDropSession() {
     const remotePub = await importPublicKeyRaw(remotePubRaw);
     const sharedBits = await deriveSharedBits(keyPairRef.current.privateKey, remotePub);
     const aesKey = await deriveSessionAesKey(sharedBits);
-    const salt = await deriveSessionCipherSalt(sharedBits);
-    cipherRef.current = await createChunkCipher(aesKey, salt);
+    cipherRef.current = await createChunkCipher(aesKey);
     const sas = await deriveSasCode(sharedBits);
     setSasCode(sas);
     setIsSecurityVerified(false);
@@ -372,6 +383,7 @@ export function useNexDropSession() {
         kind: 'offer',
         sdp: localDesc.sdp || '',
         publicKey: await exportPublicKeyRaw(keyPair.publicKey),
+        device: buildDeviceLabel(deviceInfo),
       });
       offerCodeRef.current = code;
 
@@ -390,7 +402,7 @@ export function useNexDropSession() {
       setSessionState('failed');
       return false;
     }
-  }, [buildPeerManager, cleanup, schedulePairingExpiry]);
+  }, [buildPeerManager, cleanup, schedulePairingExpiry, deviceInfo]);
 
   // -----------------------------------------------------------------------
   // HOST: apply the scanned/pasted answer
@@ -411,7 +423,9 @@ export function useNexDropSession() {
         }
         if (offerCodeRef.current) {
           const expectedAck = await computeSha256Base64Url(offerCodeRef.current);
-          if (parsed.ackOfOffer !== expectedAck) {
+          // v1 answers carry the full 256-bit ack; NDP2 compact answers carry
+          // its 128-bit prefix to stay inside the single-QR budget.
+          if (parsed.ackOfOffer !== expectedAck && !expectedAck.startsWith(parsed.ackOfOffer ?? '')) {
             // The answer belongs to a different offer — refuse it.
             setPairingError('wrong-session');
             return false;
@@ -432,9 +446,11 @@ export function useNexDropSession() {
   );
 
   // -----------------------------------------------------------------------
-  // JOINER: scan/paste an offer, produce the answer
+  // JOINER: scan/paste an offer → ACCEPT screen → produce the answer
   // -----------------------------------------------------------------------
-
+  /** JOINER step 1: scan + validate the offer, then WAIT for explicit user
+   *  consent. No keypair, no RTCPeerConnection, no ICE — nothing is created
+   *  before the user taps Accept & Connect. */
   const joinWithOffer = useCallback(
     async (offerCode: string): Promise<boolean> => {
       if (typeof RTCPeerConnection === 'undefined') {
@@ -456,33 +472,18 @@ export function useNexDropSession() {
           return false;
         }
 
-        const keyPair = await generateEcdhKeyPair();
-        keyPairRef.current = keyPair;
-
-        const peer = buildPeerManager();
-        peer.initialize(false);
-
-        const localDesc = await peer.acceptOfferAndWaitForIce(parsed.sdp);
-
-        // Bind the answer to this exact offer via an ack of the offer code
-        const ack = await computeSha256Base64Url(offerCode.trim());
-        const code = await buildPairingCode({
-          kind: 'answer',
-          sdp: localDesc.sdp || '',
-          publicKey: await exportPublicKeyRaw(keyPair.publicKey),
-          ackOfOffer: ack,
+        // Hold the validated offer; the connection request screen takes over.
+        pendingOfferRef.current = {
+          code: offerCode.trim(),
+          peerPublicKey: parsed.peerPublicKey,
+          sdp: parsed.sdp,
+          expiresAt: parsed.expiresAt,
+        };
+        setPendingOfferInfo({
+          device: parsed.device,
+          expiresAt: parsed.expiresAt,
         });
-
-        await establishSessionKeys(parsed.peerPublicKey);
-
-        const answerSegId = randomId().slice(0, 8);
-        setAnswerQr({
-          code,
-          sessionId: answerSegId.toUpperCase(),
-          segments: segmentPairingCode(code, answerSegId),
-        });
-        setSessionState('joiner-answer');
-        schedulePairingExpiry();
+        setSessionState('awaiting-accept');
         return true;
       } catch (err: any) {
         const pe = toPairingError(err);
@@ -491,8 +492,74 @@ export function useNexDropSession() {
         return false;
       }
     },
-    [buildPeerManager, cleanup, establishSessionKeys, schedulePairingExpiry]
+    [cleanup]
   );
+
+  /** JOINER step 2: user tapped Accept & Connect — start the REAL WebRTC
+   *  negotiation and produce the answer code. */
+  const acceptPendingOffer = useCallback(async (): Promise<boolean> => {
+    const pending = pendingOfferRef.current;
+    if (!pending) {
+      setPairingError('invalid-format');
+      setSessionState('failed');
+      return false;
+    }
+    if (pending.expiresAt + 2 * 60 * 1000 < Date.now()) {
+      pendingOfferRef.current = null;
+      setPendingOfferInfo(null);
+      setPairingError('expired');
+      setSessionState('failed');
+      return false;
+    }
+
+    try {
+      const keyPair = await generateEcdhKeyPair();
+      keyPairRef.current = keyPair;
+
+      const peer = buildPeerManager();
+      peer.initialize(false);
+
+      const localDesc = await peer.acceptOfferAndWaitForIce(pending.sdp);
+
+      // Bind the answer to this exact offer via an ack of the offer code
+      const ack = await computeSha256Base64Url(pending.code);
+      const code = await buildPairingCode({
+        kind: 'answer',
+        sdp: localDesc.sdp || '',
+        publicKey: await exportPublicKeyRaw(keyPair.publicKey),
+        ackOfOffer: ack,
+      });
+
+      await establishSessionKeys(pending.peerPublicKey);
+
+      pendingOfferRef.current = null;
+      setPendingOfferInfo(null);
+
+      const answerSegId = randomId().slice(0, 8);
+      setAnswerQr({
+        code,
+        sessionId: answerSegId.toUpperCase(),
+        segments: segmentPairingCode(code, answerSegId),
+      });
+      setSessionState('joiner-answer');
+      schedulePairingExpiry();
+      return true;
+    } catch (err: any) {
+      const pe = toPairingError(err);
+      setPairingError(pe || err?.message || 'The offer code was invalid or expired.');
+      setSessionState('failed');
+      return false;
+    }
+  }, [buildPeerManager, establishSessionKeys, schedulePairingExpiry]);
+
+  /** JOINER decline: terminate the pending session completely. Nothing was
+   *  created yet (no RTCPeerConnection ever existed), and cleanup discards
+   *  the stashed offer and all session material. */
+  const declinePendingOffer = useCallback(() => {
+    cleanup();
+    setPairingError(null);
+    setSessionState('idle');
+  }, [cleanup]);
 
   // -----------------------------------------------------------------------
   // Messaging (real DataChannel sends — no fakes)
@@ -579,6 +646,9 @@ export function useNexDropSession() {
     createPairing,
     submitAnswer,
     joinWithOffer,
+    acceptPendingOffer,
+    declinePendingOffer,
+    pendingOfferInfo,
     verifySasSecurityCode,
     sendTextMessage,
     sendClipboardItem,

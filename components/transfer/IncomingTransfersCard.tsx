@@ -101,12 +101,21 @@ export const IncomingTransfersCard: React.FC<IncomingTransfersCardProps> = ({
                       <span>{formatBytes(file.size)}</span>
                       <span>·</span>
                       <span className="capitalize">{file.status}</span>
-                      {file.integrityVerified && (
+                      {file.integrityVerified === true && (
                         <>
                           <span>·</span>
                           <span className="text-[#22C55E] flex items-center gap-1">
                             <FileCheck className="w-3 h-3 inline" />
                             Verified
+                          </span>
+                        </>
+                      )}
+                      {file.status === 'completed' && file.integrityVerified === false && (
+                        <>
+                          <span>·</span>
+                          <span className="text-[#EF4444] flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 inline" />
+                            Verification failed
                           </span>
                         </>
                       )}

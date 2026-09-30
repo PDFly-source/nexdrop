@@ -20,7 +20,7 @@ import {
   FileStartMessage,
 } from '@/types/transfer';
 import { encodeBinaryChunk } from './protocol';
-import { ChunkCipher, encryptChunk, IncrementalSha256 } from '@/lib/crypto';
+import { bytesToBase64Url, ChunkCipher, encryptChunk, generateIvPrefix, IncrementalSha256 } from '@/lib/crypto';
 
 export interface SenderProgress {
   transferId: string;
@@ -55,6 +55,8 @@ export class SenderEngine {
   private onCompleted: (transferId: string, hash: string) => void;
   private onError: (transferId: string, err: string) => void;
   private cipher?: ChunkCipher | null;
+  /** Per-transfer random IV prefix — unique IVs across files in one session. */
+  private ivPrefix: Uint8Array | null = null;
 
   private totalChunks: number;
   private currentChunkIndex = 0;
@@ -123,6 +125,11 @@ export class SenderEngine {
     this.isPaused = false;
     this.hasher = new IncrementalSha256();
 
+    // Fresh random IV prefix per transfer — the receiver derives identical
+    // IVs from this value. Without it, every file would reuse the same
+    // (key, IV) pairs (chunk indexes restart at 0), which breaks GCM.
+    if (this.cipher) this.ivPrefix = generateIvPrefix();
+
     const startMsg: FileStartMessage = {
       type: 'FILE_START',
       transferId: this.transferId,
@@ -132,6 +139,9 @@ export class SenderEngine {
       chunkSize: CHUNK_SIZE,
       totalChunks: this.totalChunks,
       e2eeEnabled: !!this.cipher,
+      ...(this.cipher && this.ivPrefix
+        ? { ivPrefix: bytesToBase64Url(this.ivPrefix) }
+        : {}),
     };
 
     const sent = this.sendControlMessage(startMsg);
@@ -189,7 +199,8 @@ export class SenderEngine {
       let payload: ArrayBuffer = chunkBuffer;
       if (this.cipher) {
         try {
-          payload = await encryptChunk(this.cipher, this.currentChunkIndex, chunkBuffer);
+          if (!this.ivPrefix) throw new Error('E2EE transfer missing IV prefix');
+          payload = await encryptChunk(this.cipher, this.ivPrefix, this.currentChunkIndex, chunkBuffer);
         } catch (err: any) {
           this.onError(this.transferId, `Encryption error: ${err?.message || err}`);
           this.emitProgress('failed', 0, 0);

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import {
+  AlertCircle,
   History,
   Trash2,
   Search,
@@ -208,12 +209,21 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
                       <span className="capitalize">{item.direction}</span>
                       <span>·</span>
                       <span>{formatTimestamp(item.timestamp)}</span>
-                      {item.hashVerified && (
+                      {item.hashVerified === true && (
                         <>
                           <span>·</span>
                           <span className="text-[#19C37D] flex items-center gap-0.5">
                             <FileCheck className="w-3 h-3 inline" />
                             SHA-256 Verified
+                          </span>
+                        </>
+                      )}
+                      {item.status === 'completed' && item.hashVerified === false && (
+                        <>
+                          <span>·</span>
+                          <span className="text-[#EF4444] flex items-center gap-0.5">
+                            <AlertCircle className="w-3 h-3 inline" />
+                            Verification failed
                           </span>
                         </>
                       )}

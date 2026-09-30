@@ -19,6 +19,7 @@
 export type SessionState =
   | 'idle'
   | 'hosting-offer'
+  | 'awaiting-accept'
   | 'joiner-answer'
   | 'connecting'
   | 'connected'
@@ -51,6 +52,8 @@ export interface ParsedPairingPayload {
   expiresAt: number;
   /** SHA-256 (base64url) of the original offer payload — answers only. */
   ackOfOffer?: string;
+  /** Short label of the sending device, when provided. */
+  device?: string;
 }
 
 export type PairingError =

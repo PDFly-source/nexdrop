@@ -120,46 +120,60 @@ export async function deriveSasCode(sharedBits: ArrayBuffer): Promise<string> {
 // ---------------------------------------------------------------------------
 
 export interface ChunkCipher {
+  /** Session AES-256-GCM key (non-extractable, derived from the ECDH secret). */
   key: CryptoKey;
-  /** 4-byte random session salt — first part of every IV. */
-  salt: Uint8Array;
+}
+
+export async function createChunkCipher(key: CryptoKey): Promise<ChunkCipher> {
+  return { key };
 }
 
 /**
- * Derive the 4-byte session IV salt from the ECDH shared secret.
- * CRITICAL: both peers must derive the SAME salt deterministically —
- * random per-device salts would break cross-decryption (unique IVs come
- * from the per-chunk counter, not from the salt).
+ * Per-transfer random IV prefix (6 bytes, CSPRNG). Sent in FILE_START so the
+ * receiver derives identical IVs. This is what guarantees IVs are NEVER
+ * reused across two different files in the same session — a plain
+ * per-transfer chunk counter restarting at 0 would repeat the exact same
+ * (key, IV) pairs for the second, third, ... file of a session, which is
+ * catastrophic for GCM (keystream reuse + authentication-key recovery).
  */
-export async function deriveSessionCipherSalt(sharedBits: ArrayBuffer): Promise<Uint8Array> {
-  const saltBits = await hkdf(sharedBits, 'nexdrop-gcm-iv-salt', 4);
-  return new Uint8Array(saltBits.slice(0, 4));
-}
-
-export async function createChunkCipher(key: CryptoKey, salt: Uint8Array): Promise<ChunkCipher> {
-  return { key, salt };
+export function generateIvPrefix(): Uint8Array {
+  const prefix = new Uint8Array(6);
+  crypto.getRandomValues(prefix);
+  return prefix;
 }
 
 /**
- * Build a unique 12-byte GCM IV for a chunk index: 4-byte session salt +
- * 8-byte big-endian counter. Counter is the chunk index, so no IV is ever
- * reused within a session.
+ * Build a unique 12-byte GCM IV for a chunk index:
+ *   6-byte per-transfer random prefix + 6-byte big-endian chunk counter.
+ * Within one transfer the counter is unique per chunk; across transfers in
+ * a session the random prefix makes an IV collision negligibly unlikely
+ * (2^-48 per transfer pair). Cross-session reuse is irrelevant because
+ * each session derives a fresh AES key.
  */
-export function chunkIv(cipher: ChunkCipher, chunkIndex: number): Uint8Array {
+export function chunkIv(ivPrefix: Uint8Array, chunkIndex: number): Uint8Array {
+  if (ivPrefix.length !== 6) throw new Error('invalid-iv-prefix');
+  const counter = Math.floor(chunkIndex);
+  // 6-byte big-endian counter. Chunk indexes are bounded by the uint32 wire
+  // header, so plain number math is exact here (< 2^32 << 2^53).
+  if (!Number.isFinite(counter) || counter < 0 || counter >= 2 ** 48) {
+    throw new Error('chunk-index-overflow');
+  }
   const iv = new Uint8Array(12);
-  iv.set(cipher.salt, 0);
-  const view = new DataView(iv.buffer);
-  view.setBigUint64(4, BigInt(chunkIndex), false);
+  iv.set(ivPrefix, 0);
+  for (let i = 0; i < 6; i++) {
+    iv[6 + i] = Math.floor(counter / 2 ** ((5 - i) * 8)) & 0xff;
+  }
   return iv;
 }
 
 export async function encryptChunk(
   cipher: ChunkCipher,
+  ivPrefix: Uint8Array,
   chunkIndex: number,
   data: ArrayBuffer
 ): Promise<ArrayBuffer> {
   return await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: chunkIv(cipher, chunkIndex) as unknown as BufferSource },
+    { name: 'AES-GCM', iv: chunkIv(ivPrefix, chunkIndex) as unknown as BufferSource },
     cipher.key,
     data
   );
@@ -167,11 +181,12 @@ export async function encryptChunk(
 
 export async function decryptChunk(
   cipher: ChunkCipher,
+  ivPrefix: Uint8Array,
   chunkIndex: number,
   data: ArrayBuffer
 ): Promise<ArrayBuffer> {
   return await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: chunkIv(cipher, chunkIndex) as unknown as BufferSource },
+    { name: 'AES-GCM', iv: chunkIv(ivPrefix, chunkIndex) as unknown as BufferSource },
     cipher.key,
     data
   );

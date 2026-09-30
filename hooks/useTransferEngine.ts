@@ -41,6 +41,10 @@ interface TransferCompleteInfo {
   hashVerified?: boolean;
 }
 
+/** Cap on incoming-file entries kept in the UI (blob URLs of evicted items are revoked). */
+const MAX_INCOMING_ITEMS = 20;
+
+
 export function useTransferEngine(
   peerManager: PeerConnectionManager | null,
   isPeerConnected: boolean,
@@ -182,22 +186,34 @@ export function useTransferEngine(
       switch (msg.type) {
         case 'FILE_START':
           if (!receiver) return;
-          setIncomingFiles((prev) => [
-            {
-              id: msg.transferId,
-              name: msg.name,
-              size: msg.size,
-              type: msg.mime,
-              status: 'transferring',
-              progress: 0,
-              bytesTransferred: 0,
-              speedBps: 0,
-              etaSeconds: 0,
-              direction: 'incoming',
-              startedAt: Date.now(),
-            },
-            ...prev,
-          ]);
+          setIncomingFiles((prev) => {
+            const next = [
+              {
+                id: msg.transferId,
+                name: msg.name,
+                size: msg.size,
+                type: msg.mime,
+                status: 'transferring' as const,
+                progress: 0,
+                bytesTransferred: 0,
+                speedBps: 0,
+                etaSeconds: 0,
+                direction: 'incoming' as const,
+                startedAt: Date.now(),
+              },
+              ...prev,
+            ];
+            // Bound the incoming list: revoke the blob URL of any completed
+            // item evicted past the cap so object URLs (and the blobs they
+            // pin) cannot accumulate without limit across a long session.
+            if (next.length > MAX_INCOMING_ITEMS) {
+              next.slice(MAX_INCOMING_ITEMS).forEach((evicted) => {
+                if (evicted.blobUrl) URL.revokeObjectURL(evicted.blobUrl);
+              });
+              return next.slice(0, MAX_INCOMING_ITEMS);
+            }
+            return next;
+          });
           void receiver.startTransfer(msg);
           break;
 

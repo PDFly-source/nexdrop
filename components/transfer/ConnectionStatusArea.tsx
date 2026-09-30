@@ -42,6 +42,10 @@ interface ConnectionStatusAreaProps {
   onCreatePairing: () => void;
   onSubmitAnswer: (code: string) => Promise<boolean>;
   onJoinWithOffer: (code: string) => Promise<boolean>;
+  onAcceptPendingOffer: () => Promise<boolean>;
+  onDeclinePendingOffer: () => void;
+  onStartOver: () => void;
+  pendingOfferInfo: { device?: string; expiresAt: number } | null;
   onClearPairingError: () => void;
   onDisconnect: () => void;
   onOpenSecurityModal: () => void;
@@ -83,6 +87,10 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
   onCreatePairing,
   onSubmitAnswer,
   onJoinWithOffer,
+  onAcceptPendingOffer,
+  onDeclinePendingOffer,
+  onStartOver,
+  pendingOfferInfo,
   onClearPairingError,
   onDisconnect,
   onOpenSecurityModal,
@@ -95,11 +103,41 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
   const [offerSegmentIndex, setOfferSegmentIndex] = useState<number>(0);
   const [answerSegmentIndex, setAnswerSegmentIndex] = useState<number>(0);
 
+  // A NEW pairing session (new segments array) must always start its QR
+  // carousel on page 1 — a stale page index must never carry over into
+  // the next pairing. The segments arrays are session-scoped state in
+  // the hook, so this render-time adjustment (React's documented pattern
+  // for deriving state from changed props) fires exactly once per session.
+  const [prevOfferSegments, setPrevOfferSegments] = useState(offerQr?.segments);
+  if (prevOfferSegments !== offerQr?.segments) {
+    setPrevOfferSegments(offerQr?.segments);
+    setOfferSegmentIndex(0);
+  }
+  const [prevAnswerSegments, setPrevAnswerSegments] = useState(answerQr?.segments);
+  if (prevAnswerSegments !== answerQr?.segments) {
+    setPrevAnswerSegments(answerQr?.segments);
+    setAnswerSegmentIndex(0);
+  }
+
   // Expiry countdown for active pairing payloads
   const [secondsRemaining, setSecondsRemaining] = useState<number>(600);
 
   const isPairingActive =
-    sessionState === 'hosting-offer' || sessionState === 'joiner-answer' || sessionState === 'connecting';
+    sessionState === 'hosting-offer' ||
+    sessionState === 'awaiting-accept' ||
+    sessionState === 'joiner-answer' ||
+    sessionState === 'connecting';
+
+  // Joiner: countdown driven by the OFFER's own expiry timestamp.
+  const [acceptSecondsRemaining, setAcceptSecondsRemaining] = useState<number>(600);
+  useEffect(() => {
+    if (sessionState !== 'awaiting-accept' || !pendingOfferInfo) return;
+    const tick = () =>
+      setAcceptSecondsRemaining(Math.max(0, Math.floor((pendingOfferInfo.expiresAt - Date.now()) / 1000)));
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [sessionState, pendingOfferInfo]);
 
   useEffect(() => {
     if (!isPairingActive) return;
@@ -409,6 +447,11 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                 </button>
               </div>
             )}
+
+            <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-[#9AA3AD]" aria-live="polite">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#19C37D]" aria-hidden="true" />
+              Waiting for peer…
+            </div>
           </div>
 
           <div className="flex-1 min-w-0 flex flex-col gap-2.5">
@@ -468,10 +511,70 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
         <QrScannerModal
           key={isScannerOpen ? 'scanner-open' : 'scanner-closed'}
           isOpen={isScannerOpen}
-          title={scannerPurpose === 'answer' ? 'Scan the answer QR' : 'Scan the pairing offer'}
+          title={scannerPurpose === 'answer' ? 'Scan the answer QR' : 'Scan pairing QR'}
           onClose={() => setIsScannerOpen(false)}
           onScanComplete={handleScanComplete}
         />
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // JOINER: scanned a valid offer — explicit consent before ANY WebRTC work
+  // ---------------------------------------------------------------------
+
+  if (sessionState === 'awaiting-accept') {
+    return (
+      <div className="rounded-2xl border border-[#19C37D]/25 bg-[#111418] p-5 sm:p-6 shadow-sm text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-[#19C37D]">
+              <span className="h-2 w-2 rounded-full bg-[#19C37D] animate-pulse" aria-hidden="true" />
+              Pairing request received
+            </div>
+            <h2 className="text-lg font-semibold text-[#F5F7F8] mt-1">NexDrop wants to connect</h2>
+          </div>
+          <span className="text-[11px] font-mono text-[#9AA3AD] shrink-0" aria-live="polite">
+            {formatTimer(acceptSecondsRemaining)}
+          </span>
+        </div>
+
+        <dl className="mt-4 space-y-2.5 rounded-xl border border-white/[0.06] bg-[#15191E] p-4 text-xs">
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-[#9AA3AD]">Device</dt>
+            <dd className="font-medium text-[#F5F7F8] text-right truncate max-w-[60%]">
+              {pendingOfferInfo?.device || 'A nearby device'}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-[#9AA3AD]">Connection</dt>
+            <dd className="font-medium text-[#F5F7F8] text-right">Direct peer-to-peer</dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-[#9AA3AD]">Security</dt>
+            <dd className="font-medium text-[#19C37D] text-right">End-to-end encrypted</dd>
+          </div>
+        </dl>
+
+        <p className="mt-3 text-[11px] text-[#9AA3AD] leading-relaxed">
+          Accepting starts a direct WebRTC connection between these two devices. Nothing is sent to any server.
+        </p>
+
+        <div className="mt-5 flex flex-col-reverse sm:flex-row gap-3">
+          <button
+            onClick={onDeclinePendingOffer}
+            className="flex-1 rounded-xl border border-white/[0.12] bg-[#1B2026] px-5 py-3.5 text-sm font-semibold text-[#F5F7F8] hover:bg-white/[0.08] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+          >
+            Decline
+          </button>
+          <button
+            onClick={() => void onAcceptPendingOffer()}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#19C37D] px-5 py-3.5 text-sm font-bold text-[#0B0D0F] hover:bg-[#3DD6A0] transition-all shadow-lg shadow-[#19C37D]/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+          >
+            <ShieldCheck className="w-4 h-4" aria-hidden="true" />
+            Accept &amp; Connect
+          </button>
+        </div>
       </div>
     );
   }
@@ -647,13 +750,22 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onCreatePairing}
-            className="self-start sm:self-center inline-flex items-center gap-2 rounded-xl bg-[#19C37D] px-4 py-2.5 text-xs font-semibold text-[#0B0D0F] hover:bg-[#3DD6A0] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
-          >
-            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Pair again</span>
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            <button
+              onClick={onCreatePairing}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#19C37D] px-4 py-2.5 text-xs font-semibold text-[#0B0D0F] hover:bg-[#3DD6A0] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+            >
+              <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Pair again</span>
+            </button>
+            <button
+              onClick={onStartOver}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-[#1B2026] px-4 py-2.5 text-xs font-semibold text-[#F5F7F8] hover:bg-white/[0.08] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#19C37D]"
+            >
+              <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Start over</span>
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -712,7 +824,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
       <QrScannerModal
         key={isScannerOpen ? 'scanner-open' : 'scanner-closed'}
         isOpen={isScannerOpen}
-        title={scannerPurpose === 'answer' ? 'Scan the answer QR' : 'Scan the pairing offer'}
+        title={scannerPurpose === 'answer' ? 'Scan the answer QR' : 'Scan pairing QR'}
         onClose={() => setIsScannerOpen(false)}
         onScanComplete={handleScanComplete}
       />

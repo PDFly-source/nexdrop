@@ -185,6 +185,12 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
                       {item.progress > 0 && item.status === 'transferring' && (
                         <span>· {item.progress.toFixed(0)}%</span>
                       )}
+                      {item.status === 'completed' && item.integrityVerified === true && (
+                        <span className="text-[#22C55E]">· Verified by receiver</span>
+                      )}
+                      {item.status === 'completed' && item.integrityVerified === false && (
+                        <span className="text-[#EF4444]">· Receiver reported integrity failure</span>
+                      )}
                     </div>
                   </div>
                 </div>
