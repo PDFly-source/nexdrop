@@ -24,7 +24,6 @@ interface SendDropzoneProps {
   onFilesSelected: (files: FileList | File[]) => void;
   onRemoveItem: (id: string) => void;
   onClearCompleted: () => void;
-  onPromptConnect: () => void;
 }
 
 export const SendDropzone: React.FC<SendDropzoneProps> = ({
@@ -33,7 +32,6 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
   onFilesSelected,
   onRemoveItem,
   onClearCompleted,
-  onPromptConnect,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
@@ -85,7 +83,7 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
   };
 
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-nd-surface p-5 shadow-sm flex flex-col h-full">
+    <div className="rounded-xl border border-white/[0.08] bg-nd-surface p-5 shadow-sm flex flex-col flex-1">
       <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
         <div>
           <h2 className="text-sm font-semibold text-nd-text-primary">Send Files</h2>
@@ -106,11 +104,19 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
 
       {/* Main Drag & Drop Zone */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Choose files to send"
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault(); fileInputRef.current?.click();
+          }
+        }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`mt-4 relative flex flex-col items-center justify-center rounded-xl border border-dashed py-8 px-4 text-center cursor-pointer transition-all ${
+        className={`mt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal relative flex flex-col items-center justify-center rounded-xl border border-dashed py-8 px-4 text-center cursor-pointer transition-all ${
           isDragOver
             ? 'border-nd-teal bg-nd-teal/5 scale-[0.99]'
             : 'border-white/[0.12] bg-nd-bg-1 hover:border-white/20 hover:bg-white/[0.02]'
@@ -136,17 +142,10 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
           Photos, videos, documents, ZIP, APK, code · Any size
         </p>
 
-        {!isConnected && (
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              onPromptConnect();
-            }}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-white/[0.05] border border-white/[0.08] px-2.5 py-1 text-[11px] text-nd-text-secondary hover:text-nd-text-primary hover:border-white/20"
-          >
-            <span>Connect peer device to start sending</span>
-          </div>
-        )}
+        {!isConnected && <p className="mt-3 text-[11px] text-nd-text-secondary">
+          {sendQueue.some(f => f.status === 'queued') ? 'Files ready. Connect a device below.' : 'Choose files to send'}
+        </p>}
+
       </div>
 
       {/* Send Queue List */}

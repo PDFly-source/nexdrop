@@ -9,6 +9,9 @@ import { ActiveTransferCard } from '@/components/transfer/ActiveTransferCard';
 import { TransferCompleteBanner } from '@/components/transfer/TransferCompleteBanner';
 import { HistoryWorkspace } from '@/components/history/HistoryWorkspace';
 import { Reveal } from '@/components/ui/Reveal';
+import { SendPairingSurface } from '@/components/pairing/SendPairingSurface';
+import type { PairingQr } from '@/hooks/useNexDropSession';
+import type { SendFlowState } from '@/lib/transfer/sendFlow';
 import { FileItem, LocalHistoryItem } from '@/types/transfer';
 
 interface ActiveTransferSummary {
@@ -26,6 +29,11 @@ interface ActiveTransferSummary {
 }
 
 interface TransfersWorkspaceProps {
+  sendFlowState: SendFlowState;
+  offerQr: PairingQr | null;
+  pairingError: string | null;
+  onCancelConnection: () => void;
+  onRetryConnection: () => void;
   sendQueue: FileItem[];
   incomingFiles: FileItem[];
   activeTransfer: ActiveTransferSummary | null;
@@ -45,6 +53,7 @@ interface TransfersWorkspaceProps {
 }
 
 export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
+  sendFlowState, offerQr, pairingError, onCancelConnection, onRetryConnection,
   sendQueue,
   incomingFiles,
   activeTransfer,
@@ -65,11 +74,20 @@ export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
   // Mobile Send / Receive segmented toggle
   const [mobileTransferMode, setMobileTransferMode] = useState<'send' | 'receive'>('send');
 
+  const activeItem = activeTransfer?.direction === 'outgoing'
+    ? sendQueue.find(file => file.id === activeTransfer.id)
+    : incomingFiles.find(file => file.id === activeTransfer?.id);
+  const completionItem = activeTransfer ? { ...activeTransfer,
+    integrityVerified: activeItem?.integrityVerified,
+    status: activeTransfer.status === 'completed' && activeItem?.integrityVerified !== true
+      ? 'verifying' : activeTransfer.status,
+  } : null;
+
   return (
     <div className="space-y-6">
       {/* LAYER 7 — real completion state (reads the engine, never fakes it) */}
       <TransferCompleteBanner
-        activeTransfer={activeTransfer}
+        activeTransfer={completionItem}
         onNavigateHome={onNavigateHome}
       />
 
@@ -96,7 +114,7 @@ export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
             role="tab"
             aria-selected={mobileTransferMode === 'send'}
             onClick={() => setMobileTransferMode('send')}
-            className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all min-h-[36px] ${
+            className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all min-h-[44px] ${
               mobileTransferMode === 'send'
                 ? 'bg-nd-teal text-nd-bg-0 shadow-sm'
                 : 'text-nd-text-secondary hover:text-nd-text-primary'
@@ -109,7 +127,7 @@ export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
             role="tab"
             aria-selected={mobileTransferMode === 'receive'}
             onClick={() => setMobileTransferMode('receive')}
-            className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all min-h-[36px] ${
+            className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all min-h-[44px] ${
               mobileTransferMode === 'receive'
                 ? 'bg-nd-teal text-nd-bg-0 shadow-sm'
                 : 'text-nd-text-secondary hover:text-nd-text-primary'
@@ -128,14 +146,21 @@ export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
             mobileTransferMode === 'send' ? 'block' : 'hidden lg:flex'
           }`}
         >
+          <div className="flex flex-col gap-4">
           <SendDropzone
             sendQueue={sendQueue}
             isConnected={isConnected}
             onFilesSelected={onFilesSelected}
             onRemoveItem={onRemoveItem}
             onClearCompleted={onClearCompleted}
-            onPromptConnect={onPromptConnect}
           />
+          {(sendQueue.length > 0 || sendFlowState === 'auto_pairing') && (
+            <SendPairingSurface state={sendFlowState} offerQr={offerQr} error={pairingError}
+              queuedCount={sendQueue.filter(f => f.status === 'queued').length}
+              onCancel={onCancelConnection} onRetry={onRetryConnection} onOpenDevices={onPromptConnect}
+              onRemoveFiles={() => sendQueue.filter(f => f.status === 'queued').forEach(f => onRemoveItem(f.id))} />
+          )}
+          </div>
         </div>
 
         <div
