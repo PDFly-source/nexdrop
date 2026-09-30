@@ -2,23 +2,21 @@
 
 import React, { useState } from 'react';
 import {
-  Settings,
   Smartphone,
   Volume2,
-  VolumeX,
   Vibrate,
   ShieldCheck,
-  FileCheck,
   Cpu,
   Trash2,
   Check,
-  AlertCircle,
   HardDrive,
-  Info,
-  Lock,
   Layers,
-  Sparkles,
+  UserRound,
+  Palette,
+  ExternalLink,
+  Info,
 } from 'lucide-react';
+import Link from 'next/link';
 import { DeviceInfo, BrowserCapabilities } from '@/lib/detection/capabilities';
 
 interface SettingsWorkspaceProps {
@@ -31,6 +29,91 @@ interface SettingsWorkspaceProps {
   onUpdateDeviceName: (name: string) => void;
   onClearHistory: () => void;
   historyCount: number;
+}
+
+function SectionCard({
+  id,
+  icon: Icon,
+  title,
+  children,
+}: {
+  id: string;
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      id={id}
+      aria-labelledby={`${id}-heading`}
+      className="rounded-2xl border border-white/[0.08] bg-[#11171B] p-5 sm:p-6 shadow-sm space-y-4 scroll-mt-20"
+    >
+      <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
+        <Icon className="w-4 h-4 text-[#00F5A0]" />
+        <h2 id={`${id}-heading`} className="text-sm font-semibold text-[#F5F7F8]">
+          {title}
+        </h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ToggleRow({
+  title,
+  description,
+  checked,
+  onToggle,
+  ariaLabel,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onToggle: (next: boolean) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div className="py-3 flex items-center justify-between gap-4 text-xs">
+      <div>
+        <p className="font-medium text-[#F5F7F8]">{title}</p>
+        <p className="text-[11px] text-[#9AA7AE] mt-0.5">{description}</p>
+      </div>
+      <button
+        role="switch"
+        aria-checked={checked}
+        aria-label={ariaLabel}
+        onClick={() => onToggle(!checked)}
+        className={`w-11 h-6 shrink-0 flex items-center rounded-full p-1 transition-colors min-h-[44px] ${
+          checked ? 'bg-[#00F5A0]' : 'bg-white/[0.1]'
+        }`}
+      >
+        <div
+          aria-hidden="true"
+          className={`bg-[#070A0D] w-4 h-4 rounded-full shadow-md transform transition-transform ${
+            checked ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function CapabilityTile({ label, ok, okText, fallbackText }: { label: string; ok: boolean | undefined; okText: string; fallbackText: string }) {
+  return (
+    <div className="rounded-xl bg-[#0B0F12] border border-white/[0.06] p-3">
+      <span className="text-[10px] text-[#9AA7AE]/80 block font-mono">{label}</span>
+      <span className="font-medium text-[#F5F7F8] mt-1 block">
+        {ok ? (
+          <span className="text-[#00F5A0] flex items-center gap-1">
+            <Check className="w-3 h-3" aria-hidden="true" />
+            {okText}
+          </span>
+        ) : (
+          <span className="text-[#9AA7AE]">{fallbackText}</span>
+        )}
+      </span>
+    </div>
+  );
 }
 
 export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
@@ -66,51 +149,68 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 space-y-8 text-left">
+    <div className="mx-auto max-w-4xl space-y-6 text-left">
       {/* Header */}
       <div className="pb-4 border-b border-white/[0.08]">
         <div className="flex items-center gap-2">
-          <h1 className="text-xl sm:text-2xl font-semibold text-[#F5F7F8]">Application Settings</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-[#F5F7F8]">Settings</h1>
           <span className="text-[11px] font-medium text-[#9AA7AE] bg-white/[0.06] px-2.5 py-0.5 rounded-full border border-white/[0.08]">
             Local Preferences
           </span>
         </div>
         <p className="text-xs text-[#9AA7AE] mt-1">
-          Customize device profile, transfer parameters, sound notifications, and privacy options. All settings are stored locally on this device.
+          Profile, transfer parameters, storage, notifications and security. All settings are stored locally on this device.
         </p>
+
+        {/* In-page section navigation */}
+        <nav aria-label="Settings sections" className="mt-3 flex flex-wrap gap-1.5">
+          {[
+            { href: '#settings-profile', label: 'Profile' },
+            { href: '#settings-theme', label: 'Theme' },
+            { href: '#settings-transfers', label: 'Transfer Settings' },
+            { href: '#settings-storage', label: 'Storage' },
+            { href: '#settings-notifications', label: 'Notifications' },
+            { href: '#settings-security', label: 'Security' },
+            { href: '#settings-about', label: 'About' },
+          ].map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className="rounded-lg border border-white/[0.08] bg-[#11171B] px-2.5 py-1.5 text-[11px] font-medium text-[#9AA7AE] hover:text-[#F5F7F8] hover:border-white/20 transition-colors"
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
       </div>
 
-      {/* Section 1: General & Device Profile */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#11171B] p-5 sm:p-6 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
-          <Smartphone className="w-4 h-4 text-[#00F5A0]" />
-          <h2 className="text-sm font-semibold text-[#F5F7F8]">General &amp; Device Identity</h2>
-        </div>
-
+      {/* 1 — PROFILE */}
+      <SectionCard id="settings-profile" icon={UserRound} title="Profile">
         <div>
-          <label className="block text-xs font-medium text-[#F5F7F8] mb-1.5">
+          <label htmlFor="device-name-input" className="block text-xs font-medium text-[#F5F7F8] mb-1.5">
             Device Display Name
           </label>
           <p className="text-xs text-[#9AA7AE] mb-3">
             This name is visible to paired devices during session connection and transfer prompts.
           </p>
 
-          <form onSubmit={handleSaveName} className="flex gap-2 max-w-md">
+          <form onSubmit={handleSaveName} className="flex flex-wrap gap-2 max-w-md">
             <input
+              id="device-name-input"
               type="text"
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
               maxLength={40}
               placeholder="e.g. Pixel 10, MacBook Pro, Studio PC"
-              className="flex-1 rounded-xl border border-white/[0.1] bg-[#0B0F12] px-3.5 py-2 text-xs sm:text-sm text-[#F5F7F8] focus:border-[#00F5A0] focus:outline-none transition-all font-medium"
+              className="flex-1 min-w-[200px] rounded-xl border border-white/[0.1] bg-[#0B0F12] px-3.5 py-2 text-xs sm:text-sm text-[#F5F7F8] focus:border-[#00F5A0] focus:outline-none transition-all font-medium"
             />
             <button
               type="submit"
-              className="rounded-xl bg-[#00F5A0] px-4 py-2 text-xs font-semibold text-[#070A0D] hover:bg-[#00D9B5] transition-colors shrink-0 shadow-sm"
+              className="rounded-xl bg-[#00F5A0] px-4 py-2 text-xs font-semibold text-[#070A0D] hover:bg-[#00D9B5] transition-colors shrink-0 shadow-sm min-h-[36px]"
             >
               {savedName ? (
                 <span className="flex items-center gap-1">
-                  <Check className="w-3.5 h-3.5" />
+                  <Check className="w-3.5 h-3.5" aria-hidden="true" />
                   Saved
                 </span>
               ) : (
@@ -122,6 +222,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
 
         <div className="pt-3 flex flex-wrap items-center gap-4 text-xs text-[#9AA7AE]">
           <div className="flex items-center gap-1.5">
+            <Smartphone className="w-3.5 h-3.5" aria-hidden="true" />
             <span className="text-[#9AA7AE]/80">Platform:</span>
             <span className="text-[#F5F7F8] font-mono">{deviceInfo.os}</span>
           </div>
@@ -136,64 +237,44 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
             </span>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
-      {/* Section 2: Transfer Engine Preferences */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#11171B] p-5 sm:p-6 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
-          <Layers className="w-4 h-4 text-[#00F5A0]" />
-          <h2 className="text-sm font-semibold text-[#F5F7F8]">Transfer &amp; Storage Engine</h2>
+      {/* 2 — THEME */}
+      <SectionCard id="settings-theme" icon={Palette} title="Theme">
+        <div className="flex items-center justify-between gap-4 text-xs">
+          <div>
+            <p className="font-medium text-[#F5F7F8]">NexDrop Dark</p>
+            <p className="text-[11px] text-[#9AA7AE] mt-0.5">
+              The premium dark interface is built into the app and matched to the PWA theme color
+              on every device. No personal data is used to style it.
+            </p>
+          </div>
+          <span className="flex items-center gap-2 shrink-0">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.1] bg-[#070A0D]" aria-hidden="true">
+              <span className="h-4 w-4 rounded bg-[#00F5A0]" />
+            </span>
+            <span className="text-[11px] font-medium text-[#F5F7F8]">Dark</span>
+          </span>
         </div>
+      </SectionCard>
 
+      {/* 3 — TRANSFER SETTINGS */}
+      <SectionCard id="settings-transfers" icon={Layers} title="Transfer Settings">
         <div className="divide-y divide-white/[0.04] text-xs">
-          <div className="py-3 flex items-center justify-between gap-4">
-            <div>
-              <p className="font-medium text-[#F5F7F8]">Incremental SHA-256 Hash Verification</p>
-              <p className="text-[11px] text-[#9AA7AE] mt-0.5">
-                Computes cryptographically secure chunk hashes on both sender and receiver to verify file integrity.
-              </p>
-            </div>
-            <button
-              role="switch"
-              aria-checked={verifyIntegrity}
-              aria-label="Incremental SHA-256 hash verification"
-              onClick={() => setVerifyIntegrity(!verifyIntegrity)}
-              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                verifyIntegrity ? 'bg-[#00F5A0]' : 'bg-white/[0.1]'
-              }`}
-            >
-              <div
-                className={`bg-[#070A0D] w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                  verifyIntegrity ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="py-3 flex items-center justify-between gap-4">
-            <div>
-              <p className="font-medium text-[#F5F7F8]">Auto-Resume Interrupted Transfers</p>
-              <p className="text-[11px] text-[#9AA7AE] mt-0.5">
-                Automatically triggers ICE restart and resumes chunk streaming from last confirmed ACK if disconnected.
-              </p>
-            </div>
-            <button
-              role="switch"
-              aria-checked={autoResume}
-              aria-label="Auto-resume interrupted transfers"
-              onClick={() => setAutoResume(!autoResume)}
-              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                autoResume ? 'bg-[#00F5A0]' : 'bg-white/[0.1]'
-              }`}
-            >
-              <div
-                className={`bg-[#070A0D] w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                  autoResume ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-
+          <ToggleRow
+            title="Incremental SHA-256 Hash Verification"
+            description="Computes cryptographically secure chunk hashes on both sender and receiver to verify file integrity."
+            checked={verifyIntegrity}
+            onToggle={setVerifyIntegrity}
+            ariaLabel="Incremental SHA-256 hash verification"
+          />
+          <ToggleRow
+            title="Auto-Resume Interrupted Transfers"
+            description="Automatically triggers ICE restart and resumes chunk streaming from last confirmed ACK if disconnected."
+            checked={autoResume}
+            onToggle={setAutoResume}
+            ariaLabel="Auto-resume interrupted transfers"
+          />
           <div className="py-3 flex items-center justify-between gap-4">
             <div>
               <p className="font-medium text-[#F5F7F8]">Active Streaming Chunk Size</p>
@@ -201,96 +282,76 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
                 Optimized 64 KiB chunks with 256 KiB backpressure threshold to prevent buffer saturation.
               </p>
             </div>
-            <span className="font-mono text-xs text-[#00F5A0] bg-white/[0.04] px-2.5 py-1 rounded-md">
+            <span className="font-mono text-xs text-[#00F5A0] bg-white/[0.04] px-2.5 py-1 rounded-md shrink-0">
               64 KiB
             </span>
           </div>
+        </div>
+      </SectionCard>
 
+      {/* 4 — STORAGE */}
+      <SectionCard id="settings-storage" icon={HardDrive} title="Storage">
+        <div className="divide-y divide-white/[0.04] text-xs">
           <div className="py-3 flex items-center justify-between gap-4">
             <div>
               <p className="font-medium text-[#F5F7F8]">Optimal Destination Writer</p>
               <p className="text-[11px] text-[#9AA7AE] mt-0.5">
                 {capabilities?.fileSystemAccess
-                  ? 'File System Access API (Streams directly to user disk with zero RAM buffer)'
+                  ? 'File System Access API (streams directly to your disk with zero RAM buffer)'
                   : capabilities?.opfs
                   ? 'Origin Private File System (OPFS persistent streaming)'
                   : 'Memory-safe chunk streaming container'}
               </p>
             </div>
-            <span className="font-mono text-[11px] text-[#00D9B5] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+            <span className="font-mono text-[11px] text-[#00D9B5] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0">
               {capabilities?.fileSystemAccess ? 'FileSystemAccess' : capabilities?.opfs ? 'OPFS' : 'Blob'}
             </span>
           </div>
-        </div>
-      </div>
 
-      {/* Section 3: Audio & Notifications */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#11171B] p-5 sm:p-6 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
-          <Volume2 className="w-4 h-4 text-[#00F5A0]" />
-          <h2 className="text-sm font-semibold text-[#F5F7F8]">Sound &amp; Haptic Notifications</h2>
-        </div>
+          <div className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-[#F5F7F8]">Local Transfer Records</p>
+              <p className="text-[11px] text-[#9AA7AE] mt-0.5">
+                Currently holding {historyCount} local transfer metadata entries in browser storage.
+              </p>
+            </div>
 
+            <button
+              onClick={handleClearHistory}
+              disabled={historyCount === 0}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-500/20 bg-red-500/10 text-xs font-medium text-red-400 hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors self-start sm:self-center min-h-[36px]"
+            >
+              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{clearedNotice ? 'Cleared!' : 'Clear Local History'}</span>
+            </button>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* 5 — NOTIFICATIONS */}
+      <SectionCard id="settings-notifications" icon={Volume2} title="Notifications">
         <div className="divide-y divide-white/[0.04] text-xs">
-          <div className="py-3 flex items-center justify-between gap-4">
-            <div>
-              <p className="font-medium text-[#F5F7F8]">Sound Effects</p>
-              <p className="text-[11px] text-[#9AA7AE] mt-0.5">
-                Synthesized Web Audio chimes for connection establishment, transfer completion, and errors.
-              </p>
-            </div>
-            <button
-              role="switch"
-              aria-checked={soundEnabled}
-              aria-label="Sound effects"
-              onClick={() => onToggleSound(!soundEnabled)}
-              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                soundEnabled ? 'bg-[#00F5A0]' : 'bg-white/[0.1]'
-              }`}
-            >
-              <div
-                className={`bg-[#070A0D] w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                  soundEnabled ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="py-3 flex items-center justify-between gap-4">
-            <div>
-              <p className="font-medium text-[#F5F7F8]">Vibration Feedback</p>
-              <p className="text-[11px] text-[#9AA7AE] mt-0.5">
-                Haptic vibration on mobile devices upon successful peer pairing and transfer completion.
-              </p>
-            </div>
-            <button
-              role="switch"
-              aria-checked={vibrationEnabled}
-              aria-label="Vibration feedback"
-              onClick={() => onToggleVibration(!vibrationEnabled)}
-              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                vibrationEnabled ? 'bg-[#00F5A0]' : 'bg-white/[0.1]'
-              }`}
-            >
-              <div
-                className={`bg-[#070A0D] w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                  vibrationEnabled ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
+          <ToggleRow
+            title="Sound Effects"
+            description="Synthesized Web Audio chimes for connection establishment, transfer completion, and errors."
+            checked={soundEnabled}
+            onToggle={onToggleSound}
+            ariaLabel="Sound effects"
+          />
+          <ToggleRow
+            title="Vibration Feedback"
+            description="Haptic vibration on mobile devices upon successful peer pairing and transfer completion."
+            checked={vibrationEnabled}
+            onToggle={onToggleVibration}
+            ariaLabel="Vibration feedback"
+          />
         </div>
-      </div>
+      </SectionCard>
 
-      {/* Section 4: Browser Diagnostics & Capability Audit */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#11171B] p-5 sm:p-6 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
-          <Cpu className="w-4 h-4 text-[#00F5A0]" />
-          <h2 className="text-sm font-semibold text-[#F5F7F8]">Browser Capabilities Diagnostics</h2>
-        </div>
-
+      {/* 6 — SECURITY */}
+      <SectionCard id="settings-security" icon={ShieldCheck} title="Security">
         <p className="text-xs text-[#9AA7AE]">
-          Real-time audit of local browser APIs used by NexDrop for P2P streaming and zero-heap persistence.
+          Real-time audit of local browser APIs used by NexDrop for P2P streaming and persistent storage.
           These are <strong className="text-[#F5F7F8]">browser capabilities</strong> — API support only, not
           permissions. NexDrop requests <strong className="text-[#F5F7F8]">no permission up front</strong>;
           the camera permission is requested only when you open the QR scanner and the camera stops
@@ -299,145 +360,48 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
         </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-          <div className="rounded-xl bg-[#0B0F12] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA7AE]/80 block font-mono">WebRTC Core</span>
-            <span className="font-medium text-[#F5F7F8] mt-1 block">
-              {capabilities?.webRTC ? (
-                <span className="text-[#00F5A0] flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Supported
-                </span>
-              ) : (
-                'Unavailable'
-              )}
-            </span>
-          </div>
-
-          <div className="rounded-xl bg-[#0B0F12] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA7AE]/80 block font-mono">RTCDataChannel</span>
-            <span className="font-medium text-[#F5F7F8] mt-1 block">
-              {capabilities?.dataChannel ? (
-                <span className="text-[#00F5A0] flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Supported
-                </span>
-              ) : (
-                'Unavailable'
-              )}
-            </span>
-          </div>
-
-          <div className="rounded-xl bg-[#0B0F12] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA7AE]/80 block font-mono">File System Access</span>
-            <span className="font-medium text-[#F5F7F8] mt-1 block">
-              {capabilities?.fileSystemAccess ? (
-                <span className="text-[#00F5A0] flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Supported
-                </span>
-              ) : (
-                <span className="text-[#9AA7AE]">OPFS Fallback</span>
-              )}
-            </span>
-          </div>
-
-          <div className="rounded-xl bg-[#0B0F12] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA7AE]/80 block font-mono">OPFS Storage</span>
-            <span className="font-medium text-[#F5F7F8] mt-1 block">
-              {capabilities?.opfs ? (
-                <span className="text-[#00F5A0] flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Supported
-                </span>
-              ) : (
-                <span className="text-[#9AA7AE]">Fallback</span>
-              )}
-            </span>
-          </div>
-
-          <div className="rounded-xl bg-[#0B0F12] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA7AE]/80 block font-mono">Web Crypto API</span>
-            <span className="font-medium text-[#F5F7F8] mt-1 block">
-              {capabilities?.webCrypto ? (
-                <span className="text-[#00F5A0] flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Active
-                </span>
-              ) : (
-                'Unavailable'
-              )}
-            </span>
-          </div>
-
-          <div className="rounded-xl bg-[#0B0F12] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA7AE]/80 block font-mono">Camera API (QR)</span>
-            <span className="font-medium text-[#F5F7F8] mt-1 block">
-              {capabilities?.camera ? (
-                <span className="text-[#00F5A0] flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Ready
-                </span>
-              ) : (
-                'Unavailable'
-              )}
-            </span>
-          </div>
-
-          <div className="rounded-xl bg-[#0B0F12] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA7AE]/80 block font-mono">Clipboard API</span>
-            <span className="font-medium text-[#F5F7F8] mt-1 block">
-              {capabilities?.clipboard ? (
-                <span className="text-[#00F5A0] flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Supported
-                </span>
-              ) : (
-                'Unavailable'
-              )}
-            </span>
-          </div>
-
-          <div className="rounded-xl bg-[#0B0F12] border border-white/[0.06] p-3">
-            <span className="text-[10px] text-[#9AA7AE]/80 block font-mono">Service Worker</span>
-            <span className="font-medium text-[#F5F7F8] mt-1 block">
-              {capabilities?.serviceWorker ? (
-                <span className="text-[#00F5A0] flex items-center gap-1">
-                  <Check className="w-3 h-3" />
-                  Supported
-                </span>
-              ) : (
-                'Unavailable'
-              )}
-            </span>
-          </div>
+          <CapabilityTile label="WebRTC Core" ok={capabilities?.webRTC} okText="Supported" fallbackText="Unavailable" />
+          <CapabilityTile label="RTCDataChannel" ok={capabilities?.dataChannel} okText="Supported" fallbackText="Unavailable" />
+          <CapabilityTile
+            label="File System Access"
+            ok={capabilities?.fileSystemAccess}
+            okText="Supported"
+            fallbackText="OPFS Fallback"
+          />
+          <CapabilityTile label="OPFS Storage" ok={capabilities?.opfs} okText="Supported" fallbackText="Fallback" />
+          <CapabilityTile label="Web Crypto API" ok={capabilities?.webCrypto} okText="Active" fallbackText="Unavailable" />
+          <CapabilityTile label="Camera API (QR)" ok={capabilities?.camera} okText="Ready" fallbackText="Unavailable" />
+          <CapabilityTile label="Clipboard API" ok={capabilities?.clipboard} okText="Supported" fallbackText="Unavailable" />
+          <CapabilityTile label="Service Worker" ok={capabilities?.serviceWorker} okText="Supported" fallbackText="Unavailable" />
         </div>
-      </div>
+      </SectionCard>
 
-      {/* Section 5: Privacy & Local Storage Data */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#11171B] p-5 sm:p-6 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
-          <ShieldCheck className="w-4 h-4 text-[#00F5A0]" />
-          <h2 className="text-sm font-semibold text-[#F5F7F8]">Privacy &amp; Local Storage</h2>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* 7 — ABOUT */}
+      <SectionCard id="settings-about" icon={Info} title="About">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
           <div>
-            <p className="font-medium text-[#F5F7F8] text-xs">Local Transfer Records</p>
+            <p className="font-medium text-[#F5F7F8]">NexDrop — Private · Direct · Fast</p>
             <p className="text-[11px] text-[#9AA7AE] mt-0.5">
-              Currently holding {historyCount} local transfer metadata entries in browser storage.
+              A P2P file &amp; text sharing app. Files travel directly between devices over
+              encrypted WebRTC DataChannels — never through cloud file storage. Pairing uses a
+              lightweight ephemeral signaling service.
             </p>
           </div>
-
-          <button
-            onClick={handleClearHistory}
-            disabled={historyCount === 0}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-500/20 bg-red-500/10 text-xs font-medium text-red-400 hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors self-start sm:self-center"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>{clearedNotice ? 'Cleared!' : 'Clear Local History'}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <Link href="/about" className="flex items-center gap-1 text-[11px] text-[#00D9B5] hover:underline">
+              <span>About</span>
+              <ExternalLink className="w-3 h-3" aria-hidden="true" />
+            </Link>
+            <Link href="/security" className="flex items-center gap-1 text-[11px] text-[#00D9B5] hover:underline">
+              <span>Security Whitepaper</span>
+              <ExternalLink className="w-3 h-3" aria-hidden="true" />
+            </Link>
+            <Link href="/privacy" className="flex items-center gap-1 text-[11px] text-[#9AA7AE] hover:text-white hover:underline">
+              <span>Privacy Policy</span>
+            </Link>
+          </div>
         </div>
-      </div>
+      </SectionCard>
     </div>
   );
 };
