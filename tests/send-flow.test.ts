@@ -1,0 +1,39 @@
+import assert from 'node:assert/strict';
+import { sendFlowReducer, sendFlowState, pairingInProgress, peerConnected } from '../lib/transfer/sendFlow';
+import { buildSignalQr, parseSignalQr } from '../lib/pairing/signalPayload';
+import type { FileItem } from '../types/transfer';
+let count = 0;
+function check(actual: unknown, expected: unknown, label: string) {
+  assert.deepEqual(actual, expected, label); count++; console.log(`  ✓ ${label}`);
+}
+const file: FileItem = { id: 'a', name: 'real.pdf', size: 391516, type: 'application/pdf',
+  status: 'queued', direction: 'outgoing', progress: 0, bytesTransferred: 0, speedBps: 0, etaSeconds: 0 };
+check(sendFlowReducer('idle', 'SEND'), 'send_intent', 'Home Send establishes intent, not pairing');
+check(sendFlowState('send_intent', 'idle', []), 'send_intent', 'empty Send mode never transfers');
+check(sendFlowReducer('send_intent', 'QUEUE'), 'file_queued', 'selection advances to real queued-file intent');
+check(sendFlowReducer('file_queued', 'PAIR'), 'auto_pairing', 'pairing has an explicit lifecycle');
+check(sendFlowState('auto_pairing', 'hosting', [file]), 'waiting_for_peer', 'existing host state drives ready-to-connect');
+check(sendFlowState('auto_pairing', 'join-requested', [file]), 'peer_request_received', 'existing request is observable');
+check(sendFlowState('auto_pairing', 'accepted', [file]), 'connecting', 'acceptance is not fake Connected');
+check(sendFlowState('auto_pairing', 'connecting', [file]), 'connecting', 'negotiation is not fake Connected');
+check(sendFlowState('file_queued', 'connected', [file]), 'connected', 'real connected session reused');
+check(sendFlowState('auto_pairing', 'transferring', [{ ...file, status: 'transferring' }]), 'transferring', 'real engine progress drives Sending');
+check(sendFlowState('auto_pairing', 'connected', [{ ...file, status: 'paused' }]), 'transferring', 'paused transfer remains live');
+check(sendFlowState('auto_pairing', 'connected', [{ ...file, status: 'preparing' }]), 'preparing_transfer', 'preparing comes from engine');
+check(sendFlowState('auto_pairing', 'completed', [{ ...file, status: 'completed' }]), 'verifying', '100% alone is never Verified');
+check(sendFlowState('auto_pairing', 'completed', [{ ...file, status: 'completed', integrityVerified: true }]), 'completed', 'only receiver SHA-256 verdict permits completion');
+check(sendFlowState('auto_pairing', 'completed', [{ ...file, status: 'completed', integrityVerified: false }]), 'failed', 'hash mismatch cannot complete');
+check(sendFlowState('auto_pairing', 'failed', [file]), 'failed', 'expiry/failure comes from real session');
+check(sendFlowReducer('auto_pairing', 'CANCEL'), 'cancelled', 'explicit connection cancellation');
+check(sendFlowState('cancelled', 'idle', [file]), 'cancelled', 'queued file stays visible after cancellation');
+check(file.status, 'queued', 'projection never mutates the real queue');
+check(sendFlowReducer('cancelled', 'QUEUE'), 'file_queued', 'retry explicitly re-arms pairing');
+check(sendFlowState('auto_pairing', 'hosting', [file, { ...file, id: 'b' }]), 'waiting_for_peer', 'multiple files share the same pairing state');
+check(pairingInProgress('hosting'), true, 'active pairing must not be recreated');
+check(pairingInProgress('awaiting-accept'), true, 'receiver consent remains in existing session machine');
+check(peerConnected('connecting'), false, 'connecting must not start transfer');
+check(peerConnected('completed'), true, 'completed transfer retains same connection');
+const input = { a: 'nexdrop', v: 1, s: 's'.repeat(32), t: 't'.repeat(32), e: 'https://signal.example.test/functions/nexdropSignal' };
+check(parseSignalQr(buildSignalQr({ ...input, i: 'send' })).i, 'send', 'single QR preserves receiver-consent intent');
+check(parseSignalQr(buildSignalQr(input)).i, undefined, 'Devices QR remains backward-compatible host-consent flow');
+console.log(`[send-flow] ${count} checks passed`);

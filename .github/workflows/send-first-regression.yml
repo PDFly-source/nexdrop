@@ -1,0 +1,42 @@
+name: Phase 21 Send-first regression
+on:
+  push:
+    branches: ['phase21/send-first-auto-pairing']
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'hooks/**'
+      - 'lib/**'
+      - 'tests/**'
+      - 'package*.json'
+      - '.github/workflows/send-first-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Verify static export
+        run: test -f out/index.html && test -f out/sw.js && test -f out/manifest.webmanifest
+      - name: Existing two-device regression (real connection required)
+        run: npx tsx tests/e2e/two-device.test.ts
+      - name: Send-first regression (real connection and SHA-256 required)
+        run: npm run test:e2e:send-first
+      - name: Existing WebRTC benchmark
+        env:
+          NEXDROP_BENCH_SIZES: '1048576,10485760'
+        run: npx tsx tests/e2e/benchmark.test.ts

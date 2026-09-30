@@ -33,11 +33,13 @@ export interface SignalQrPayload {
   t: string;
   /** Signaling endpoint URL. */
   e: string;
+  /** Send-first invitation: receiver explicitly accepts before filing a request. */
+  i?: 'send';
 }
 
 /** Build the compact one-scan QR text. */
 export function buildSignalQr(input: SignalQrPayload): string {
-  const json = JSON.stringify({ a: input.a, v: input.v, s: input.s, t: input.t, e: input.e });
+  const json = JSON.stringify({ a: input.a, v: input.v, s: input.s, t: input.t, e: input.e, ...(input.i ? { i: input.i } : {}) });
   const bytes = new TextEncoder().encode(json);
   return SIGNAL_PREFIX + bytesToBase64Url(bytes);
 }
@@ -75,5 +77,6 @@ export function parseSignalQr(code: string): SignalQrPayload {
   if (typeof parsed?.e !== 'string' || !/^https:\/\/[a-z0-9.-]+\/[a-z0-9\/.-]*$/i.test(parsed.e)) {
     throw new Error('invalid-endpoint');
   }
-  return { a: parsed.a, v: parsed.v, s: parsed.s, t: parsed.t, e: parsed.e };
+  if (parsed.i !== undefined && parsed.i !== 'send') throw new Error('invalid-intent');
+  return { ...(parsed.i ? { i: parsed.i } : {}), a: parsed.a, v: parsed.v, s: parsed.s, t: parsed.t, e: parsed.e };
 }

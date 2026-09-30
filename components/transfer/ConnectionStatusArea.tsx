@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
-import { QR_RENDER_OPTIONS } from '@/lib/pairing/qrOptions';
+import { renderPairingQr } from '@/lib/pairing/render';
 import {
   Wifi,
   WifiOff,
@@ -214,7 +213,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
     let isMounted = true;
     // Canonical options: standard polarity + quiet zone. An inverted
     // light-on-dark QR is NOT reliably decodable by phone cameras.
-    QRCode.toDataURL(activeQrText, QR_RENDER_OPTIONS)
+    renderPairingQr(activeQrText)
       .then((url) => {
         if (isMounted) setQrDataUrl(url);
       })
@@ -255,7 +254,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
     for (let i = 0; i < segs.length; i++) {
       try {
         // Download uses the exact same canonical options as the live QR.
-        const url = await QRCode.toDataURL(segs[i].text, QR_RENDER_OPTIONS);
+        const url = await renderPairingQr(segs[i].text);
         const a = document.createElement('a');
         a.href = url;
         a.download =
@@ -728,7 +727,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
               <span className="h-2 w-2 rounded-full bg-nd-teal animate-pulse" aria-hidden="true" />
               Pairing request received
             </div>
-            <h2 className="text-lg font-semibold text-nd-text-primary mt-1">NexDrop wants to connect</h2>
+            <h2 className="text-lg font-semibold text-nd-text-primary mt-1">{pairingMode === 'signal' ? 'Incoming connection' : 'NexDrop wants to connect'}</h2>
           </div>
           <span className="text-[11px] font-mono text-nd-text-secondary shrink-0" aria-live="polite">
             {formatTimer(acceptSecondsRemaining)}
@@ -770,7 +769,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
         </dl>
 
         <p className="mt-3 text-[11px] text-nd-text-secondary leading-relaxed">
-          Accepting starts a direct WebRTC connection between these two devices. Nothing is sent to any server.
+          Accept to connect securely. Files travel directly between these devices; pairing metadata uses the signaling service.
         </p>
 
         <div className="mt-5 flex flex-col-reverse sm:flex-row gap-3">
@@ -785,7 +784,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
             className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-nd-teal px-5 py-3.5 text-sm font-bold text-nd-bg-0 hover:bg-nd-teal-bright transition-all shadow-lg shadow-nd-teal/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
           >
             <ShieldCheck className="w-4 h-4" aria-hidden="true" />
-            Accept &amp; Connect
+            {pairingMode === 'signal' ? 'Accept' : 'Accept & Connect'}
           </button>
         </div>
       </div>

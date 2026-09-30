@@ -15,6 +15,7 @@ import { MediaPreviewModal } from '@/components/preview/MediaPreviewModal';
 import DiagnosticsPanel from '@/components/transfer/DiagnosticsPanel';
 import { useNexDropSession } from '@/hooks/useNexDropSession';
 import { updateHistoryVerification } from '@/lib/storage/history';
+import { useSendFlow } from '@/hooks/useSendFlow';
 import { useTransferEngine } from '@/hooks/useTransferEngine';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FileItem } from '@/types/transfer';
@@ -147,6 +148,11 @@ function NexDropMainContent() {
     setTransferActivity
   );
 
+  const sendFlow = useSendFlow({
+    sessionState, sendQueue, addFiles: addFilesToSend, createPairing, disconnect,
+  });
+  const openSend = () => { sendFlow.beginSend(); setActiveTab('transfers'); };
+
   // Handle invite links: #join=<pairing code> loads the offer automatically
   useEffect(() => {
     if (autoJoinAttempted.current) return;
@@ -219,7 +225,8 @@ function NexDropMainContent() {
               historyItems={transferHistory}
               sendQueueCount={sendQueue.length}
               incomingCount={incomingFiles.length}
-              onFilesSelected={addFilesToSend}
+              onFilesSelected={sendFlow.queueFiles}
+              onBeginSend={openSend}
               onOpenText={() => setIsClipboardOpen(true)}
               onNavigate={(tab) => setActiveTab(tab)}
             />
@@ -228,6 +235,11 @@ function NexDropMainContent() {
           {/* LAYER 5 — TRANSFERS (active queue, incoming, history) */}
           {activeTab === 'transfers' && (
             <TransfersWorkspace
+              sendFlowState={sendFlow.state}
+              offerQr={offerQr}
+              pairingError={pairingError}
+              onCancelConnection={sendFlow.cancelConnection}
+              onRetryConnection={sendFlow.retry}
               sendQueue={sendQueue}
               incomingFiles={incomingFiles}
               activeTransfer={activeTransfer}
@@ -235,7 +247,7 @@ function NexDropMainContent() {
               onNavigateHome={() => setActiveTab('home')}
               isConnected={isPeerConnected}
               supportsFileSystemAccess={isMounted ? !!capabilities?.fileSystemAccess : false}
-              onFilesSelected={addFilesToSend}
+              onFilesSelected={sendFlow.queueFiles}
               onRemoveItem={removeSendItem}
               onClearCompleted={clearCompletedSends}
               onPauseTransfer={pauseActiveTransfer}
