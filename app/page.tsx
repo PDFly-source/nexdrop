@@ -4,36 +4,40 @@ import React, { useEffect, useRef, useState, useSyncExternalStore, Suspense } fr
 import { Navbar, WorkspaceTab } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Footer } from '@/components/layout/Footer';
-import { ConnectionStatusArea } from '@/components/transfer/ConnectionStatusArea';
-import { SendDropzone } from '@/components/transfer/SendDropzone';
-import { IncomingTransfersCard } from '@/components/transfer/IncomingTransfersCard';
-import { ActiveTransferCard } from '@/components/transfer/ActiveTransferCard';
-import { ClipboardWorkspace } from '@/components/clipboard/ClipboardWorkspace';
-import { HistoryWorkspace } from '@/components/history/HistoryWorkspace';
-import DiagnosticsPanel from '@/components/transfer/DiagnosticsPanel';
+import { HomeWorkspace } from '@/components/home/HomeWorkspace';
+import { OnboardingOverlay } from '@/components/home/OnboardingOverlay';
+import { TransfersWorkspace } from '@/components/transfers/TransfersWorkspace';
+import { DevicesWorkspace } from '@/components/devices/DevicesWorkspace';
 import { SettingsWorkspace } from '@/components/settings/SettingsWorkspace';
+import { ClipboardOverlay } from '@/components/clipboard/ClipboardOverlay';
 import { SecurityVerifyModal } from '@/components/dialogs/SecurityVerifyModal';
 import { MediaPreviewModal } from '@/components/preview/MediaPreviewModal';
+import DiagnosticsPanel from '@/components/transfer/DiagnosticsPanel';
 import { useNexDropSession } from '@/hooks/useNexDropSession';
 import { updateHistoryVerification } from '@/lib/storage/history';
 import { useTransferEngine } from '@/hooks/useTransferEngine';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FileItem } from '@/types/transfer';
-import {
-  WifiOff,
-  ShieldCheck,
-  Lock,
-  ArrowUpRight,
-  ArrowDownLeft,
-  UploadCloud,
-  Download,
-  CheckCircle2,
-  HardDrive,
-  ExternalLink,
-} from 'lucide-react';
-import Link from 'next/link';
+import { WifiOff } from 'lucide-react';
 
 const emptySubscribe = () => () => {};
+
+/**
+ * Session states where the pairing state machine is mid-flow. When one of
+ * these becomes active while the user is on Home, we surface the Devices
+ * screen so the pairing / Accept-Decline decision is never missed —
+ * the same visibility the old single-screen workspace guaranteed.
+ */
+const PAIRING_STATES = new Set([
+  'hosting',
+  'hosting-offer',
+  'waiting-for-join',
+  'join-requested',
+  'accepted',
+  'awaiting-accept',
+  'joiner-answer',
+  'connecting',
+]);
 
 function NexDropMainContent() {
   const autoJoinAttempted = useRef<boolean>(false);
@@ -42,10 +46,10 @@ function NexDropMainContent() {
   const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   // Active top-level workspace tab
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('transfer');
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('home');
 
-  // Mobile Send / Receive toggle
-  const [mobileTransferMode, setMobileTransferMode] = useState<'send' | 'receive'>('send');
+  // Text & Clipboard sheet (re-homed from the old bottom-nav tab)
+  const [isClipboardOpen, setIsClipboardOpen] = useState<boolean>(false);
 
   // Modals state
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
@@ -155,37 +159,98 @@ function NexDropMainContent() {
     }
   }, [joinWithOffer]);
 
+  // Keep pairing flows visible: if a pairing state becomes active while the
+  // user sits on Home, move to Devices so QR / Accept-Decline is on screen.
+  const prevSessionStateRef = useRef(sessionState);
+  useEffect(() => {
+    if (prevSessionStateRef.current !== sessionState && PAIRING_STATES.has(sessionState)) {
+      setActiveTab((current) => (current === 'home' ? 'devices' : current));
+    }
+    prevSessionStateRef.current = sessionState;
+  }, [sessionState]);
+
+  // A live transfer starting should be visible too — send the user to
+  // Transfers so real progress/speed/ETA is on screen (only from Home).
+  const hasActiveTransfer = !!activeTransfer;
+  const prevHasActiveTransferRef = useRef(hasActiveTransfer);
+  useEffect(() => {
+    if (hasActiveTransfer && !prevHasActiveTransferRef.current) {
+      setActiveTab((current) => (current === 'home' ? 'transfers' : current));
+    }
+    prevHasActiveTransferRef.current = hasActiveTransfer;
+  }, [hasActiveTransfer]);
+
   return (
     <div className="min-h-screen bg-[#070A0D] text-[#F5F7F8] selection:bg-[#00F5A0]/20 selection:text-[#00D9B5] flex flex-col justify-between">
+      {/* LAYER 1 — first-launch onboarding (shows once per browser) */}
+      <OnboardingOverlay />
+
       {/* Offline Banner */}
       {isMounted && !isOnline && (
         <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center text-xs text-[#FFB84D] flex items-center justify-center gap-2">
-          <WifiOff className="w-3.5 h-3.5" />
+          <WifiOff className="w-3.5 h-3.5" aria-hidden="true" />
           <span>You are currently offline. Local P2P features remain cached and functional.</span>
         </div>
       )}
 
       <div>
-        {/* Modern Workspace Header */}
+        {/* Workspace Header */}
         <Navbar
           activeTab={activeTab}
           onTabChange={(tab) => setActiveTab(tab)}
           sessionState={sessionState}
           peerName={peerInfo?.name}
-          onOpenConnectionDetails={() => setActiveTab('transfer')}
+          onOpenConnectionDetails={() => setActiveTab('devices')}
           onStartPairing={() => {
-            setActiveTab('transfer');
+            setActiveTab('devices');
             createPairing();
           }}
         />
 
-        <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8 sm:px-6 space-y-6">
-        <h1 className="sr-only">NexDrop — peer-to-peer file and text transfer</h1>
-        {/* WORKSPACE 1: TRANSFER (MAIN P2P WORKSPACE) */}
-        {activeTab === 'transfer' && (
-          <>
-            {/* Top Focused Connection Status Area */}
-            <ConnectionStatusArea
+        <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8 sm:px-6">
+          <h1 className="sr-only">NexDrop — peer-to-peer file and text transfer</h1>
+
+          {/* LAYER 2 — HOME DASHBOARD (command center) */}
+          {activeTab === 'home' && (
+            <HomeWorkspace
+              isConnected={isPeerConnected}
+              peerName={peerInfo?.name}
+              sessionState={sessionState}
+              historyItems={transferHistory}
+              sendQueueCount={sendQueue.length}
+              incomingCount={incomingFiles.length}
+              onFilesSelected={addFilesToSend}
+              onOpenText={() => setIsClipboardOpen(true)}
+              onNavigate={(tab) => setActiveTab(tab)}
+            />
+          )}
+
+          {/* LAYER 5 — TRANSFERS (active queue, incoming, history) */}
+          {activeTab === 'transfers' && (
+            <TransfersWorkspace
+              sendQueue={sendQueue}
+              incomingFiles={incomingFiles}
+              activeTransfer={activeTransfer}
+              historyItems={transferHistory}
+              onNavigateHome={() => setActiveTab('home')}
+              isConnected={isPeerConnected}
+              supportsFileSystemAccess={isMounted ? !!capabilities?.fileSystemAccess : false}
+              onFilesSelected={addFilesToSend}
+              onRemoveItem={removeSendItem}
+              onClearCompleted={clearCompletedSends}
+              onPauseTransfer={pauseActiveTransfer}
+              onResumeTransfer={resumeActiveTransfer}
+              onCancelTransfer={cancelActiveTransfer}
+              onClearHistory={clearHistory}
+              onPromptConnect={() => setActiveTab('devices')}
+              onPreviewFile={(file) => setPreviewFile(file)}
+            />
+          )}
+
+          {/* LAYER 4/6 — DEVICES (connect, QR pairing, accept/decline, session) */}
+          {activeTab === 'devices' && (
+            <DevicesWorkspace
+              deviceInfo={deviceInfo}
               sessionState={sessionState}
               offerQr={offerQr}
               answerQr={answerQr}
@@ -200,163 +265,35 @@ function NexDropMainContent() {
               signalUnavailable={signalUnavailable}
               signalJoinerAccepted={signalJoinerAccepted}
               joinRequestInfo={joinRequestInfo}
-              onAcceptJoinRequest={acceptJoinRequest}
-              onDeclineJoinRequest={declineJoinRequest}
               onSubmitAnswer={submitAnswer}
               onJoinWithOffer={joinWithOffer}
               onAcceptPendingOffer={acceptPendingOffer}
               onDeclinePendingOffer={declinePendingOffer}
+              onAcceptJoinRequest={acceptJoinRequest}
+              onDeclineJoinRequest={declineJoinRequest}
               onStartOver={declinePendingOffer}
               pendingOfferInfo={pendingOfferInfo}
               onClearPairingError={() => setPairingError(null)}
               onDisconnect={disconnect}
               onOpenSecurityModal={() => setIsSecurityModalOpen(true)}
             />
+          )}
 
-            {/* Active Transfer Card (Highlighted at top when active) */}
-            {activeTransfer && (
-              <div className="animate-in fade-in duration-150">
-                <ActiveTransferCard
-                  activeTransfer={activeTransfer}
-                  onPause={pauseActiveTransfer}
-                  onResume={resumeActiveTransfer}
-                  onCancel={cancelActiveTransfer}
-                />
-              </div>
-            )}
+          {/* LAYER 8 — SETTINGS */}
+          {activeTab === 'settings' && (
+            <SettingsWorkspace
+              deviceInfo={deviceInfo}
+              capabilities={capabilities}
+              soundEnabled={soundEnabled}
+              vibrationEnabled={vibrationEnabled}
+              onToggleSound={toggleSound}
+              onToggleVibration={toggleVibration}
+              onUpdateDeviceName={updateDeviceName}
+              onClearHistory={clearHistory}
+              historyCount={transferHistory.length}
+            />
+          )}
 
-            {/* Mobile Segmented Toggle [ Send ] [ Receive ] when space is limited */}
-            <div className="flex lg:hidden items-center justify-center pt-1">
-              <div className="grid grid-cols-2 rounded-xl bg-[#11171B] p-1 border border-white/[0.08] w-full max-w-xs shadow-sm">
-                <button
-                  onClick={() => setMobileTransferMode('send')}
-                  className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all ${
-                    mobileTransferMode === 'send'
-                      ? 'bg-[#00F5A0] text-[#070A0D] shadow-sm'
-                      : 'text-[#9AA7AE] hover:text-[#F5F7F8]'
-                  }`}
-                >
-                  <UploadCloud className="w-3.5 h-3.5" />
-                  <span>Send ({sendQueue.length})</span>
-                </button>
-                <button
-                  onClick={() => setMobileTransferMode('receive')}
-                  className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all ${
-                    mobileTransferMode === 'receive'
-                      ? 'bg-[#00F5A0] text-[#070A0D] shadow-sm'
-                      : 'text-[#9AA7AE] hover:text-[#F5F7F8]'
-                  }`}
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Receive ({incomingFiles.length})</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Send / Receive Workspace: Desktop 2-column bento, Mobile tabbed view */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-              {/* Send Dropzone & Queue */}
-              <div
-                className={`lg:col-span-6 flex flex-col ${
-                  mobileTransferMode === 'send' ? 'block' : 'hidden lg:flex'
-                }`}
-              >
-                <SendDropzone
-                  sendQueue={sendQueue}
-                  isConnected={isPeerConnected}
-                  onFilesSelected={addFilesToSend}
-                  onRemoveItem={removeSendItem}
-                  onClearCompleted={clearCompletedSends}
-                  onPromptConnect={() => setActiveTab('transfer')}
-                />
-              </div>
-
-              {/* Incoming Received Files */}
-              <div
-                className={`lg:col-span-6 flex flex-col ${
-                  mobileTransferMode === 'receive' ? 'block' : 'hidden lg:flex'
-                }`}
-              >
-                <IncomingTransfersCard
-                  incomingFiles={incomingFiles}
-                  onPreviewFile={(file) => setPreviewFile(file)}
-                  supportsFileSystemAccess={isMounted ? !!capabilities?.fileSystemAccess : false}
-                />
-              </div>
-            </div>
-
-            {/* Minimal Trust & Architecture Info Banner */}
-            <div className="rounded-2xl border border-white/[0.06] bg-[#0B0F12] p-5 text-xs text-[#9AA7AE] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-[#00F5A0] border border-emerald-500/20">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="font-medium text-[#F5F7F8]">Direct P2P Architecture</p>
-                  <p className="text-[11px] text-[#9AA7AE] mt-0.5">
-                    Pairing uses a lightweight ephemeral signaling service. Files and text travel directly between devices over encrypted WebRTC DataChannels.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
-                <Link
-                  href="/security"
-                  className="flex items-center gap-1 text-[11px] text-[#00D9B5] hover:underline"
-                >
-                  <span>Security Whitepaper</span>
-                  <ExternalLink className="w-3 h-3" />
-                </Link>
-                <span className="text-white/20">·</span>
-                <Link
-                  href="/privacy"
-                  className="flex items-center gap-1 text-[11px] text-[#9AA7AE] hover:text-white"
-                >
-                  <span>Privacy Policy</span>
-                </Link>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* WORKSPACE 2: CLIPBOARD & CODE */}
-        {activeTab === 'clipboard' && (
-          <ClipboardWorkspace
-            isConnected={isPeerConnected}
-            peerName={peerInfo?.name}
-            clipboardItems={clipboardItems}
-            textMessages={textMessages}
-            onSendText={sendTextMessage}
-            onSendClipboard={sendClipboardItem}
-            onPromptConnect={() => {
-              setActiveTab('transfer');
-            }}
-          />
-        )}
-
-        {/* WORKSPACE 3: HISTORY */}
-        {activeTab === 'history' && (
-          <HistoryWorkspace
-            historyItems={transferHistory}
-            onClearHistory={clearHistory}
-            onNavigateTransfer={() => setActiveTab('transfer')}
-          />
-        )}
-
-        {/* WORKSPACE 4: SETTINGS */}
-        {activeTab === 'settings' && (
-          <SettingsWorkspace
-            deviceInfo={deviceInfo}
-            capabilities={capabilities}
-            soundEnabled={soundEnabled}
-            vibrationEnabled={vibrationEnabled}
-            onToggleSound={toggleSound}
-            onToggleVibration={toggleVibration}
-            onUpdateDeviceName={updateDeviceName}
-            onClearHistory={clearHistory}
-            historyCount={transferHistory.length}
-          />
-        )}
           {/* Dev-only live transfer diagnostics (opt-in: ?diag=1 or localStorage) */}
           <div className="mt-8">
             <DiagnosticsPanel />
@@ -379,11 +316,27 @@ function NexDropMainContent() {
         onClose={() => setPreviewFile(null)}
       />
 
+      {/* Text & Clipboard sheet (re-homed clipboard workspace) */}
+      <ClipboardOverlay
+        isOpen={isClipboardOpen}
+        onClose={() => setIsClipboardOpen(false)}
+        isConnected={isPeerConnected}
+        peerName={peerInfo?.name}
+        clipboardItems={clipboardItems}
+        textMessages={textMessages}
+        onSendText={sendTextMessage}
+        onSendClipboard={sendClipboardItem}
+        onPromptConnect={() => {
+          setIsClipboardOpen(false);
+          setActiveTab('devices');
+        }}
+      />
+
       {/* Mobile Bottom Navigation */}
       <BottomNav
         activeTab={activeTab}
         onTabChange={(tab) => setActiveTab(tab)}
-        unreadClipboardCount={clipboardItems.length}
+        activeTransferCount={activeTransfer ? 1 : 0}
       />
 
       {/* Standard Footer with padding for mobile bottom bar */}
@@ -400,7 +353,7 @@ export default function HomePage() {
       fallback={
         <div className="min-h-screen bg-[#070A0D] flex items-center justify-center">
           <div className="flex items-center gap-3 text-xs text-[#9AA7AE]">
-            <div className="h-4 w-4 rounded-full border-2 border-[#00F5A0] border-t-transparent animate-spin" />
+            <div className="h-4 w-4 rounded-full border-2 border-[#00F5A0] border-t-transparent animate-spin" aria-hidden="true" />
             <span>Loading NexDrop workspace…</span>
           </div>
         </div>

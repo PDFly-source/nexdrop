@@ -29,6 +29,7 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
   onNavigateTransfer,
 }) => {
   const [filter, setFilter] = useState<'all' | 'sent' | 'received'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'failed' | 'cancelled'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [confirmClear, setConfirmClear] = useState<boolean>(false);
 
@@ -38,12 +39,16 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
       if (filter === 'received') return item.direction === 'received';
       return true;
     })
+    .filter((item) => {
+      if (statusFilter === 'all') return true;
+      return item.status === statusFilter;
+    })
     .filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const totalBytesTransferred = historyItems.reduce((acc, item) => acc + item.size, 0);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 space-y-6 text-left">
+    <div className="space-y-6 text-left">
       {/* Workspace Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
         <div>
@@ -110,14 +115,14 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
           <span className="text-[11px] text-[#9AA7AE] font-medium">Privacy Architecture</span>
           <div className="flex items-center gap-1.5 text-sm font-semibold text-[#F5F7F8] mt-2">
             <Shield className="w-4 h-4 text-[#00F5A0]" />
-            <span>Zero-Cloud Storage</span>
+            <span>Local-Only Records</span>
           </div>
           <span className="text-[10px] text-[#9AA7AE]/80">Stored only in this browser</span>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
         <div className="flex items-center gap-1 rounded-xl bg-[#11171B] border border-white/[0.08] p-1 w-full sm:w-auto">
           <button
             onClick={() => setFilter('all')}
@@ -143,6 +148,25 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
           >
             Received ({historyItems.filter((i) => i.direction === 'received').length})
           </button>
+        </div>
+
+        <div
+          role="group"
+          aria-label="Filter by status"
+          className="flex items-center gap-1 rounded-xl bg-[#11171B] border border-white/[0.08] p-1 w-full sm:w-auto"
+        >
+          {(['all', 'completed', 'failed', 'cancelled'] as const).map((sf) => (
+            <button
+              key={sf}
+              onClick={() => setStatusFilter(sf)}
+              aria-pressed={statusFilter === sf}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${
+                statusFilter === sf ? 'bg-[#00F5A0] text-[#070A0D]' : 'text-[#9AA7AE] hover:text-[#F5F7F8]'
+              }`}
+            >
+              {sf === 'all' ? 'Any status' : `${sf} (${historyItems.filter((i) => i.status === sf).length})`}
+            </button>
+          ))}
         </div>
 
         <div className="relative w-full sm:w-64">
@@ -173,7 +197,7 @@ export const HistoryWorkspace: React.FC<HistoryWorkspaceProps> = ({
                 onClick={onNavigateTransfer}
                 className="mt-4 px-4 py-2 rounded-xl bg-[#00F5A0] text-xs font-semibold text-[#070A0D] hover:bg-[#00D9B5] transition-colors"
               >
-                Go to Transfer Workspace
+                Start a Transfer
               </button>
             )}
           </div>
