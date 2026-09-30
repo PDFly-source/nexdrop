@@ -58,9 +58,10 @@ jobs:
           path: out
 
   two-device-e2e:
-    # REAL two-device test: two isolated Chromium sessions pair over actual
-    # WebRTC (QR payload exchange -> DataChannels -> file transfer with
-    # SHA-256 verification). Runners have a real ICE path, unlike sandboxes.
+    # REAL two-device regression suite: two isolated Chromium sessions pair
+    # over actual WebRTC (QR payload exchange -> DataChannels -> file
+    # transfer with SHA-256 verification). Runners have a real ICE path,
+    # unlike sandboxes. Failures here are real regressions, never skipped.
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -86,11 +87,19 @@ jobs:
         run: NEXDROP_E2E_VERBOSE=1 npx tsx tests/e2e/two-device.test.ts
 
   transfer-benchmark:
-    # REAL throughput benchmark on the current engine: pairs two isolated
-    # Chromium sessions over real WebRTC (same ICE path as the e2e job) and
-    # transfers 100 MiB / 500 MiB / 1 GiB while sampling live engine
-    # telemetry. Prints one [BENCH] JSON line per size — measured values
-    # only (bytes/time/RTT/bufferedAmount/heap), never synthesized.
+    # Benchmark tier C — REAL two-device browser benchmark: pairs two
+    # isolated Chromium sessions over real WebRTC (loopback host candidates
+    # on the runner — a genuine DataChannel path, though not a physical
+    # network) and transfers 100 MiB / 500 MiB / 1 GiB while sampling live
+    # engine telemetry. Prints one [BENCH] JSON line per size — measured
+    # values only (bytes/time/RTT/bufferedAmount/heap), never synthesized,
+    # and no hard-coded pass speed: the job fails only on real transfer
+    # failures (no completion, no SHA-256 verify), not on slow numbers.
+    #
+    # Tier A (deterministic protocol/unit suite: crypto, pairing codecs,
+    # session state machines) runs inside the build job via `npm test`.
+    # Tier B (browser integration) is covered by the two-device-e2e job,
+    # which exercises the real browser pairing + transfer UI end to end.
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: build
