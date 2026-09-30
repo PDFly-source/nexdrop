@@ -7,6 +7,7 @@
  */
 
 import {
+  ACK_BATCH,
   FileEndMessage,
   FilePauseMessage,
   FileResumeMessage,
@@ -247,11 +248,23 @@ export class ReceiverEngine {
       this.bytesReceived += payload.byteLength;
       this.receivedChunksCount++;
 
-      this.callbacks.sendControlMessage({
-        type: 'ACK',
-        transferId: this.transferId,
-        index: decoded.chunkIndex,
-      });
+      // Batched ACKs: one control frame per ACK_BATCH chunks instead of one
+      // per chunk. Per-chunk ACKs flood the SCTP association with control
+      // frames that queue behind file data (control and file share one
+      // transport), which measurably throttles throughput on slow links.
+      // ACK BATCH divides the sender's flow-control window, so the window
+      // still slides continuously; the final chunk always ACKs immediately
+      // (the sender's completion wait needs it), and duplicates ACK at once.
+      if (
+        decoded.chunkIndex === this.totalChunks - 1 ||
+        (decoded.chunkIndex + 1) % ACK_BATCH === 0
+      ) {
+        this.callbacks.sendControlMessage({
+          type: 'ACK',
+          transferId: this.transferId,
+          index: decoded.chunkIndex,
+        });
+      }
 
       // Real speed & ETA from actual counters, throttled to 100ms
       const now = Date.now();
@@ -268,7 +281,9 @@ export class ReceiverEngine {
         const remainingBytes = Math.max(0, this.size - this.bytesReceived);
         const eta = avgSpeed > 0 ? Math.ceil(remainingBytes / avgSpeed) : 0;
 
-        this.emitProgress('transferring', avgSpeed, eta);
+        if (!this.isPaused && !this.isCancelled) {
+          this.emitProgress('transferring', avgSpeed, eta);
+        }
         this.lastProgressEmit = now;
         this.lastBytes = this.bytesReceived;
         this.lastTime = now;

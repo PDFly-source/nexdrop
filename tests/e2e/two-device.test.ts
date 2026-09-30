@@ -437,7 +437,7 @@ async function main() {
     await page.waitForFunction(
       ([fname, stat]: [string, string]) => {
         const esc = fname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        return new RegExp(esc + '[\\s\\S]{0,600}' + stat).test(document.body.innerText);
+        return new RegExp(esc + '[\\s\\S]{0,100}' + stat).test(document.body.innerText);
       },
       [name, status],
       { timeout: timeoutMs, polling: 250 }
@@ -529,9 +529,16 @@ async function main() {
   try {
     await pageA.waitForFunction(
       () => {
-        // Require the ACTIVE CARD (not the queued item, which also shows 0%)
+        // Bind to the ACTIVE CARD's own text: the section between the
+        // 'SENDING TO PEER' header and the 'Outbound Queue' list. A body-wide
+        // includes() also matches the QUEUED item's name and would pass while
+        // a previous transfer is still active.
         const t = document.body.innerText;
-        return t.includes('SENDING TO PEER') && t.includes('e2e-pause-resume.bin') && /\d+%/.test(t);
+        const s = t.indexOf('SENDING TO PEER');
+        const q = t.indexOf('Outbound Queue');
+        if (s === -1 || q === -1 || q < s) return false;
+        const card = t.substring(s, q);
+        return card.includes('e2e-pause-resume.bin') && /\d+%/.test(card);
       },
       { timeout: 60000, polling: 200 }
     );
@@ -560,8 +567,14 @@ async function main() {
     await uploadFile(pageA, 'e2e-cancel-live.bin', bigBuffer);
     await pageA.waitForFunction(
       () => {
+        // Bind to the ACTIVE CARD's section — a body-wide match would pass
+        // while the previous transfer is still active and cancel the wrong one.
         const t = document.body.innerText;
-        return t.includes('SENDING TO PEER') && t.includes('e2e-cancel-live.bin') && /\d+%/.test(t);
+        const s = t.indexOf('SENDING TO PEER');
+        const q = t.indexOf('Outbound Queue');
+        if (s === -1 || q === -1 || q < s) return false;
+        const card = t.substring(s, q);
+        return card.includes('e2e-cancel-live.bin') && /\d+%/.test(card);
       },
       { timeout: 60000, polling: 200 }
     );
@@ -595,8 +608,14 @@ async function main() {
     await uploadFile(pageA, 'e2e-disconnect.bin', bigBuffer);
     await pageA.waitForFunction(
       () => {
+        // Bind to the ACTIVE CARD's section — must be e2e-disconnect.bin
+        // itself, not any transfer that happens to be live at the moment.
         const t = document.body.innerText;
-        return t.includes('SENDING TO PEER') && t.includes('e2e-disconnect.bin') && /\d+%/.test(t);
+        const s = t.indexOf('SENDING TO PEER');
+        const q = t.indexOf('Outbound Queue');
+        if (s === -1 || q === -1 || q < s) return false;
+        const card = t.substring(s, q);
+        return card.includes('e2e-disconnect.bin') && /\d+%/.test(card);
       },
       { timeout: 60000, polling: 200 }
     );

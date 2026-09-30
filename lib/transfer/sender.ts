@@ -203,6 +203,14 @@ export class SenderEngine {
         return;
       }
 
+      // The awaited read above can straddle a pause() call. Re-check BEFORE
+      // hashing: the incremental hash must only ever consume chunks that are
+      // actually sent. Pausing here (chunkIndex not yet advanced) makes
+      // resume() re-read this same slice — hash and stream stay consistent.
+      // Without this check a chunk could be hashed+sent AFTER the 'paused'
+      // emit, leaving the UI stuck on 'Streaming' for a paused transfer.
+      if (this.isCancelled || this.isPaused) return;
+
       // Incremental hash of the PLAINTEXT content
       this.hasher.update(new Uint8Array(chunkBuffer));
 
@@ -235,9 +243,17 @@ export class SenderEngine {
 
       this.currentChunkIndex++;
 
-      // Real speed & ETA from actual transfer counters, throttled to 100ms
+      // Real speed & ETA from actual transfer counters, throttled to 100ms.
+      // Never emit 'transferring' once paused/cancelled: a pause can land
+      // while this chunk was already committed to send (hash consumed it),
+      // and a stale 'transferring' emit would overwrite the authoritative
+      // 'paused' status in the UI.
       const now = Date.now();
-      if (now - this.lastProgressEmit >= 100 || this.currentChunkIndex === this.totalChunks) {
+      if (
+        !this.isPaused &&
+        !this.isCancelled &&
+        (now - this.lastProgressEmit >= 100 || this.currentChunkIndex === this.totalChunks)
+      ) {
         const bytesSent = Math.min(this.file.size, this.currentChunkIndex * this.chunkSize);
         const timeDiff = Math.max(0.001, (now - lastTime) / 1000);
         const bytesDiff = bytesSent - lastBytes;

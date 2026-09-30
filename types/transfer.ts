@@ -7,6 +7,9 @@
 export const CHUNK_SIZE = 64 * 1024; // 64 KiB chunks
 export const BUFFERED_AMOUNT_LOW_THRESHOLD = 256 * 1024; // 256 KiB threshold
 export const DEFAULT_FLOW_CONTROL_WINDOW = 16; // Chunks in-flight before waiting for ACK
+// Receiver ACKs every ACK_BATCH chunks (and the final chunk) — one control
+// frame per batch instead of one per chunk keeps the SCTP queue lean.
+export const ACK_BATCH = 8;
 
 export type TransferStatus =
   | 'queued'
