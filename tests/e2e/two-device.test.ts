@@ -301,6 +301,16 @@ async function main() {
   // File transfer SIZE MATRIX (1 KB -> 100 MB), SHA-256 verified per file
   // ---------------------------------------------------------------------
   console.log('[two-device e2e] A → B: file transfer size matrix with SHA-256 verification');
+
+  // Device B runs as a mobile browser: received files live behind the
+  // Send/Receive pill, and innerText excludes the hidden card. Switch B to
+  // the Receive tab (as a real user would) so incoming items are visible.
+  const recvPill = pageB.getByRole('button', { name: /Receive \(\d+\)/ });
+  if (await recvPill.count()) {
+    await recvPill.first().click();
+    await pageB.waitForTimeout(300);
+    console.log('  ✓ B switched to the mobile Receive tab before transfers');
+  }
   await pageA.getByRole('button', { name: /transfer/i }).first().click();
   await pageB.getByRole('button', { name: /transfer/i }).first().click();
   await pageA.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });

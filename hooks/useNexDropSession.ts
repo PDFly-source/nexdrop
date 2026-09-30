@@ -221,6 +221,16 @@ export function useNexDropSession() {
       onStateChange: (rtcState) => {
         switch (rtcState) {
           case 'connected':
+            // The pairing handshake is complete — disarm the 10-minute
+            // offer/answer expiry. Previously this timer kept running after
+            // a successful connect and killed live sessions (state flipped
+            // to failed mid-transfer) exactly 10 minutes after pairing was
+            // created. From here the session lifetime is governed by the
+            // DataChannel / ICE states below.
+            if (expiryTimerRef.current) {
+              clearTimeout(expiryTimerRef.current);
+              expiryTimerRef.current = null;
+            }
             setSessionState('connected');
             sounds.playConnect();
             if (vibrationEnabled && typeof navigator !== 'undefined' && navigator.vibrate) {
