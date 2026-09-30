@@ -1,13 +1,31 @@
 /**
- * NexDrop Receiver Engine.
+ * NexDrop Receiver Engine — pipelined high-throughput ingest.
+ *
  * Streams received chunks into File System Access / OPFS / memory-blob
- * writers, ACKs each chunk over the control channel, decrypts when E2EE is
- * active, computes an INCREMENTAL SHA-256 while writing, and honestly
- * verifies it against the sender's hash at FILE_END.
+ * writers with an ORDERED, OVERLAPPED pipeline:
+ *
+ *   chunk arrives ──► decrypt chunk N+1   (overlaps)
+ *                        │ meanwhile: write chunk N (chained, in order)
+ *                        ▼
+ *                    durable write ──► batched/timed ACK ──► sender window slides
+ *
+ * - Writes are chained in arrival order on a single promise chain: chunks
+ *   are decrypted while the PREVIOUS write is still in flight, but never
+ *   written out of order (fixes a latent reorder race the old sequential
+ *   per-chunk await could hit under E2EE).
+ * - ACKs are sent only after the covered chunks are DURABLY WRITTEN, at an
+ *   adaptive cadence: every ACK_BATCH chunks, at most ACK_MAX_DELAY_MS
+ *   apart, immediately for the final chunk, immediately when the receiver
+ *   queue backs up (backpressure signaling: the ACK carries the live queue
+ *   depth so the sender shrinks its window).
+ * - Incremental SHA-256 runs on the decrypted stream while writing.
+ * - Memory stays bounded: the sender's in-flight window bounds the bytes
+ *   in the pipeline; the queue depth feeds back to keep it that way.
  */
 
 import {
   ACK_BATCH,
+  ACK_MAX_DELAY_MS,
   FileEndMessage,
   FilePauseMessage,
   FileResumeMessage,
@@ -67,6 +85,10 @@ export class ReceiverEngine {
   private lastTime = 0;
   private recentSpeeds: number[] = [];
   private acksSent = 0;
+  /** Last time an ACK left — drives the ACK_MAX_DELAY_MS cadence. */
+  private lastAckAt = 0;
+  /** Largest observed pipeline depth this transfer (diagnostics). */
+  private maxQueueDepthSeen = 0;
 
   private isPaused = false;
   /** PAUSE that arrived before this transfer started (applied at start). */
@@ -75,17 +97,28 @@ export class ReceiverEngine {
   private isCompleted = false;
   private callbacks: ReceiverCallbacks;
 
-  // Chunks (and FILE_END) that arrive while the storage writer is still
-  // initializing. startTransfer() creates the writer asynchronously (OPFS /
-  // file handles), and on a fast link the whole file can land before that
-  // promise resolves. Dropping those chunks would silently corrupt the
-  // transfer, so they are buffered and flushed in arrival order once the
-  // writer exists.
+  // ---- ordered, overlapped write pipeline ----
+  /** Chunks (and FILE_END) that arrive while the storage writer is still
+   *  initializing. startTransfer() creates the writer asynchronously, and on
+   *  a fast link the whole in-flight window can land before that promise
+   *  resolves. Dropping those chunks would corrupt the transfer. */
   private pendingChunks: ArrayBuffer[] = [];
   private pendingFinish: FileEndMessage | null = null;
+  /** Decoded-order queue feeding the single drain loop. */
+  private processQueue: ArrayBuffer[] = [];
+  private draining = false;
+  /** Chained, strictly-ordered write pipeline. */
+  private writeChain: Promise<void> = Promise.resolve();
+  /** Writes chained but not yet resolved (real queue-depth feedback). */
+  private writesQueued = 0;
 
   constructor(callbacks: ReceiverCallbacks) {
     this.callbacks = callbacks;
+  }
+
+  /** Real receiver queue depth: everything accepted but not yet durably written. */
+  private queueDepth(): number {
+    return this.pendingChunks.length + this.processQueue.length + this.writesQueued;
   }
 
   public async startTransfer(meta: FileStartMessage): Promise<void> {
@@ -137,6 +170,11 @@ export class ReceiverEngine {
     this.isPaused = false;
     this.isCancelled = false;
     this.isCompleted = false;
+    this.lastAckAt = Date.now();
+    this.acksSent = 0;
+    this.writeChain = Promise.resolve();
+    this.writesQueued = 0;
+    this.processQueue = [];
     this.hasher = new IncrementalSha256();
     this.startTime = Date.now();
     this.lastTime = this.startTime;
@@ -152,15 +190,14 @@ export class ReceiverEngine {
       return;
     }
 
-    // Flush anything that arrived while the writer was being created.
+    // Flush anything that arrived while the writer was being created —
+    // through the SAME ordered queue so nothing can bypass the pipeline.
     console.debug('[nexdrop] writer ready:', this.writer.getType(), 'pending chunks:', this.pendingChunks.length);
     if (this.pendingChunks.length > 0) {
       const queued = this.pendingChunks;
       this.pendingChunks = [];
-      for (const chunk of queued) {
-        if (this.isCancelled || this.isCompleted) return;
-        await this.processChunk(chunk);
-      }
+      this.processQueue.push(...queued);
+      await this.drain();
     }
 
     this.emitProgress('transferring', 0, 0);
@@ -180,17 +217,33 @@ export class ReceiverEngine {
 
     // Writer still initializing: buffer the chunk — never drop in-flight
     // data (dropping it would corrupt the transfer and stall the sender,
-    // which paces itself on our per-chunk ACKs).
+    // which paces itself on our ACKs).
     if (!this.writer) {
       if (!this.transferId) return; // no active transfer
       this.pendingChunks.push(packetBuffer);
-      if (this.pendingChunks.length === 1 || this.pendingChunks.length % 16 === 0) {
-        console.debug('[nexdrop] receiver buffering chunk before writer ready:', this.pendingChunks.length);
-      }
       return;
     }
 
-    await this.processChunk(packetBuffer);
+    this.processQueue.push(packetBuffer);
+    await this.drain();
+  }
+
+  /** Single drain loop: decrypts chunk N+1 while write N is in flight. */
+  private async drain(): Promise<void> {
+    if (this.draining) return;
+    this.draining = true;
+    try {
+      while (this.processQueue.length > 0) {
+        if (this.isCancelled || this.isCompleted) {
+          this.processQueue = [];
+          return;
+        }
+        const buf = this.processQueue.shift()!;
+        await this.processChunk(buf);
+      }
+    } finally {
+      this.draining = false;
+    }
   }
 
   private async processChunk(packetBuffer: ArrayBuffer): Promise<void> {
@@ -209,13 +262,14 @@ export class ReceiverEngine {
       return;
     }
 
-    // Duplicate chunk (e.g. a re-scanned/re-delivered frame): ACK and ignore.
+    // Duplicate chunk (e.g. a re-delivered frame): ACK and ignore.
     if (decoded.chunkIndex < this.nextExpectedChunkIndex) {
       this.callbacks.sendControlMessage({
         type: 'ACK',
         transferId: this.transferId,
         index: decoded.chunkIndex,
         w: Math.round(this.writeMsEwma * 10) / 10,
+        q: this.queueDepth(),
       });
       return;
     }
@@ -238,85 +292,114 @@ export class ReceiverEngine {
     // Pause only stops the sender's pump; the receiver accepts whatever was
     // already in flight so the stream stays gap-free.
 
+    let payload: ArrayBuffer;
     try {
-      // Decrypt to plaintext before writing / hashing
-      let payload: ArrayBuffer = decoded.payload;
+      // Decrypt to plaintext before writing / hashing (this await overlaps
+      // the PREVIOUS chunk's in-flight write).
       const cipher = this.callbacks.getCipher?.();
       if (this.e2eeEnabled && cipher) {
         if (!this.ivPrefix) throw new Error('E2EE transfer missing IV prefix');
         payload = await decryptChunk(cipher, this.ivPrefix, decoded.chunkIndex, decoded.payload);
+      } else {
+        payload = decoded.payload;
       }
+    } catch (err: any) {
+      this.callbacks.onError(this.transferId, `Failed decrypting received data: ${err?.message || err}`);
+      return;
+    }
 
+    this.hasher?.update(new Uint8Array(payload));
+    this.bytesReceived += payload.byteLength;
+    this.receivedChunksCount++;
+
+    // Chain the write — strictly in arrival order, never blocking the
+    // decrypt of the next chunk. The ACK for this chunk fires after the
+    // write is durable, at an adaptive cadence.
+    const chunkIndex = decoded.chunkIndex;
+    const toWrite = payload;
+    const isFinalChunk = chunkIndex === this.totalChunks - 1;
+    const isBatchBoundary = (chunkIndex + 1) % ACK_BATCH === 0;
+    this.writesQueued++;
+    this.writeChain = this.writeChain.then(async () => {
+      if (this.isCancelled || this.isCompleted || !this.writer) return;
       const wStart = Date.now();
-      await this.writer.writeChunk(payload, decoded.chunkIndex);
+      await this.writer!.writeChunk(toWrite, chunkIndex);
       const wSample = Date.now() - wStart;
       this.writeMsEwma = this.writeMsEwma > 0 ? this.writeMsEwma * 0.8 + wSample * 0.2 : wSample;
+      this.writesQueued--;
+      this.writesQueued = Math.max(0, this.writesQueued);
 
-      this.hasher?.update(new Uint8Array(payload));
-      this.bytesReceived += payload.byteLength;
-      this.receivedChunksCount++;
-
-      // Batched ACKs: one control frame per ACK_BATCH chunks instead of one
-      // per chunk. Per-chunk ACKs flood the SCTP association with control
-      // frames that queue behind file data (control and file share one
-      // transport), which measurably throttles throughput on slow links.
-      // ACK BATCH divides the sender's flow-control window, so the window
-      // still slides continuously; the final chunk always ACKs immediately
-      // (the sender's completion wait needs it), and duplicates ACK at once.
-      if (
-        decoded.chunkIndex === this.totalChunks - 1 ||
-        (decoded.chunkIndex + 1) % ACK_BATCH === 0
-      ) {
+      // Adaptive ACK policy: batch boundary OR the timer expired OR final
+      // chunk OR our own queue is backing up (tell the sender NOW so it
+      // shrinks the window) — one small control frame per batch.
+      const queueNow = this.queueDepth();
+      if (queueNow > this.maxQueueDepthSeen) this.maxQueueDepthSeen = queueNow;
+      const timerDue = Date.now() - this.lastAckAt >= ACK_MAX_DELAY_MS;
+      if (isFinalChunk || isBatchBoundary || timerDue || queueNow > 8) {
+        this.lastAckAt = Date.now();
+        this.acksSent++;
         this.callbacks.sendControlMessage({
           type: 'ACK',
           transferId: this.transferId,
-          index: decoded.chunkIndex,
+          index: chunkIndex,
           w: Math.round(this.writeMsEwma * 10) / 10,
-        });
-        this.acksSent++;
-      }
-
-      // Real speed & ETA from actual counters, throttled to 100ms
-      const now = Date.now();
-      if (now - this.lastProgressEmit >= 100 || this.receivedChunksCount === this.totalChunks) {
-        const timeDiff = Math.max(0.001, (now - this.lastTime) / 1000);
-        const bytesDiff = this.bytesReceived - this.lastBytes;
-        const currentSpeed = bytesDiff / timeDiff;
-
-        this.recentSpeeds.push(currentSpeed);
-        if (this.recentSpeeds.length > 5) this.recentSpeeds.shift();
-        const avgSpeed =
-          this.recentSpeeds.reduce((a, b) => a + b, 0) / this.recentSpeeds.length;
-
-        const remainingBytes = Math.max(0, this.size - this.bytesReceived);
-        const eta = avgSpeed > 0 ? Math.ceil(remainingBytes / avgSpeed) : 0;
-
-        if (!this.isPaused && !this.isCancelled) {
-          this.emitProgress('transferring', avgSpeed, eta);
-        }
-        this.lastProgressEmit = now;
-        this.lastBytes = this.bytesReceived;
-        this.lastTime = now;
-        updateReceiverTelemetry({
-          transferId: this.transferId,
-          name: this.name,
-          totalBytes: this.size,
-          chunkSize: this.chunkSize,
-          bytesReceived: this.bytesReceived,
-          chunksReceived: this.receivedChunksCount,
-          writeMsEwma: this.writeMsEwma,
-          queueDepth: 0,
-          maxQueueDepth: 0,
-          acksSent: this.acksSent,
-          throughputBps: avgSpeed,
-          writerType: this.writer?.getType() || 'unknown',
-          heapBytes: (performance as any)?.memory?.usedJSHeapSize ?? 0,
-          startedAt: this.startTime,
+          q: queueNow,
         });
       }
-    } catch (err: any) {
-      console.error('Failed processing chunk:', err);
+    }).catch((err: any) => {
+      this.writesQueued = Math.max(0, this.writesQueued - 1);
+      if (this.isCancelled || this.isCompleted) return;
+      console.error('Failed writing received data:', err);
       this.callbacks.onError(this.transferId, `Failed writing received data: ${err?.message || err}`);
+    });
+
+    // Real speed & ETA from actual counters, throttled to 100ms
+    const now = Date.now();
+    if (now - this.lastProgressEmit >= 100 || this.receivedChunksCount === this.totalChunks) {
+      const timeDiff = Math.max(0.001, (now - this.lastTime) / 1000);
+      const bytesDiff = this.bytesReceived - this.lastBytes;
+      const currentSpeed = bytesDiff / timeDiff;
+
+      this.recentSpeeds.push(currentSpeed);
+      if (this.recentSpeeds.length > 5) this.recentSpeeds.shift();
+      const avgSpeed =
+        this.recentSpeeds.reduce((a, b) => a + b, 0) / this.recentSpeeds.length;
+
+      const remainingBytes = Math.max(0, this.size - this.bytesReceived);
+      const eta = avgSpeed > 0 ? Math.ceil(remainingBytes / avgSpeed) : 0;
+
+      if (!this.isPaused && !this.isCancelled) {
+        this.emitProgress('transferring', avgSpeed, eta);
+      }
+      this.lastProgressEmit = now;
+      this.lastBytes = this.bytesReceived;
+      this.lastTime = now;
+      updateReceiverTelemetry({
+        transferId: this.transferId,
+        name: this.name,
+        totalBytes: this.size,
+        chunkSize: this.chunkSize,
+        bytesReceived: this.bytesReceived,
+        chunksReceived: this.receivedChunksCount,
+        writeMsEwma: this.writeMsEwma,
+        queueDepth: this.queueDepth(),
+        maxQueueDepth: this.maxQueueDepthSeen,
+        acksSent: this.acksSent,
+        throughputBps: avgSpeed,
+        writerType: this.writer.getType(),
+        heapBytes: (performance as any)?.memory?.usedJSHeapSize ?? 0,
+        startedAt: this.startTime,
+      });
+    }
+  }
+
+  /** Wait until the pipeline is fully drained (bounded; used by finishTransfer). */
+  private async awaitSettled(timeoutMs = 60000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (this.isCancelled || this.isCompleted) return;
+      if (!this.draining && this.processQueue.length === 0 && this.writesQueued === 0) return;
+      await new Promise((r) => setTimeout(r, 20));
     }
   }
 
@@ -357,6 +440,12 @@ export class ReceiverEngine {
       this.pendingFinish = endMsg;
       return;
     }
+
+    // Cross-channel ordering is NOT guaranteed: let the ordered write
+    // pipeline finish everything already accepted before judging completeness.
+    await this.awaitSettled();
+    if (this.isCancelled || this.isCompleted) return;
+
     this.isCompleted = true;
 
     // Byte-count honesty check: FILE_END only counts as complete when the
@@ -376,6 +465,7 @@ export class ReceiverEngine {
       this.ivPrefix = null;
       if (this.writer) {
         try {
+          this.writeChain = this.writeChain.catch(() => undefined);
           await this.writer.abort();
         } catch {
           // best-effort cleanup
@@ -440,12 +530,15 @@ export class ReceiverEngine {
     this.pendingFinish = null;
     this.pendingPauseId = null;
     this.ivPrefix = null;
+    this.processQueue = [];
     if (this.isCompleted) return;
     if (!this.transferId) return; // nothing active — never emit or notify
     this.isCancelled = true;
     const id = this.transferId;
     this.transferId = '';
     if (this.writer) {
+      // Swallow in-flight pipeline writes — the abort below invalidates them.
+      this.writeChain = this.writeChain.catch(() => undefined);
       await this.writer.abort();
       this.writer = null;
     }

@@ -1022,7 +1022,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
               No device connected
             </h2>
             <p className="text-xs text-[#9AA3AD] max-w-md">
-              Pair another device to share files and text directly over an encrypted peer-to-peer link. No server, no account, nothing is uploaded.
+              Pair another device to share files and text directly over an encrypted peer-to-peer link. No account, nothing is uploaded.
             </p>
           </div>
         </div>

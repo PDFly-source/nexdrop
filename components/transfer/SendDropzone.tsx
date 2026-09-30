@@ -89,7 +89,7 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
       <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
         <div>
           <h2 className="text-sm font-semibold text-[#F5F7F8]">Send Files</h2>
-          <p className="text-xs text-[#9AA3AD] mt-0.5">Direct P2P streaming · 64 KiB chunked</p>
+          <p className="text-xs text-[#9AA3AD] mt-0.5">Direct P2P · Adaptive streaming</p>
         </div>
 
         <div className="flex items-center gap-2">

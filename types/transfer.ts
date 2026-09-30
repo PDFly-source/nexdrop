@@ -4,12 +4,37 @@
  * backpressure & ACK flow control.
  */
 
-export const CHUNK_SIZE = 64 * 1024; // 64 KiB chunks
-export const BUFFERED_AMOUNT_LOW_THRESHOLD = 256 * 1024; // 256 KiB threshold
-export const DEFAULT_FLOW_CONTROL_WINDOW = 16; // Chunks in-flight before waiting for ACK
-// Receiver ACKs every ACK_BATCH chunks (and the final chunk) — one control
-// frame per batch instead of one per chunk keeps the SCTP queue lean.
+// ---- Transfer flow-control constants (all MEASURED, none decorative) ----
+/** Conservative starting chunk size; grows per measured stability. */
+export const CHUNK_SIZE = 64 * 1024; // 64 KiB
+/** Largest chunk the sender may ever use (also clamped to negotiated SCTP limit − headroom). */
+export const MAX_CHUNK_BYTES = 256 * 1024; // 256 KiB
+/**
+ * SCTP send-buffer pacing (bufferedAmountLowThreshold pattern):
+ * keep sending while bufferedAmount <= BUFFER_HIGH_WATER; above it, wait
+ * for 'bufferedamountlow', which fires when the buffer drains to
+ * BUFFER_LOW_WATER. The old 256 KiB threshold + 50 ms failsafe timer
+ * acted as a throughput sawtooth (fill 256 KiB → wait → repeat) and
+ * throttled fast links; these bounds keep the pipeline FULL instead.
+ */
+export const BUFFER_HIGH_WATER = 4 * 1024 * 1024; // 4 MiB
+export const BUFFER_LOW_WATER = 1 * 1024 * 1024; // 1 MiB
+/**
+ * In-flight byte window bounds (memory-bounded by design): starts at
+ * INITIAL, grows ×1.5 per clean full-window drain up to MAX, shrinks on
+ * real pressure but never below MIN — so a high-RTT link can never
+ * collapse into stop-and-wait behavior.
+ */
+export const INITIAL_WINDOW_BYTES = 1 * 1024 * 1024; // 1 MiB
+export const MIN_WINDOW_BYTES = 512 * 1024; // 512 KiB floor
+export const MAX_WINDOW_BYTES = 16 * 1024 * 1024; // 16 MiB cap (bounded memory)
+// Receiver ACK policy: ACK at least every ACK_BATCH chunks, and never let
+// the last ACK wait more than ACK_MAX_DELAY_MS — whichever fires first.
+// One control frame per batch keeps the SCTP queue lean; the timer
+// guarantees the ACK frontier advances even mid-batch (final chunk, slow
+// tail, backpressure signaling).
 export const ACK_BATCH = 8;
+export const ACK_MAX_DELAY_MS = 40;
 
 export type TransferStatus =
   | 'queued'
@@ -77,6 +102,9 @@ export interface ChunkAckMessage {
   /** Receiver's EWMA ms per chunk write — real write-throughput feedback
    *  for the sender's flow control. Optional: old peers omit it. */
   w?: number;
+  /** Receiver's pending queue depth (chunks decrypted but not yet durably
+   *  written) — real receiver-backpressure feedback. Optional. */
+  q?: number;
 }
 
 export interface FileEndMessage {

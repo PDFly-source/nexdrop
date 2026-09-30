@@ -10,6 +10,7 @@ import { IncomingTransfersCard } from '@/components/transfer/IncomingTransfersCa
 import { ActiveTransferCard } from '@/components/transfer/ActiveTransferCard';
 import { ClipboardWorkspace } from '@/components/clipboard/ClipboardWorkspace';
 import { HistoryWorkspace } from '@/components/history/HistoryWorkspace';
+import DiagnosticsPanel from '@/components/transfer/DiagnosticsPanel';
 import { SettingsWorkspace } from '@/components/settings/SettingsWorkspace';
 import { SecurityVerifyModal } from '@/components/dialogs/SecurityVerifyModal';
 import { MediaPreviewModal } from '@/components/preview/MediaPreviewModal';
@@ -291,9 +292,9 @@ function NexDropMainContent() {
                   <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="font-medium text-[#F5F7F8]">Zero-Cloud P2P Architecture</p>
+                  <p className="font-medium text-[#F5F7F8]">Direct P2P Architecture</p>
                   <p className="text-[11px] text-[#9AA3AD] mt-0.5">
-                    Pairing happens by QR or pasted codes between your devices only — there is no server at all. Files and text travel strictly over encrypted WebRTC DataChannels.
+                    Pairing uses a lightweight ephemeral signaling service. Files and text travel directly between devices over encrypted WebRTC DataChannels.
                   </p>
                 </div>
               </div>
@@ -356,6 +357,10 @@ function NexDropMainContent() {
             historyCount={transferHistory.length}
           />
         )}
+          {/* Dev-only live transfer diagnostics (opt-in: ?diag=1 or localStorage) */}
+          <div className="mt-8">
+            <DiagnosticsPanel />
+          </div>
         </main>
       </div>
 

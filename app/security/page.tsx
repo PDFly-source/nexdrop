@@ -103,7 +103,7 @@ export default function SecurityPage() {
               </h2>
             </div>
             <p className="mt-3 text-xs sm:text-sm text-[#9AA3AD] leading-relaxed">
-              There is no server. NexDrop is a fully static PWA: no signaling relay, no database, no file storage. SDP offers, answers, and ICE candidates travel only between your two devices inside the QR/paste pairing codes, and file contents never leave the direct peer connection.
+              NexDrop is a fully static PWA: no database, no file storage. One-scan pairing uses a lightweight ephemeral signaling service that relays only connection metadata (session id, single-use token, SDP, ICE) and expires each session within minutes; the manual QR/paste code path needs no signaling at all. File contents never touch any server — they travel only over the direct peer connection.
             </p>
           </div>
         </div>

@@ -220,7 +220,11 @@ export function useTransferEngine(
           break;
 
         case 'ACK':
-          sender?.handleAck(msg.index, typeof msg.w === 'number' ? msg.w : undefined);
+          sender?.handleAck(
+            msg.index,
+            typeof msg.w === 'number' ? msg.w : undefined,
+            typeof (msg as { q?: number }).q === 'number' ? (msg as { q?: number }).q : undefined
+          );
           break;
 
         case 'FILE_END':
