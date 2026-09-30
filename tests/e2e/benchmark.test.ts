@@ -112,7 +112,35 @@ interface Sample {
   heapB: number;
 }
 
+/**
+ * Phase 19 IA: the app opens on Home; pairing controls live in the Devices
+ * tab and the file input lives in the Transfers workspace. Fresh Chromium
+ * contexts also show the first-launch onboarding overlay (Layer 1,
+ * localStorage-gated). These helpers drive the same navigation a real user
+ * would take on both the desktop (Navbar) and mobile (BottomNav) layouts.
+ */
+async function dismissOnboardingIfShown(page: any) {
+  try {
+    await page.waitForSelector('button:has-text("Get Started")', { timeout: 3000 });
+    await page.getByRole('button', { name: 'Get Started' }).click();
+  } catch {
+    // Onboarding did not appear — nothing to dismiss.
+  }
+}
+
+async function goToTab(page: any, label: string) {
+  await page.locator('button:visible').filter({ hasText: label }).first().click();
+}
+
+async function goToDevicesTab(page: any) {
+  await dismissOnboardingIfShown(page);
+  await goToTab(page, 'Devices');
+  await page.waitForSelector('text=Create pairing', { timeout: 30000 });
+}
+
 async function main() {
+  console.log('[benchmark] tier C — real two-device browser benchmark (real WebRTC DataChannels)');
+  console.log('[benchmark] environment: two isolated Chromium contexts on one host — a real DataChannel path over loopback host candidates, not a physical network');
   console.log('[benchmark] sizes (MiB):', SIZES.map((s) => (s / 1048576).toFixed(0)).join(', '));
   const server = await startServer();
 
@@ -138,8 +166,8 @@ async function main() {
   await blockSignaling(pageB);
   await pageA.goto(url, { waitUntil: 'domcontentloaded' });
   await pageB.goto(url, { waitUntil: 'domcontentloaded' });
-  await pageA.waitForSelector('text=Create pairing', { timeout: 30000 });
-  await pageB.waitForSelector('text=Create pairing', { timeout: 30000 });
+  await goToDevicesTab(pageA);
+  await goToDevicesTab(pageB);
 
   // --- manual pairing (real SDP offer/answer over QR paste, real WebRTC) ---
   await pageA.getByRole('button', { name: /create pairing/i }).first().click();
@@ -157,6 +185,11 @@ async function main() {
   await submitViaPaste(pageA, answerSegments);
   await pageA.waitForSelector('text=Connected', { timeout: 45000 });
   await pageB.waitForSelector('text=Connected', { timeout: 45000 });
+  console.log('[benchmark] connected — switching to the Transfers tab (Phase 19 IA) before uploads');
+  await goToTab(pageA, 'Transfers');
+  await goToTab(pageB, 'Transfers');
+  await pageA.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });
+  await pageB.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });
   console.log('[benchmark] connected — starting transfer matrix');
 
   const patternBuffer = (bytes: number) => {

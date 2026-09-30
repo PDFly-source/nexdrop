@@ -6,7 +6,10 @@
 export const DEFAULT_RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     // A small set of STUN servers is used ONLY for local network / NAT discovery.
-    // No TURN relay, no signaling, no credentials — files never touch any server.
+    // No TURN relay, no credentials — file data never passes through any
+    // server, not even these STUN endpoints. (Pairing SDP/ICE travel via the
+    // ephemeral signaling service on the automatic path, or QR/copy-paste
+    // on the manual fallback path — never through STUN.)
     { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
   ],
   iceCandidatePoolSize: 0,

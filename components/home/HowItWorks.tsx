@@ -8,7 +8,7 @@ export const HowItWorks: React.FC = () => {
     {
       num: '01',
       title: 'Pair Devices Instantly',
-      desc: 'Point your phone camera at the QR code on your laptop or enter a 6-digit PIN. No accounts, sign-ins, or installs required.',
+      desc: 'Point your phone camera at the QR code on your laptop — one scan, then the host taps Accept. No accounts, sign-ins, or installs required.',
       icon: <KeyRound className="w-5 h-5 text-[#00F5A0]" />,
     },
     {

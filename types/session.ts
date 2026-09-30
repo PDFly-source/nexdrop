@@ -1,7 +1,17 @@
 /**
- * Session types for NexDrop manual local pairing.
- * There is NO signaling server: the offer/answer SDP is exchanged by QR code
- * or copy/paste between the two devices.
+ * Session types for NexDrop pairing.
+ *
+ * Two pairing paths exist:
+ *  - AUTOMATIC (primary): one-scan pairing via the ephemeral signaling
+ *    service — the joiner scans ONE QR (session id + single-use join token
+ *    + endpoint, never SDP/ICE/keys), the host accepts or declines, and the
+ *    SDP/ICE exchange happens automatically through the service.
+ *  - MANUAL (fallback, states below): when the signaling service is
+ *    unreachable, the offer/answer SDP is exchanged by QR code or
+ *    copy/paste directly between the two devices — no signaling involved.
+ *
+ * In BOTH paths files and text travel only over the direct peer-to-peer
+ * WebRTC DataChannels; the signaling service never relays file contents.
  */
 
 /**

@@ -146,6 +146,38 @@ async function submitViaPaste(page: any, pieces: string[]) {
   }
 }
 
+/**
+ * Phase 19 IA: the app now opens on Home, and pairing controls (Create
+ * pairing / Join pairing) live inside the Devices tab. A fresh onboarding
+ * overlay (Layer 1, shown once per browser/localStorage) can also cover the
+ * screen on a brand-new context. These helpers make every browser context
+ * used by this test reach the real pairing screen the same way a user would:
+ * dismiss onboarding if shown, then switch to Devices.
+ */
+async function dismissOnboardingIfShown(page: any) {
+  try {
+    await page.waitForSelector('button:has-text("Get Started")', { timeout: 3000 });
+    await page.getByRole('button', { name: 'Get Started' }).click();
+  } catch {
+    // Onboarding did not appear (already dismissed for this storage, or the
+    // check raced ahead of first paint) — nothing to dismiss.
+  }
+}
+
+/** Click the currently VISIBLE nav control with this label (desktop Navbar
+ *  and mobile BottomNav both render a button with the same text; only one
+ *  is visible at a time depending on viewport — `:visible` picks the right
+ *  one on both pageA's desktop viewport and pageB's Pixel 7 viewport). */
+async function goToTab(page: any, label: string) {
+  await page.locator('button:visible').filter({ hasText: label }).first().click();
+}
+
+async function goToDevicesTab(page: any) {
+  await dismissOnboardingIfShown(page);
+  await goToTab(page, 'Devices');
+  await page.waitForSelector('text=Create pairing', { timeout: 30000 });
+}
+
 async function main() {
   console.log('[two-device e2e] starting static server');
   const server = await startServer();
@@ -187,9 +219,9 @@ async function main() {
   const url = `http://localhost:${PORT}/nexdrop/`;
   await pageA.goto(url, { waitUntil: 'domcontentloaded' });
   await pageB.goto(url, { waitUntil: 'domcontentloaded' });
-  await pageA.waitForSelector('text=Create pairing', { timeout: 30000 });
-  await pageB.waitForSelector('text=Create pairing', { timeout: 30000 });
-  console.log('[two-device e2e] both devices loaded the app');
+  await goToDevicesTab(pageA);
+  await goToDevicesTab(pageB);
+  console.log('[two-device e2e] both devices loaded the app and switched to the Devices tab (Phase 19 IA)');
 
   // ---------------------------------------------------------------------
   // A: create pairing — real RTCPeerConnection + SDP offer + QR
@@ -263,8 +295,8 @@ async function main() {
     const pageD = await ctxD.newPage();
     await pageC.goto(url, { waitUntil: 'domcontentloaded' });
     await pageD.goto(url, { waitUntil: 'domcontentloaded' });
-    await pageC.waitForSelector('text=Create pairing', { timeout: 30000 });
-    await pageD.waitForSelector('text=Create pairing', { timeout: 30000 });
+    await goToDevicesTab(pageC);
+    await goToDevicesTab(pageD);
 
     // invalid QR: garbage paste is rejected, the join flow stays usable
     await pageD.getByRole('button', { name: /join pairing/i }).first().click();
@@ -339,8 +371,8 @@ async function main() {
       await pageE.route('**/functions/nexdropSignal*', (route: any) => route.abort());
       await pageE.goto(url, { waitUntil: 'domcontentloaded' });
       await pageF.goto(url, { waitUntil: 'domcontentloaded' });
-      await pageE.waitForSelector('text=Create pairing', { timeout: 30000 });
-      await pageF.waitForSelector('text=Create pairing', { timeout: 30000 });
+      await goToDevicesTab(pageE);
+      await goToDevicesTab(pageF);
 
       await pageE.getByRole('button', { name: /create pairing/i }).first().click();
       await pageE.waitForSelector('text=Automatic pairing unavailable', { timeout: 20000 });
@@ -424,6 +456,10 @@ async function main() {
   // Real text message over the text DataChannel
   // ---------------------------------------------------------------------
   console.log('[two-device e2e] A → B: real text message');
+  // Phase 19 IA: text & clipboard sharing is a full-screen sheet opened
+  // from the Home quick actions, not a persistent nav tab — go Home first.
+  await goToTab(pageA, 'Home');
+  await goToTab(pageB, 'Home');
   await pageA.getByRole('button', { name: /clipboard/i }).first().click();
   await pageB.getByRole('button', { name: /clipboard/i }).first().click();
   await pageA.waitForSelector('textarea');
@@ -443,6 +479,10 @@ async function main() {
   // ---------------------------------------------------------------------
   console.log('[two-device e2e] A → B: file transfer size matrix with SHA-256 verification');
 
+  // Close the text/clipboard sheet (it's a full-screen overlay above the
+  // nav) before switching tabs.
+  await pageA.keyboard.press('Escape');
+  await pageB.keyboard.press('Escape');
   await pageA.getByRole('button', { name: /transfer/i }).first().click();
   await pageB.getByRole('button', { name: /transfer/i }).first().click();
   await pageA.waitForSelector('input[type="file"]', { state: 'attached', timeout: 10000 });

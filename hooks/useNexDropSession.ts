@@ -1,9 +1,17 @@
 'use client';
 
 /**
- * useNexDropSession — manual, server-less WebRTC pairing orchestration.
+ * useNexDropSession — WebRTC pairing orchestration for BOTH pairing paths.
  *
- * Flow (NO signaling server, NO database, NO accounts):
+ * AUTOMATIC one-scan path (primary): the host publishes a short-lived
+ * session on the ephemeral signaling service and shows ONE QR (session id +
+ * single-use join token + endpoint — no SDP/ICE/key material). The joiner
+ * scans it once and files a join request; the HOST decides (Accept /
+ * Decline). On Accept the SDP offer/answer and ICE candidates are exchanged
+ * automatically through the service and the DataChannels open — no second
+ * QR, no answer code, ever.
+ *
+ * MANUAL path (fallback when the signaling service is unreachable):
  *
  * HOST (Create pairing):
  *   1. ECDH keypair + RTCPeerConnection + offer
@@ -18,8 +26,11 @@
  *   3. Wait for ICE gathering → build answer pairing code → show as QR
  *   4. When the host applies the answer, DataChannels open → 'connected'
  *
- * Both sides derive the same AES-256-GCM session key and the same 6-digit
- * SAS verification code from the ECDH shared secret.
+ * No database, no accounts. Files and text travel only over the direct
+ * peer connection; the signaling service only carries connection
+ * establishment metadata. Both sides derive the same AES-256-GCM session
+ * key and the same 6-digit SAS verification code from the ECDH shared
+ * secret.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';

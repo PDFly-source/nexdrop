@@ -38,7 +38,7 @@ export default function PrivacyPage() {
               1. Zero Account & Zero Identity Tracking
             </h2>
             <p className="text-xs sm:text-sm text-[#9AA7AE] leading-relaxed">
-              We do not ask for your email address, phone number, or name. There are no user profiles, account databases, or persistent tracking IDs — the app is a static website with no backend of any kind.
+              We do not ask for your email address, phone number, or name. There are no user profiles, account databases, or persistent tracking IDs — the app is a static website with no user accounts and no file storage of any kind.
             </p>
           </section>
 
@@ -58,7 +58,7 @@ export default function PrivacyPage() {
               3. Ephemeral Sessions with Auto-Destruction
             </h2>
             <p className="text-xs sm:text-sm text-[#9AA7AE] leading-relaxed">
-              Pairing codes (the QR codes or pasted text used to negotiate the WebRTC handshake) exist only in memory on the two pairing devices and expire automatically after 10 minutes. There is no signaling server at all — the codes are exchanged directly between the two screens.
+              Pairing sessions are short-lived: each one expires automatically after 10 minutes, the join token is single-use, and the session is destroyed the moment the direct connection opens. Automatic one-scan pairing uses a lightweight ephemeral signaling service that carries only connection establishment data (session id, single-use token, SDP, ICE, device name) — never file contents. The manual QR / copy-paste fallback exchanges codes directly between the two screens with no signaling service involved at all.
             </p>
           </section>
 

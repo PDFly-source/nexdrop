@@ -38,7 +38,7 @@ export default function AboutPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-[#F5F7F8]">What is NexDrop?</h2>
             <p>
-              NexDrop is a Progressive Web App designed to bridge personal devices — phones, laptops, desktops, and tablets — over pure peer-to-peer WebRTC connections. Whether sharing high-resolution photos, 4K video clips, code snippets, or clipboard text, data travels directly between the two devices. There is no backend: pairing happens by scanning QR codes between the devices themselves.
+              NexDrop is a Progressive Web App designed to bridge personal devices — phones, laptops, desktops, and tablets — over direct peer-to-peer WebRTC connections. Whether sharing high-resolution photos, 4K video clips, code snippets, or clipboard text, files and text travel directly between the two devices — never through a cloud server. Pairing uses lightweight ephemeral signaling only to establish the WebRTC connection: one scan, the host accepts, and the devices connect. The signaling service does not relay file contents.
             </p>
           </section>
 
@@ -97,9 +97,9 @@ export default function AboutPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-[#F5F7F8]">No Server, Period</h2>
+            <h2 className="text-base font-semibold text-[#F5F7F8]">No Accounts, No File Servers</h2>
             <p>
-              NexDrop runs entirely in your browser as a static PWA. There are no accounts, no subscriptions, no database, and no signaling server — the two devices exchange pairing codes (QR or copy/paste) directly. Direct connectivity depends on your browser and network; for the most reliable link, keep both devices on the same Wi-Fi.
+              NexDrop runs entirely in your browser as a static PWA. There are no accounts, no subscriptions, and no database. One-scan pairing uses a lightweight ephemeral signaling service that carries only connection establishment data (session id, single-use token, SDP, ICE) and destroys the session as soon as the devices connect — it never sees file contents. Prefer no signaling at all? The manual QR / copy-paste fallback exchanges everything directly between the two screens. Direct connectivity depends on your browser and network; for the most reliable link, keep both devices on the same Wi-Fi.
             </p>
           </section>
         </div>

@@ -1,7 +1,9 @@
 /**
- * Manual WebRTC pairing payload encoding for NexDrop.
+ * MANUAL-path WebRTC pairing payload encoding for NexDrop (the fallback
+ * used when the ephemeral signaling service is unavailable — see
+ * lib/signaling/client.ts for the primary one-scan path).
  *
- * There is NO signaling server. The SDP offer/answer is:
+ * The manual path needs NO signaling server. The SDP offer/answer is:
  *   1. trimmed to the essential lines,
  *   2. deflate-compressed (when CompressionStream is available),
  *   3. wrapped with an ECDH public key + expiry into a compact JSON envelope,
