@@ -80,7 +80,8 @@ async function main() {
     if(requireConnection) {
       await a.locator('[data-testid="send-pairing"][data-state="completed"]').waitFor({timeout:90000});
       check(creates===1,'all three files auto-send sequentially through the same connection');
-      await b.getByRole('button',{name:'Transfers',exact:true}).last().click();
+      await b.getByRole('button',{name:/Transfers/}).last().click();
+      await b.getByRole('tab',{name:/Receive/}).click();
       check(await b.getByText('phase21-c.txt',{exact:true}).count()>=1,'receiver gets last real queued file');
       check(await a.getByText('· Verified by receiver',{exact:true}).count()>=3,'all three sender files have real receiver SHA-256 verdicts');
       await choose(a,['phase21-already-connected.txt']);
