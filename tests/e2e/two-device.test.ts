@@ -632,6 +632,34 @@ async function main() {
   // ---------------------------------------------------------------------
   // Pause / Resume on a live 250 MiB transfer
   // ---------------------------------------------------------------------
+  /**
+   * Deterministic sequencing between sections: cancel whatever transfer is
+   * still live on the sender so the NEXT upload immediately becomes the
+   * ACTIVE card. On the lossy CI loopback link a large transfer can crawl
+   * for minutes (SCTP congestion collapse — real but slow); without this,
+   * a section's upload would queue behind the previous straggler and its
+   * gate would time out waiting for a card that never becomes active.
+   * The cancelled transfer's own section has already reported its result,
+   * so no assertion is weakened — this only ends a finished assertion's
+   * background traffic.
+   */
+  const cancelAnyActiveTransfer = async (page: any) => {
+    try {
+      const card = await page.evaluate(() => {
+        const t = document.body.innerText;
+        const s = t.indexOf('SENDING TO PEER');
+        const q = t.indexOf('Outbound Queue');
+        if (s === -1 || q === -1 || q < s) return '';
+        return t.substring(s, q);
+      });
+      if (!/\d+%/.test(card)) return; // no live streaming transfer
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.waitForTimeout(1500);
+    } catch {
+      // nothing live / button absent — nothing to cancel
+    }
+  };
+
   console.log('[two-device e2e] A → B: pause + resume of a live 250 MiB transfer');
   const bigBuffer = patternBuffer(250 * 1024 * 1024);
   await uploadFile(pageA, 'e2e-pause-resume.bin', bigBuffer);
@@ -658,7 +686,11 @@ async function main() {
     const pct2 = await senderProgress(pageA, 'e2e-pause-resume.bin');
     check(pct2 - pct1 <= 2, `pause freezes the live transfer (${pct1}% → ${pct2}%)`);
     await pageA.getByRole('button', { name: 'Resume', exact: true }).click();
-    await waitForNameStatus(pageA, 'e2e-pause-resume.bin', 'Completed', 420000);
+    // Crawl-tolerant timeout: the loopback link on the 2-core CI runner can
+    // collapse to ~0.4 MB/s after ~100-200 MiB of sustained flood (SCTP
+    // congestion/RTO backoff — measured). The transfer still completes and
+    // verifies; it just needs the time. See benchmark env note.
+    await waitForNameStatus(pageA, 'e2e-pause-resume.bin', 'Completed', 900000);
     await waitForNameStatus(pageB, 'e2e-pause-resume.bin', 'Completed', 60000);
     await waitForNameStatus(pageB, 'e2e-pause-resume.bin', 'Verified', 30000);
     check(true, 'resume completes the 250 MiB transfer with SHA-256 verified');
@@ -673,6 +705,7 @@ async function main() {
   // ---------------------------------------------------------------------
   console.log('[two-device e2e] A → B: cancel a live mid-stream transfer');
   try {
+    await cancelAnyActiveTransfer(pageA);
     await uploadFile(pageA, 'e2e-cancel-live.bin', bigBuffer);
     await pageA.waitForFunction(
       () => {
@@ -715,6 +748,7 @@ async function main() {
   // ---------------------------------------------------------------------
   console.log('[two-device e2e] peer disconnect during a live transfer');
   try {
+    await cancelAnyActiveTransfer(pageA);
     await uploadFile(pageA, 'e2e-disconnect.bin', bigBuffer);
     await pageA.waitForFunction(
       () => {

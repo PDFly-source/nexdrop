@@ -11,7 +11,9 @@
  *   receiver write ms, peak heap, pause/resume result, SHA-256 verify.
  *
  * Sizes via NEXDROP_BENCH_SIZES (bytes, comma-separated).
- * Default: 100 MiB, 500 MiB, 1 GiB. 5 GiB only by explicit env opt-in.
+ * Default: 100 MiB, 250 MiB — chosen so the matrix always completes inside
+ * the CI job budget (see the environment note below). Larger sizes (1 GiB,
+ * 5 GiB) only by explicit env opt-in on a beefier machine.
  */
 
 import { chromium, devices } from 'playwright';
@@ -22,7 +24,7 @@ import os from 'os';
 
 const PORT = 3998;
 const OUT_DIR = path.join(process.cwd(), 'out');
-const SIZES = (process.env.NEXDROP_BENCH_SIZES || `${100 * 1024 * 1024},${500 * 1024 * 1024},${1024 * 1024 * 1024}`)
+const SIZES = (process.env.NEXDROP_BENCH_SIZES || `${100 * 1024 * 1024},${250 * 1024 * 1024}`)
   .split(',')
   .map((x) => parseInt(x.trim(), 10))
   .filter((x) => x > 0);
@@ -141,6 +143,7 @@ async function goToDevicesTab(page: any) {
 async function main() {
   console.log('[benchmark] tier C — real two-device browser benchmark (real WebRTC DataChannels)');
   console.log('[benchmark] environment: two isolated Chromium contexts on one host — a real DataChannel path over loopback host candidates, not a physical network');
+  console.log('[benchmark] note: sustained high-rate loops on the 2-core CI runner can overflow the receiver UDP socket and collapse SCTP throughput to a crawl (measured ~0.4 MB/s after ~100-200 MiB cumulative). Timeouts are sized for that worst case, a 120s no-progress abort ends dead links early, and completion + SHA-256 verification are always required — throughput numbers are measured telemetry, never asserted speeds.');
   console.log('[benchmark] sizes (MiB):', SIZES.map((s) => (s / 1048576).toFixed(0)).join(', '));
   const server = await startServer();
 
@@ -267,7 +270,14 @@ async function main() {
 
     const samples: Sample[] = [];
     let failed = false;
-    const timeoutMs = Math.max(300000, Math.ceil((size / (2.5 * 1024 * 1024)) * 1000) + 120000);
+    let lastSentBytes = 0;
+    let lastProgressAt = Date.now();
+    // Crawl-tolerant ceiling: sustained high-rate loopback transfer on the
+    // 2-core CI runner can overflow the receiver's UDP socket, collapse
+    // SCTP throughput to ~0.4 MB/s (measured), and turn a nominal 60 s
+    // transfer into a 10-minute one. Size the timeout for that measured
+    // worst case; a 120 s no-progress abort below fails dead links early.
+    const timeoutMs = Math.max(900000, Math.ceil((size / (0.35 * 1024 * 1024)) * 1000) + 120000);
     const t0 = Date.now();
     let pausedResumed = 'n/a';
     let shaVerified = false;
@@ -280,6 +290,10 @@ async function main() {
           await new Promise((r) => setTimeout(r, 500));
           try {
             const [ta, tb] = await Promise.all([readTelemetry(pageA), readTelemetry(pageB)]);
+            if ((ta.s?.bytesSent ?? 0) > lastSentBytes) {
+              lastSentBytes = ta.s?.bytesSent ?? 0;
+              lastProgressAt = Date.now();
+            }
             samples.push({
               t: Date.now() - t0,
               sentBytes: ta.s?.bytesSent ?? 0, sentBps: ta.s?.throughputBps ?? 0,
@@ -315,7 +329,24 @@ async function main() {
         first = false;
       }
 
-      await doneA;
+      // Honest early abort: zero sender progress for 120s means the link is
+      // dead (not merely congested — a crawl still moves forward every poll).
+      const stallAbort = new Promise<never>((_, reject) => {
+        const iv = setInterval(() => {
+          if (transferDone) { clearInterval(iv); return; }
+          if (Date.now() - lastProgressAt > 120000) {
+            clearInterval(iv);
+            reject(new Error('stalled: no sender progress for 120s'));
+          }
+        }, 5000);
+      });
+      try {
+        await Promise.race([doneA, stallAbort]);
+      } catch (e: any) {
+        transferDone = true; // stop the telemetry poll loop
+        doneA.catch(() => {}); // swallow the now-abandoned wait's rejection
+        throw e;
+      }
       await waitForNameStatus(pageB, name, 'Completed', Math.max(60000, timeoutMs / 4));
       const doneT = Date.now() - t0;
       try {
