@@ -539,6 +539,8 @@ export class SenderEngine {
           throughputBps: this.throughputBps,
           srttMs: this.rttEwmaMs,
           minRttMs: this.minRttMs,
+          inFlightBytes: this.bytesSent - this.bytesAcked,
+          ackLatencyMs: this.rttEwmaMs,
           windowChunks: Math.ceil(this.windowBytes / this.chunkSize),
           windowBytes: this.windowBytes,
           bufferedAmount: this.fileChannel.bufferedAmount,

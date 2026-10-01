@@ -61,6 +61,12 @@ function defaultRecords(): DeviceTestRecord[] {
     lastBufferedBytes: null,
     lastStalls: null,
     lastTotalBytes: null,
+    networkType: null,
+    retransmissionsSent: null,
+    maxInFlightBytes: null,
+    ackLatencyMs: null,
+    localAddress: null,
+    remoteAddress: null,
     shaVerified: null,
     result: null,
     notes: '',
@@ -278,6 +284,15 @@ export function sampleDeviceTestNow(): void {
     lastBufferedBytes: sender?.bufferedAmount ?? rec.lastBufferedBytes,
     lastStalls: sender?.stalls ?? rec.lastStalls,
     lastTotalBytes: sender?.totalBytes ?? rec.lastTotalBytes,
+    networkType: transport?.networkType ?? rec.networkType,
+    retransmissionsSent: transport?.retransmissionsSent ?? rec.retransmissionsSent,
+    maxInFlightBytes:
+      sender?.inFlightBytes != null
+        ? Math.max(rec.maxInFlightBytes ?? 0, sender.inFlightBytes)
+        : rec.maxInFlightBytes,
+    ackLatencyMs: sender?.ackLatencyMs ?? rec.ackLatencyMs,
+    localAddress: transport?.localAddress ?? rec.localAddress,
+    remoteAddress: transport?.remoteAddress ?? rec.remoteAddress,
   };
   updateRecord(rec.caseId, patch, false);
 }
@@ -365,6 +380,11 @@ export function buildDeviceTestReport(): string {
     `Peak: ${measured && measured.peakBps > 0 ? fmtMBps(measured.peakBps) : 'not measured'}`,
     `Transferred: ${fmtBytes(transferred)} / ${fmtBytes(transferredTotal)}`,
     `Stalls: ${measured?.lastStalls != null ? String(measured.lastStalls) : 'not sampled'}`,
+    `Path network: ${measured?.networkType ?? 'not exposed by browser (candidate networkType)'} — 5G/Wi-Fi status icons are NOT WebRTC path evidence`,
+    `Candidate addresses: ${measured?.localAddress ?? '—'} → ${measured?.remoteAddress ?? '—'} (mDNS .local = same LAN)`,
+    `Retransmissions: ${measured?.retransmissionsSent != null ? String(measured.retransmissionsSent) : 'not exposed'} (candidate-pair loss evidence)`,
+    `In-flight peak: ${measured?.maxInFlightBytes != null && measured.maxInFlightBytes > 0 ? `${(measured.maxInFlightBytes / 1048576).toFixed(2)} MiB (window-fill proof)` : 'not sampled'}`,
+    `ACK latency: ${measured?.ackLatencyMs != null && measured.ackLatencyMs > 0 ? `${Math.round(measured.ackLatencyMs)} ms (send→durable-ACK EWMA)` : 'not sampled'}`,
     `Network capacity out/in: ${fmtCapacity(measured?.outgoingCapacityBps)} / ${fmtCapacity(measured?.incomingCapacityBps)}`,
     `SCTP max message size: ${measured?.sctpMaxMessageSize ? `${measured.sctpMaxMessageSize} bytes (read from pc.sctp)` : 'not readable'}`,
     `SHA-256: ${shaState}`,

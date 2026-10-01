@@ -8,7 +8,7 @@
     "build": "next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx tests/core.test.ts && tsx tests/compact-pairing.test.ts && tsx tests/qr-pairing.test.ts && tsx tests/signal-pairing.test.ts && tsx tests/send-flow.test.ts && tsx tests/devicetest.test.ts && tsx tests/performance.test.ts",
+    "test": "tsx tests/core.test.ts && tsx tests/compact-pairing.test.ts && tsx tests/qr-pairing.test.ts && tsx tests/signal-pairing.test.ts && tsx tests/send-flow.test.ts && tsx tests/devicetest.test.ts && tsx tests/performance.test.ts && tsx tests/cellular.test.ts",
     "test:e2e:send-first": "tsx tests/e2e/send-first.test.ts"
   },
   "dependencies": {

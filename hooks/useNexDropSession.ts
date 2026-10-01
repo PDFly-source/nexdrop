@@ -1093,6 +1093,46 @@ export function useNexDropSession() {
    * connection: a transient ICE 'disconnected' blip must never show
    * "Not connected" while bytes are verifiably flowing.
    */
+  /**
+   * Screen Wake Lock while a transfer is ACTIVE: Android Chrome throttles
+   * timers in hidden pages and can freeze the renderer when the screen
+   * turns off — during an 11-minute physical transfer that can stall the
+   * receiver's ACK cadence and the sender's pipeline. Holding the screen
+   * awake while bytes flow is the browser-sanctioned mitigation
+   * (navigator.wakeLock, best-effort, silently ignored where unsupported).
+   */
+  const transferActive = transferActivity.active && !transferActivity.verifying;
+  useEffect(() => {
+    const wl = (navigator as unknown as { wakeLock?: { request: (t: string) => Promise<{ released: boolean; release: () => Promise<void> }> } }).wakeLock;
+    if (!transferActive || !wl) return;
+    let lock: { released: boolean; release: () => Promise<void> } | null = null;
+    let disposed = false;
+    const acquire = async () => {
+      if (disposed || lock?.released === false) return;
+      try {
+        lock = await wl.request('screen');
+      } catch {
+        /* denied / unsupported — transfers still run, just less protected */
+      }
+    };
+    const onVisibility = () => {
+      // Wake locks auto-release when the page becomes hidden; re-acquire
+      // when the user returns (e.g. after a manual screen-off).
+      if (document.visibilityState === 'visible') void acquire();
+    };
+    void acquire();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      disposed = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+      try {
+        void lock?.release?.();
+      } catch {
+        /* already released */
+      }
+    };
+  }, [transferActive]);
+
   const connectionPhase = useMemo<ConnectionPhase>(() => {
     if (transferActivity.active) {
       if (transferActivity.verifying) return 'verifying';

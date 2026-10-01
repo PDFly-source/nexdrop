@@ -38,6 +38,22 @@ export interface TransportStats {
   incomingBitrateBps: number | null;
   /** selected pair network protocol ('udp'|'tcp'), from the candidates */
   protocol: string | null;
+  /** local candidate network interface type as reported by the browser:
+   *  'wifi' | 'cellular' | 'ethernet' | ... — the ONLY reliable answer to
+   *  "is the 5G icon a cellular WebRTC path?" (Chrome local candidate).
+   *  Null when the browser does not expose it (privacy restrictions). */
+  networkType: string | null;
+  /** relay protocol ('udp'|'tcp'|'tls') when a relay candidate is selected */
+  relayProtocol: string | null;
+  /** selected candidate-pair STUN requests sent (loss evidence denominator) */
+  requestsSent: number | null;
+  /** selected candidate-pair STUN responses received */
+  responsesReceived: number | null;
+  /** selected candidate-pair consent/STUN retransmissions sent — real
+   *  network-loss evidence on the active path (higher = lossier path) */
+  retransmissionsSent: number | null;
+  /** totalRoundTripTime (seconds) of the selected pair when exposed */
+  totalRoundTripTimeS: number | null;
   /** negotiated SCTP maxMessageSize (pc.sctp.maxMessageSize), when readable */
   sctpMaxMessageSize: number | null;
   /** dtls transport state */
@@ -56,6 +72,7 @@ interface CandidateLike {
   relayProtocol?: string;
   url?: string;
   protocol?: string;
+  networkType?: string;
 }
 interface PairLike {
   type?: string;
@@ -69,6 +86,10 @@ interface PairLike {
   bytesReceived?: number;
   availableOutgoingBitrate?: number;
   availableIncomingBitrate?: number;
+  requestsSent?: number;
+  responsesReceived?: number;
+  retransmissionsSent?: number;
+  totalRoundTripTime?: number;
 }
 
 export function transportLabel(t: TransportStats | null | undefined): string {
@@ -176,6 +197,14 @@ export async function sampleTransportStats(
     localCandidateType: localType,
     remoteCandidateType: remoteType,
     protocol: local?.protocol || remote?.protocol || null,
+    networkType: local?.networkType ?? null,
+    relayProtocol: local?.relayProtocol ?? remote?.relayProtocol ?? null,
+    requestsSent: typeof bestPair?.requestsSent === 'number' ? bestPair.requestsSent : null,
+    responsesReceived: typeof bestPair?.responsesReceived === 'number' ? bestPair.responsesReceived : null,
+    retransmissionsSent:
+      typeof bestPair?.retransmissionsSent === 'number' ? bestPair.retransmissionsSent : null,
+    totalRoundTripTimeS:
+      typeof bestPair?.totalRoundTripTime === 'number' ? bestPair.totalRoundTripTime : null,
     sctpMaxMessageSize,
     rttMs:
       typeof bestPair?.currentRoundTripTime === 'number' && bestPair.currentRoundTripTime >= 0

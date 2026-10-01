@@ -51,8 +51,10 @@ async function main(): Promise<void> {
       nominated: true, localCandidateId: 'L', remoteCandidateId: 'R',
       currentRoundTripTime: 0.042, bytesSent: 1000, bytesReceived: 2000,
       availableOutgoingBitrate: 8000000, availableIncomingBitrate: 12000000,
+      requestsSent: 120, responsesReceived: 117, retransmissionsSent: 9,
+      totalRoundTripTime: 4.32,
     }],
-    ['L', { type: 'local-candidate', id: 'L', candidateType: 'srflx', protocol: 'udp' }],
+    ['L', { type: 'local-candidate', id: 'L', candidateType: 'srflx', protocol: 'udp', networkType: 'cellular' }],
     ['R', { type: 'remote-candidate', id: 'R', candidateType: 'srflx', protocol: 'udp' }],
   ]);
   const pc = {
@@ -67,6 +69,10 @@ async function main(): Promise<void> {
   check(stats!.incomingBitrateBps === 12000000, 'transportStats: incoming capacity parsed');
   check(stats!.sctpMaxMessageSize === 262144, 'transportStats: negotiated SCTP max message size read from pc.sctp');
   check(transportLabel(stats) === 'Internet Direct', 'transportStats: honest internet-direct label');
+  check(stats!.networkType === 'cellular', 'transportStats: cellular networkType surfaces the real path (status-bar 5G is not evidence)', String(stats!.networkType));
+  check(stats!.retransmissionsSent === 9, 'transportStats: candidate-pair retransmissions parsed (loss evidence)', String(stats!.retransmissionsSent));
+  check(stats!.requestsSent === 120 && stats!.responsesReceived === 117, 'transportStats: STUN req/resp parsed');
+  check(stats!.totalRoundTripTimeS === 4.32, 'transportStats: totalRoundTripTime parsed');
 }
 {
   const report = new Map<string, unknown>([

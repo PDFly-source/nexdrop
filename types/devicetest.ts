@@ -62,6 +62,17 @@ export interface DeviceTestRecord {
   lastBufferedBytes: number | null;
   lastStalls: number | null;
   lastTotalBytes: number | null;
+  /** Cellular-path evidence: local candidate networkType ('wifi'/'cellular'). */
+  networkType: string | null;
+  /** Selected candidate-pair retransmissions — real loss evidence. */
+  retransmissionsSent: number | null;
+  /** Max real in-flight bytes seen by the sampler (window fill proof). */
+  maxInFlightBytes: number | null;
+  /** Sender ACK-latency EWMA at the last sample (bulk-path RTT). */
+  ackLatencyMs: number | null;
+  /** Selected pair candidate addresses (mDNS .local = local network). */
+  localAddress: string | null;
+  remoteAddress: string | null;
   /** Receiver's real VERIFY verdict (sender devices learn it via VERIFY). */
   shaVerified: boolean | null;
   result: 'passed' | 'failed' | null;

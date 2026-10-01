@@ -28,6 +28,10 @@ export interface SenderTelemetry {
   windowBytes: number;
   /** DataChannel bufferedAmount at the last update. */
   bufferedAmount: number;
+  /** Real bytes in flight: sent but not yet durably ACKed. */
+  inFlightBytes: number;
+  /** Measured send-to-ACK latency EWMA (the true bulk-path RTT). */
+  ackLatencyMs: number;
   /** Largest bufferedAmount observed. */
   maxBufferedAmount: number;
   ackCount: number;
@@ -76,6 +80,17 @@ export interface TransportTelemetry {
   /** Selected pair candidate addresses (mDNS .local names are local-network). */
   localAddress: string | null;
   remoteAddress: string | null;
+  /** local candidate networkType ('wifi'/'cellular'/...) when exposed */
+  networkType: string | null;
+  /** selected pair retransmissions sent — real loss evidence */
+  retransmissionsSent: number | null;
+  /** relay protocol when selected */
+  relayProtocol: string | null;
+  /** totalRoundTripTime (s) of the selected pair when exposed */
+  totalRoundTripTimeS: number | null;
+  /** selected pair STUN requestsSent / responsesReceived */
+  requestsSent: number | null;
+  responsesReceived: number | null;
   rttMs: number | null;
   bytesSent: number | null;
   bytesReceived: number | null;
