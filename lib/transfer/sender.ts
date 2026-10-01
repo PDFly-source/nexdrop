@@ -40,6 +40,15 @@ import {
 } from '@/types/transfer';
 import { encodeBinaryChunk } from './protocol';
 import { bytesToBase64Url, ChunkCipher, encryptChunk, generateIvPrefix, IncrementalSha256 } from '@/lib/crypto';
+import { StageStats, StageSummary } from './stageStats';
+import {
+  HashPipeline,
+  MerkleHashPipeline,
+  WorkerHashPipeline,
+  workerAvailable,
+  hashQueueCapBytes,
+  HashMode,
+} from './hashPipeline';
 import { initialChunkSize, noteTransferSuccess, noteTransferFailure } from './tuner';
 import { updateSenderTelemetry } from './telemetry';
 import { TransferTimeline } from './timeline';
@@ -118,6 +127,13 @@ export class SenderEngine {
       prevSize = step.size;
     }
     return prevSize;
+  }
+
+  /** Bounded File.slice read of one chunk — NEVER whole-file in RAM. */
+  private sliceOfAsync(index: number): Promise<ArrayBuffer> {
+    const start = this.bytesAtChunkStart(index);
+    const end = Math.min(start + this.chunkSizeFor(index), this.file.size);
+    return this.file.slice(start, end).arrayBuffer();
   }
 
   private bytesAtChunkStart(index: number): number {
@@ -215,6 +231,31 @@ export class SenderEngine {
   /** Window utilization summary, computed from the 10 Hz timeline at
    *  completion: inFlightBytes / windowBytes per sample. */
   private utilization: { avg: number; p50: number; p95: number; min: number; max: number } | null = null;
+  // ---- v2.4 hash pipeline + per-stage profiling (2026-10-01 Phases 1-6) ----
+  /** Active hash mode for THIS transfer ('inline' = exact v2.3 behavior). */
+  private hashMode: HashMode = 'inline';
+  /** Post-send hash pipeline (merkle/worker modes; null in inline mode). */
+  private hashPipeline: HashPipeline | null = null;
+  /** True while an 's256m' offer is outstanding (FILE_START sent, HASH_OK pending). */
+  private hashOffered = false;
+  private hashOkSeen = false;
+  private hashOkWaiters = new Set<() => void>();
+  /** Queued un-hashed byte cap (bounded pipeline memory). */
+  private hashQueueCap = hashQueueCapBytes();
+  /** Read-ahead depth: 1 = v2.3 single-slot; up to 4 for the sweep. */
+  private readAheadDepth = 1;
+  /** Forced channel pool (0 = auto measured gate). */
+  private forcedChannels = 0;
+  /** Pinned chunk size (0 = adaptive ladder). */
+  private chunkPinned = 0;
+  // Per-stage MEASURED profile: slice, hash, encode, send, buffer wait, ACK wait.
+  private sliceStats = new StageStats();
+  private hashStats = new StageStats();
+  private encodeStats = new StageStats();
+  private sendStats = new StageStats();
+  private bufferWaitStats = new StageStats();
+  private ackWaitStats = new StageStats();
+  private finalizeStats = new StageStats();
 
   private isPaused = false;
   private isCancelled = false;
@@ -246,6 +287,31 @@ export class SenderEngine {
     this.chunkSteps0 = initialChunkSize(negotiated);
     this.chunkSteps = [{ firstIndex: 0, size: this.chunkSteps0 }];
 
+    // ---- v2.4 benchmark/telemetry knobs (measurement ONLY; safe defaults) ----
+    // All read from the page global set by tests/benchmark; absence = the
+    // production default. Pinning the chunk size freezes the ladder.
+    const env = (globalThis as Record<string, unknown>);
+    const pin = Number(env.__NEXDROP_CHUNK_CAP_BYTES ?? 0);
+    if (pin >= 16 * 1024 && pin <= this.chunkCap) {
+      this.chunkPinned = pin;
+      this.chunkSteps0 = pin;
+      this.chunkSteps = [{ firstIndex: 0, size: pin }];
+      this.chunkFrozen = true; // pinned: ladder disabled by explicit request
+    }
+    this.readAheadDepth = Math.max(1, Math.min(4, Number(env.__NEXDROP_READAHEAD ?? 1)));
+    const fc = Number(env.__NEXDROP_FORCE_CHANNELS ?? 0);
+    if (fc >= 1 && options.extraFileChannels) {
+      const extras = options
+        .extraFileChannels()
+        .slice(0, fc - 1)
+        .filter((ch) => ch.readyState === 'open');
+      if (extras.length > 0) {
+        this.activeChannels = [this.fileChannel, ...extras];
+        this.forcedChannels = this.activeChannels.length;
+        for (const ch of this.activeChannels) ch.bufferedAmountLowThreshold = BUFFER_LOW_WATER;
+      }
+    }
+
     this.totalChunks = Math.max(1, Math.ceil(this.file.size / this.chunkSteps0));
     this.getActiveChannels = options.extraFileChannels
       ? () => [this.fileChannel, ...options.extraFileChannels!().slice(0, 3)]
@@ -255,6 +321,29 @@ export class SenderEngine {
     // Event-driven SCTP buffer pacing: fill to BUFFER_HIGH_WATER, then wait
     // for 'bufferedamountlow' which fires once the buffer drains to this.
     this.fileChannel.bufferedAmountLowThreshold = BUFFER_LOW_WATER;
+  }
+
+  /**
+   * v2.4: the receiver accepts the native-Merkle hash ('s256m'). Arrives
+   * immediately after FILE_START; before the first chunk — a late or absent
+   * reply simply keeps the legacy classic-digest path (old peers).
+   */
+  public handleHashOk(algo: string): void {
+    if (algo === 's256m') this.hashOkSeen = true;
+    for (const w of [...this.hashOkWaiters]) w();
+  }
+
+  private waitHashOk(timeoutMs: number): Promise<boolean> {
+    if (this.hashOkSeen) return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => {
+      const done = () => {
+        clearTimeout(t);
+        this.hashOkWaiters.delete(done);
+        resolve(this.hashOkSeen);
+      };
+      const t = setTimeout(done, timeoutMs);
+      this.hashOkWaiters.add(done);
+    });
   }
 
   /**
@@ -422,15 +511,18 @@ export class SenderEngine {
       // provably race-free with the in-flight pre-read slice.
       if (
         !this.chunkFrozen &&
+        !this.chunkPinned &&
         this.chunkSteps.length > 0 &&
         this.drainsSinceChunkStep >= 2 &&
-        this.currentChunkIndex + 2 > this.chunkSteps[this.chunkSteps.length - 1].firstIndex
+        this.currentChunkIndex + this.readAheadDepth + 1 > this.chunkSteps[this.chunkSteps.length - 1].firstIndex
       ) {
         const cur = this.chunkSize;
         const ladder = [128 * 1024, 256 * 1024];
         const next = ladder.find((sz) => sz > cur && sz <= this.chunkCap);
         if (next) {
-          this.chunkSteps.push({ firstIndex: this.currentChunkIndex + 2, size: next });
+          // Race-free horizon: never at/below the pump's read-ahead index,
+          // whatever the configured depth (v2.4 generalizes the v2.3 +2 rule).
+          this.chunkSteps.push({ firstIndex: this.currentChunkIndex + this.readAheadDepth + 1, size: next });
           this.drainsSinceChunkStep = 0;
         } else {
           this.chunkFrozen = true; // ceiling reached — no more steps
@@ -489,8 +581,22 @@ export class SenderEngine {
     pumpSliceMs: number; pumpHashMs: number; pumpEncodeMs: number;
     windowUtilization: { avg: number; p50: number; p95: number; min: number; max: number } | null;
     inFlightBytes: number;
+    hashMode: HashMode; hashCpuMs: number; hashPctOfWall: number;
+    readAheadDepth: number; forcedChannels: number; chunkPinned: number;
+    stages: Record<'slice' | 'hash' | 'encode' | 'send' | 'bufferWait' | 'ackWait' | 'finalize', StageSummary>;
   } {
     const elapsedS = (Date.now() - this.startTime) / 1000;
+    const elapsedMs = Math.max(1, Date.now() - this.startTime);
+    const hashCpu = this.hashPipeline ? this.hashPipeline.hashCpuMs() : this.hashStats.totalMsLive;
+    const stages: Record<string, StageSummary> = {
+      slice: this.sliceStats.summary(),
+      hash: this.hashStats.summary(),
+      encode: this.encodeStats.summary(),
+      send: this.sendStats.summary(),
+      bufferWait: this.bufferWaitStats.summary(),
+      ackWait: this.ackWaitStats.summary(),
+      finalize: this.finalizeStats.summary(),
+    };
     return {
       rttMs: this.rttEwmaMs,
       minRttMs: this.minRttMs,
@@ -517,6 +623,14 @@ export class SenderEngine {
       pumpEncodeMs: this.encodeMsEwma,
       windowUtilization: this.utilization,
       inFlightBytes: this.bytesSent - this.bytesAcked,
+      // ---- v2.4 pipeline profile (all measured) ----
+      hashMode: this.hashMode,
+      hashCpuMs: hashCpu,
+      hashPctOfWall: this.startTime > 0 ? Math.round((hashCpu / elapsedMs) * 1000) / 10 : 0,
+      readAheadDepth: this.readAheadDepth,
+      forcedChannels: this.forcedChannels,
+      chunkPinned: this.chunkPinned,
+      stages,
     };
   }
 
@@ -617,6 +731,9 @@ export class SenderEngine {
   public cancel(reason: string = 'Cancelled by sender') {
     if (this.isDone) return;
     this.isCancelled = true;
+    // v2.4: discard queued un-hashed buffers — a cancel must never leak the
+    // bounded pipeline's memory or leave stale hash state for the next run.
+    this.hashPipeline?.reset();
     this.stopTimeline();
     for (const wake of [...this.windowWaiters]) wake();
     this.sendControlMessage({ type: 'CANCEL', transferId: this.transferId, reason });
@@ -650,6 +767,20 @@ export class SenderEngine {
     // (key, IV) pairs (chunk indexes restart at 0), which breaks GCM.
     if (this.cipher) this.ivPrefix = generateIvPrefix();
 
+    // ---- v2.4 hash-mode selection (measured A/B; 'inline' = exact v2.3) ----
+    // 'merkle' needs BOTH ends native (negotiated via FILE_START.hashAlgo +
+    // HASH_OK). 'worker' is wire-compatible with every peer (same classic
+    // digest, hashed off the main thread). Selection is never guessed:
+    // bench_hash_mode A/B runs compare all three.
+    this.hashPipeline?.dispose();
+    this.hashPipeline = null;
+    this.hashMode = 'inline';
+    this.hashOffered = false;
+    this.hashOkSeen = false;
+    const envMode = String((globalThis as Record<string, unknown>).__NEXDROP_HASH_MODE ?? 'auto');
+    const subtle = typeof crypto !== 'undefined' && !!crypto?.subtle;
+    const wantMerkleOffer = (envMode === 'auto' || envMode === 'merkle') && subtle;
+
     const startMsg: FileStartMessage = {
       type: 'FILE_START',
       transferId: this.transferId,
@@ -663,6 +794,10 @@ export class SenderEngine {
         ? { ivPrefix: bytesToBase64Url(this.ivPrefix) }
         : {}),
     };
+    if (wantMerkleOffer) {
+      startMsg.hashAlgo = 's256m';
+      this.hashOffered = true;
+    }
 
     const sent = this.sendControlMessage(startMsg);
     if (!sent) {
@@ -670,31 +805,59 @@ export class SenderEngine {
       return;
     }
 
+    if (this.hashOffered) {
+      // One control-RTT negotiation; the reply precedes the first chunk.
+      // Modern peers answer within ~ms; only pre-v2.4 receivers pay the timeout.
+      const ok = await this.waitHashOk(250);
+      if (ok) {
+        this.hashMode = 'merkle';
+        this.hashPipeline = new MerkleHashPipeline();
+      } else if (envMode === 'auto' && workerAvailable()) {
+        this.hashMode = 'worker';
+        this.hashPipeline = new WorkerHashPipeline();
+      } else {
+        // Peer declined or forced-merkle without support: legacy inline.
+        this.hashMode = 'inline';
+      }
+    } else if (envMode === 'worker' && workerAvailable()) {
+      this.hashMode = 'worker';
+      this.hashPipeline = new WorkerHashPipeline();
+    } else {
+      this.hashMode = 'inline';
+    }
+    this.hashQueueCap = hashQueueCapBytes();
+
     await this.pump();
   }
 
   private async pump(): Promise<void> {
     let lastBytes = 0;
     let lastTime = Date.now();
-    // One-slice read-ahead: the disk read of chunk N+1 overlaps the
-    // encrypt/send of chunk N.
-    let readAhead: Promise<ArrayBuffer> | null = null;
-    let readAheadIndex = -1;
-    let readAheadLastStepCount = 1;
-
-    const sliceOf = (index: number): Promise<ArrayBuffer> => {
-      const start = this.bytesAtChunkStart(index);
-      const end = Math.min(start + this.chunkSizeFor(index), this.file.size);
-      return this.file.slice(start, end).arrayBuffer();
+    // v2.4 bounded read-ahead slots (depth 1..4; depth 1 = the v2.3
+    // single-slice overlap, kept identical). Each slot records the chunk
+    // step-table length it was primed under — a table change invalidates
+    // the slot (size correctness), and stale slots are re-read.
+    const raSlots: Array<{ index: number; steps: number; p: Promise<ArrayBuffer> }> = [];
+    const primeSlot = (index: number) => {
+      if (raSlots.some((slot) => slot.index === index)) return;
+      raSlots.push({ index, steps: this.chunkSteps.length, p: this.sliceOfAsync(index) });
     };
 
     while (this.bytesSent < this.file.size) {
       if (this.isCancelled || this.isDone) return;
       if (this.isPaused) return; // pump() is re-invoked by resume()
 
+      // ---- v2.4 bounded hash-pipeline queue (never unbounded) ----
+      if (this.hashPipeline && this.hashPipeline.lagBytes() > this.hashQueueCap) {
+        await this.hashPipeline.drainTo(this.hashQueueCap - Math.max(this.chunkSize, 64 * 1024));
+        if (this.isCancelled || this.isPaused) return;
+      }
+
       // ---- ACK-driven byte window (bounded in-flight memory) ----
       if (this.bytesSent - this.bytesAcked >= this.windowBytes) {
+        const ackWaitT0 = Date.now();
         await this.waitForWindow();
+        this.ackWaitStats.record(Date.now() - ackWaitT0);
         if (this.isCancelled || this.isPaused) return;
       }
 
@@ -705,23 +868,25 @@ export class SenderEngine {
         return;
       }
       if (this.fileChannel.bufferedAmount > BUFFER_HIGH_WATER) {
+        const bufWaitT0 = Date.now();
         await this.waitForBufferLow();
+        this.bufferWaitStats.record(Date.now() - bufWaitT0);
         if (this.isCancelled || this.isPaused) return;
       }
 
-      // ---- read (with one-slice read-ahead) ----
+      // ---- read (bounded read-ahead slots, v2.4) ----
       const index = this.currentChunkIndex;
-      if (readAheadIndex !== index) readAhead = null; // stale (e.g. after pause)
-      // TURBO ladder: a step landing at/below the pre-read index changes
-      // that slice's boundary — discard it; sliceOf re-reads with the
-      // per-index size from the CURRENT table.
-      if (readAheadIndex === index && readAheadLastStepCount !== this.chunkSteps.length) readAhead = null;
-      const pending = readAhead;
-      readAhead = null;
+      let slotIdx = raSlots.findIndex((slot) => slot.index === index && slot.steps === this.chunkSteps.length);
+      if (slotIdx === -1) {
+        // No exact match: stale slots (ladder step, restart, pause) would
+        // carry a boundary that no longer matches the CURRENT step table —
+        // drop them all and re-read; correctness over reuse.
+        raSlots.length = 0;
+      }
       let chunkBuffer: ArrayBuffer;
       const sliceT0 = Date.now();
       try {
-        chunkBuffer = await (pending ?? sliceOf(index));
+        chunkBuffer = await (slotIdx >= 0 ? raSlots.splice(slotIdx, 1)[0].p : this.sliceOfAsync(index));
       } catch (err: any) {
         this.fail(`File read error: ${err?.message || err}`);
         this.emitProgress('failed', 0, 0);
@@ -738,8 +903,10 @@ export class SenderEngine {
         return;
       }
 
-      // v2.3: measured disk-read (slice) cost — the pump's serial stage 1.
-      this.sliceMsEwma = this.sliceMsEwma > 0 ? this.sliceMsEwma * 0.8 + (Date.now() - sliceT0) * 0.2 : (Date.now() - sliceT0);
+      // v2.4: measured disk-read (slice) stage — EWMA + full distribution.
+      const sliceDt = Date.now() - sliceT0;
+      this.sliceStats.record(sliceDt, chunkBuffer.byteLength);
+      this.sliceMsEwma = this.sliceMsEwma > 0 ? this.sliceMsEwma * 0.8 + sliceDt * 0.2 : sliceDt;
 
       // The awaited read above can straddle a pause() call. Re-check BEFORE
       // hashing: the incremental hash must only ever consume chunks that are
@@ -747,19 +914,26 @@ export class SenderEngine {
       // re-read this same slice — hash and stream stay consistent.
       if (this.isCancelled || this.isPaused) return;
 
-      // Start the next read while this chunk is encrypted + sent.
-      if (this.bytesAtChunkStart(index) + chunkBuffer.byteLength < this.file.size) {
-        readAhead = sliceOf(index + 1);
-        readAheadIndex = index + 1;
-        readAheadLastStepCount = this.chunkSteps.length;
+      // v2.4: prime up to readAheadDepth future reads. A step landing at/below
+      // the horizon is prevented by the ladder rule (firstIndex >= current +
+      // depth + 1) and slots re-validate against the step-table length.
+      for (let d = 1; d <= this.readAheadDepth; d++) {
+        const nextIdx = index + d;
+        if (this.bytesAtChunkStart(nextIdx) >= this.file.size) break;
+        primeSlot(nextIdx);
       }
 
-      // Incremental hash of the PLAINTEXT content
-      // v2.3: measured SHA-256 cost — the pump's serial stage 2 (JS, main thread).
-      const hashT0 = Date.now();
-      this.hasher.update(new Uint8Array(chunkBuffer));
-      const hashDt = Date.now() - hashT0;
-      this.hashMsEwma = this.hashMsEwma > 0 ? this.hashMsEwma * 0.8 + hashDt * 0.2 : hashDt;
+      // Incremental hash of the PLAINTEXT content.
+      // 'inline' mode: v2.3 behavior EXACTLY (pre-send, main thread).
+      // Pipeline modes ('merkle'/'worker'): hashing happens POST-send — see
+      // the push after sendPacket — so SHA cost never serializes the pump.
+      if (!this.hashPipeline) {
+        const hashT0 = Date.now();
+        this.hasher.update(new Uint8Array(chunkBuffer));
+        const hashDt = Date.now() - hashT0;
+        this.hashStats.record(hashDt, chunkBuffer.byteLength);
+        this.hashMsEwma = this.hashMsEwma > 0 ? this.hashMsEwma * 0.8 + hashDt * 0.2 : hashDt;
+      }
 
       // v2.3: measured encrypt+frame cost — the pump's serial stage 3.
       const encT0 = Date.now();
@@ -776,7 +950,9 @@ export class SenderEngine {
       }
 
       const packet = encodeBinaryChunk(index, this.totalChunks, this.transferId, payload);
-      this.encodeMsEwma = this.encodeMsEwma > 0 ? this.encodeMsEwma * 0.8 + (Date.now() - encT0) * 0.2 : (Date.now() - encT0);
+      const encodeDt = Date.now() - encT0;
+      this.encodeStats.record(encodeDt, chunkBuffer.byteLength);
+      this.encodeMsEwma = this.encodeMsEwma > 0 ? this.encodeMsEwma * 0.8 + encodeDt * 0.2 : encodeDt;
 
       // TURBO striping: per-stream SCTP buffer backpressure, then send.
       const stripe = this.activeChannels[index % this.activeChannels.length];
@@ -791,17 +967,34 @@ export class SenderEngine {
         return;
       }
       if (sendCh.bufferedAmount > BUFFER_HIGH_WATER) {
+        const bufWaitT0 = Date.now();
         await this.waitForBufferLow(sendCh);
+        this.bufferWaitStats.record(Date.now() - bufWaitT0);
         if (this.isCancelled || this.isPaused) return;
       }
 
       this.sendTimes.set(index, Date.now());
+      const sendT0 = Date.now();
       try {
         this.sendPacket(packet, index);
       } catch (err: any) {
         this.fail(`Send error: ${err?.message || err}`);
         this.emitProgress('failed', 0, 0);
         return;
+      }
+      this.sendStats.record(Date.now() - sendT0, packet.byteLength);
+
+      // v2.4 post-send hash push (pipeline modes only). Invariant: pushed
+      // iff sent — send and push share one loop iteration with NO await
+      // between them, so pause/resume can never skip or double-consume a
+      // chunk. The buffer is fully consumed by encode (packet copy /
+      // ciphertext) — the pipeline owns it from here.
+      if (this.hashPipeline) {
+        const pushT0 = Date.now();
+        this.hashPipeline.push(chunkBuffer, chunkBuffer.byteLength);
+        const pushDt = Date.now() - pushT0;
+        this.hashStats.record(pushDt, chunkBuffer.byteLength);
+        this.hashMsEwma = this.hashMsEwma > 0 ? this.hashMsEwma * 0.8 + pushDt * 0.2 : pushDt;
       }
 
       this.currentChunkIndex = index + 1;
@@ -910,10 +1103,13 @@ export class SenderEngine {
     this.stopTimeline();
     this.summarizeUtilization();
 
-    // Incremental hash — computed while streaming, no extra full read needed
+    // Incremental hash — computed while streaming, no extra full read needed.
+    // v2.4 pipeline modes: drain the bounded queue for the final digest.
     let hash = '';
     try {
-      hash = this.hasher.finalize();
+      const finT0 = Date.now();
+      hash = this.hashPipeline ? await this.hashPipeline.finalize() : this.hasher.finalize();
+      this.finalizeStats.record(Date.now() - finT0);
     } catch {
       hash = '';
     }
@@ -1048,6 +1244,7 @@ export class SenderEngine {
    * down. Max 4 streams. All decisions from real counters.
    */
   private evaluateChannelScaling(): void {
+    if (this.forcedChannels > 0) return; // explicit benchmark/sweep override
     const now = Date.now();
     const available = this.getActiveChannels();
     const active = this.activeChannels.length;

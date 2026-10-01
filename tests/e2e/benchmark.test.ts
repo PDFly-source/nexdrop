@@ -131,6 +131,14 @@ interface Sample {
   pumpHashMs: number;       // EWMA SHA-256 cost per chunk (main thread)
   pumpEncodeMs: number;     // EWMA encrypt+frame cost per chunk
   utilInstant: number;      // inFlight / window at sample time
+  // v2.4 hash pipeline verdict set (all measured)
+  hashMode: string;         // negotiated engine: inline|merkle|worker
+  hashCpuMs: number;        // engine-internal hash CPU time (pipeline modes)
+  hashPctOfWall: number;    // hash share of wall time so far
+  hashQueueLag: number;     // un-hashed queued bytes at sample time
+  sliceP95Ms: number;
+  encodeP95Ms: number;
+  sendP95Ms: number;
 }
 
 /**
@@ -174,12 +182,20 @@ async function main() {
   // byte ACK floor (measurement only — production default stays in code,
   // chosen from THIS sweep's results).
   const ackTuneBytes = Number(process.env.NEXDROP_ACK_TUNE_BYTES || 0);
+  // v2.4 sender-pipeline sweep knobs (measurement only — production
+  // defaults live in code and are chosen from THESE runs' results).
+  const hashMode = process.env.NEXDROP_BENCH_HASH_MODE || 'auto'; // auto|inline|merkle|worker
+  const chunkKb = Number(process.env.NEXDROP_BENCH_CHUNK_KB || 0); // pin chunk size
+  const readAhead = Number(process.env.NEXDROP_BENCH_READAHEAD || 0); // 1..4
+  const forceChannels = Number(process.env.NEXDROP_BENCH_CHANNELS || 0); // 1..4
   const initTune = (ctx: any) => {
-    if (ackTuneBytes > 0) {
-      void ctx.addInitScript(
-        `window.__NEXDROP_ACK_TUNE_BYTES = ${ackTuneBytes};`
-      );
-    }
+    let script = '';
+    if (ackTuneBytes > 0) script += `window.__NEXDROP_ACK_TUNE_BYTES = ${ackTuneBytes};\n`;
+    if (hashMode) script += `window.__NEXDROP_HASH_MODE = '${hashMode}';\n`;
+    if (chunkKb > 0) script += `window.__NEXDROP_CHUNK_CAP_BYTES = ${chunkKb * 1024};\n`;
+    if (readAhead > 0) script += `window.__NEXDROP_READAHEAD = ${readAhead};\n`;
+    if (forceChannels > 0) script += `window.__NEXDROP_FORCE_CHANNELS = ${forceChannels};\n`;
+    if (script) void ctx.addInitScript(script);
   };
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext({ ...devices['Pixel 7'], permissions: ['camera'] });
@@ -404,6 +420,13 @@ async function main() {
               pumpHashMs: ta.s?.pumpHashMs ?? 0,
               pumpEncodeMs: ta.s?.pumpEncodeMs ?? 0,
               utilInstant: ta.s?.windowUtilization ?? 0,
+              hashMode: ta.s?.hashMode ?? '',
+              hashCpuMs: ta.s?.hashCpuMs ?? 0,
+              hashPctOfWall: ta.s?.hashPctOfWall ?? 0,
+              hashQueueLag: ta.s?.inFlightBytes ?? 0,
+              sliceP95Ms: ta.s?.stages?.slice?.p95Ms ?? 0,
+              encodeP95Ms: ta.s?.stages?.encode?.p95Ms ?? 0,
+              sendP95Ms: ta.s?.stages?.send?.p95Ms ?? 0,
             });
           } catch { /* page busy */ }
         }
@@ -542,6 +565,14 @@ async function main() {
         pumpSliceMs: +samples.reduce((m, x) => Math.max(m, x.pumpSliceMs), 0).toFixed(1),
         pumpHashMs: +samples.reduce((m, x) => Math.max(m, x.pumpHashMs), 0).toFixed(1),
         pumpEncodeMs: +samples.reduce((m, x) => Math.max(m, x.pumpEncodeMs), 0).toFixed(1),
+        // ---- v2.4 hash-pipeline verdict set (all measured) ----
+        hashMode: samples.length ? samples[samples.length - 1].hashMode : 'unknown',
+        hashCpuMs: Math.round(samples.reduce((m, x) => Math.max(m, x.hashCpuMs), 0)),
+        hashPctOfWall: +(samples.reduce((m, x) => Math.max(m, x.hashPctOfWall), 0)).toFixed(1),
+        sliceP95Ms: +samples.reduce((m, x) => Math.max(m, x.sliceP95Ms), 0).toFixed(1),
+        encodeP95Ms: +samples.reduce((m, x) => Math.max(m, x.encodeP95Ms), 0).toFixed(1),
+        sendP95Ms: +samples.reduce((m, x) => Math.max(m, x.sendP95Ms), 0).toFixed(1),
+        benchConfig: `mode=${hashMode} chunk=${chunkKb || 'auto'}KB ra=${readAhead || 1} ch=${forceChannels || 'auto'}`,
       };
       results.push(r);
       console.log('[BENCH] ' + JSON.stringify(r));

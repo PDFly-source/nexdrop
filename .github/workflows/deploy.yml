@@ -14,6 +14,18 @@ on:
       bench_ack_bytes:
         description: 'ACK coalescing sweep override (bytes per cumulative ACK) — e.g. 1048576 / 4194304. Empty = production default (2 MiB).'
         default: ''
+      bench_hash_mode:
+        description: 'v2.4 hash pipeline A/B — auto / inline / merkle / worker. Empty = auto (production selection).'
+        default: ''
+      bench_chunk_kb:
+        description: 'Chunk-size pin in KiB (64/128/256). Empty = adaptive ladder (64-256 KiB).'
+        default: ''
+      bench_readahead:
+        description: 'Read-ahead depth 1-4 (double/triple buffering sweep). Empty = 1 (v2.3 single-slot).'
+        default: ''
+      bench_channels:
+        description: 'Force the striping pool size 1-4 (multi-channel gate sweep). Empty = measured auto gate (max 4).'
+        default: ''
 
 permissions:
   contents: read
@@ -138,6 +150,10 @@ jobs:
         env:
           NEXDROP_BENCH_SIZES: ${{ inputs.bench_sizes || '' }}
           NEXDROP_ACK_TUNE_BYTES: ${{ inputs.bench_ack_bytes || '' }}
+          NEXDROP_BENCH_HASH_MODE: ${{ inputs.bench_hash_mode || '' }}
+          NEXDROP_BENCH_CHUNK_KB: ${{ inputs.bench_chunk_kb || '' }}
+          NEXDROP_BENCH_READAHEAD: ${{ inputs.bench_readahead || '' }}
+          NEXDROP_BENCH_CHANNELS: ${{ inputs.bench_channels || '' }}
 
   deploy:
     environment:

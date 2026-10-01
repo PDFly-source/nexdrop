@@ -73,6 +73,21 @@ async function main(): Promise<void> {
   const expectedHasher = new IncrementalSha256();
   expectedHasher.update(body);
   const expectedHash = expectedHasher.finalize();
+  // v2.4: with the native-Merkle negotiation the pair exchanges the s256m
+  // digest instead of the classic stream digest. Compute the expected
+  // merkle value INDEPENDENTLY (same block size as production, 4 MiB) so the
+  // check stays an end-to-end content proof, not a tautology.
+  const expectedMerkle = await (async () => {
+    const BLOCK = 4 * 1024 * 1024;
+    const chain: number[] = [];
+    const u8 = new Uint8Array(body);
+    for (let o = 0; o < u8.length; o += BLOCK) {
+      const d = new Uint8Array(await crypto.subtle.digest('SHA-256', u8.subarray(o, Math.min(o + BLOCK, u8.length))));
+      for (const b of d) chain.push(b);
+    }
+    const fin = await crypto.subtle.digest('SHA-256', new Uint8Array(chain));
+    return Array.from(new Uint8Array(fin)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  })();
   const file = new File([body], 'ack-pipeline.bin', { type: 'application/octet-stream' });
 
   const chA = new LoopChannel();
@@ -102,6 +117,7 @@ async function main(): Promise<void> {
     },
     sendControlMessage: (m: any) => {
       queueMicrotask(() => {
+        if (m.type === 'HASH_OK') sender.handleHashOk(m.algo);
         if (m.type === 'ACK') {
           acks.push({ index: m.index, rb: m.rb, wb: m.wb, at: Date.now() });
           sender.handleAck(m.index, m.w, m.q, m.rb, m.wb);
@@ -175,8 +191,12 @@ async function main(): Promise<void> {
 
   // ---------------- A. Completion + integrity ----------------
   check(sendInfo.err === undefined, 'v2.3: sender completes with no error', sendInfo.err ?? '');
-  check(sendInfo.hash === expectedHash, 'v2.3: sender completed with SHA-256 matching the source file');
-  check(recvInfo.hash === expectedHash, 'v2.3: receiver SHA-256 matches the source file');
+  // The negotiated mode decides WHICH digest is expected — the assertion
+  // holds the sender to the FULL content either way.
+  const negotiatedMerkle = (sender as unknown as { metrics: { hashMode: string } }).metrics.hashMode === 'merkle';
+  const expected = negotiatedMerkle ? expectedMerkle : expectedHash;
+  check(sendInfo.hash === expected, 'v2.4: sender digest matches the source file content (negotiated algo)');
+  check(recvInfo.hash === expected, 'v2.4: receiver digest matches the source file content (negotiated algo)');
   check(verifyMsg?.match === true, 'v2.3: receiver VERIFY verdict is a match');
 
   const senderS = sender as unknown as { bytesAcked: number; bytesSent: number };
@@ -222,10 +242,23 @@ async function main(): Promise<void> {
     typeof metrics.ackWaitMs === 'number' && metrics.ackWaitMs >= 0,
     'v2.3: ACK-wait telemetry measured'
   );
+  // v2.4: hash stage profiled in ALL modes. Inline mode measures the JS
+  // SHA-256 cost in the pump; pipeline modes measure push cost there and
+  // real hash CPU inside the engine (hashCpuMs).
   check(
-    metrics.pumpHashMs > 0 && metrics.pumpSliceMs >= 0 && metrics.pumpEncodeMs >= 0,
-    'v2.3: pump stage costs measured (slice/hash/encode)',
-    JSON.stringify({ slice: metrics.pumpSliceMs, hash: metrics.pumpHashMs, encode: metrics.pumpEncodeMs })
+    metrics.hashMode === 'merkle',
+    'v2.4: native-Merkle hash negotiated for the pair test',
+    'mode=' + metrics.hashMode
+  );
+  check(
+    metrics.pumpSliceMs >= 0 && metrics.pumpEncodeMs >= 0 && (metrics.hashMode === 'inline' ? metrics.pumpHashMs > 0 : metrics.hashCpuMs >= 0),
+    'v2.4: pump stage costs measured in every mode (slice/hash/encode + pipeline hash CPU)',
+    JSON.stringify({ mode: metrics.hashMode, slice: metrics.pumpSliceMs, hash: metrics.pumpHashMs, cpu: metrics.hashCpuMs, encode: metrics.pumpEncodeMs })
+  );
+  check(
+    metrics.stages.hash.count > 0 && metrics.stages.slice.count > 0,
+    'v2.4: per-stage percentile profiles recorded (p50/p95/p99)',
+    JSON.stringify({ hashCount: metrics.stages.hash.count, sliceP95: metrics.stages.slice.p95Ms })
   );
   check(
     !!metrics.windowUtilization,

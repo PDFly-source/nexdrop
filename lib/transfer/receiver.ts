@@ -39,6 +39,7 @@ import {
 import { createOptimalStorageWriter, StorageWriter } from './writer';
 import { decodeBinaryChunk, simpleStringHash } from './protocol';
 import { base64UrlToBytes, ChunkCipher, decryptChunk, IncrementalSha256 } from '@/lib/crypto';
+import { MerkleHasher } from './merkle';
 import { updateReceiverTelemetry } from './telemetry';
 import { TransferTimeline } from './timeline';
 
@@ -88,6 +89,8 @@ export class ReceiverEngine {
 
   private writer: StorageWriter | null = null;
   private hasher: IncrementalSha256 | null = null;
+  /** v2.4: native-Merkle verifier when the sender offered 's256m'. */
+  private hasherM: MerkleHasher | null = null;
   private receivedChunksCount = 0;
   // ---- TURBO multi-channel reorder buffer (2026-10-01) ----
   // Parallel file streams interleave arrival, so out-of-order chunks are
@@ -233,7 +236,21 @@ export class ReceiverEngine {
     this.writesQueued = 0;
     this.maxWriteBatch = 0;
     this.processQueue = [];
-    this.hasher = new IncrementalSha256();
+    this.hasher = null;
+    this.hasherM = null;
+    // v2.4 hash-algorithm negotiation: when the sender offers the native
+    // Merkle pipeline ('s256m') AND this environment has crypto.subtle,
+    // verify with it and say so IMMEDIATELY — the sender is waiting on
+    // HASH_OK before its first chunk. Legacy senders (no hashAlgo) keep
+    // the classic streaming SHA-256 path, bit-for-bit.
+    const offered = (meta as { hashAlgo?: 's256m' }).hashAlgo;
+    const subtle = typeof crypto !== 'undefined' && !!crypto?.subtle;
+    if (offered === 's256m' && subtle) {
+      this.hasherM = new MerkleHasher();
+      this.callbacks.sendControlMessage({ type: 'HASH_OK', transferId: this.transferId, algo: 's256m' });
+    } else {
+      this.hasher = new IncrementalSha256();
+    }
     this.startTime = Date.now();
     this.startTimeline();
     this.lastTime = this.startTime;
@@ -383,7 +400,14 @@ export class ReceiverEngine {
       return;
     }
 
-    this.hasher?.update(new Uint8Array(payload));
+    // v2.4: hash the PLAINTEXT exactly once, in arrival order. Merkle mode
+    // copies synchronously into its block before any await — fire-and-forget
+    // keeps the same ordering guarantees as the classic path.
+    if (this.hasherM) {
+      void this.hasherM.update(payload);
+    } else {
+      this.hasher?.update(new Uint8Array(payload));
+    }
     this.bytesReceived += payload.byteLength;
     this.receivedChunksCount++;
 
@@ -723,11 +747,12 @@ export class ReceiverEngine {
       // hash we computed incrementally from the decrypted stream.
       let verified: boolean | undefined = undefined;
       let localHash: string | undefined = undefined;
-      if (endMsg.hash && this.hasher) {
+      if (endMsg.hash && (this.hasher || this.hasherM)) {
         try {
-          localHash = this.hasher.finalize();
+          localHash = this.hasherM ? await this.hasherM.finalize() : (this.hasher as IncrementalSha256).finalize();
           verified = localHash === endMsg.hash;
           this.hasher = null;
+          this.hasherM = null;
         } catch {
           verified = false;
         }

@@ -255,6 +255,11 @@ export function useTransferEngine(
           void receiver.startTransfer(msg);
           break;
 
+        case 'HASH_OK':
+          // v2.4: the receiver accepts the native-Merkle hash ('s256m').
+          sender?.handleHashOk((msg as { algo?: string }).algo ?? '');
+          break;
+
         case 'ACK': {
           const a = msg as { rb?: number; wb?: number };
           // v2.3: cumulative byte ACK — wb (durably written bytes) is the

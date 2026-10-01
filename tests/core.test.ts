@@ -429,16 +429,24 @@ async function testMeasuredFlowControl(): Promise<void> {
     addEventListener: () => {},
     removeEventListener: () => {},
   } as unknown as RTCDataChannel;
+  let sender: SenderEngine | null = null;
   const opts = {
     file,
     transferId: 'flowtest',
     fileChannel: channel,
-    sendControlMessage: () => true,
+    // Modern receivers answer the v2.4 hash-algorithm offer instantly
+    // (before any chunk) — model that so flow control sees real RTT.
+    sendControlMessage: (m: { type?: string; hashAlgo?: string }) => {
+      if (m.type === 'FILE_START' && m.hashAlgo === 's256m') {
+        setTimeout(() => sender?.handleHashOk('s256m'), 0);
+      }
+      return true;
+    },
     onProgress: () => {},
     onCompleted: () => {},
     onError: () => {},
   } as unknown as SenderOptions;
-  const sender = new SenderEngine(opts);
+  sender = new SenderEngine(opts);
   void sender.start();
   // ACK every chunk after a simulated ~40 ms round trip
   for (let i = 0; i < 4; i++) {

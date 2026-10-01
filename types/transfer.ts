@@ -99,6 +99,21 @@ export interface FileStartMessage {
   e2eeEnabled?: boolean;
   /** base64url 6-byte per-transfer IV prefix (E2EE transfers only). */
   ivPrefix?: string;
+  /**
+   * TURBO v2.4: end-to-end hash algorithm offered by the sender.
+   *  - 's256m' — Merkle SHA-256 (native block digests; both ends must agree)
+   *  - absent  — classic streaming SHA-256 (legacy; default for old peers)
+   * The receiver answers HASH_OK when it accepts 's256m'; the sender falls
+   * back to the classic digest otherwise.
+   */
+  hashAlgo?: 's256m';
+}
+
+export interface HashOkMessage {
+  type: 'HASH_OK';
+  transferId: string;
+  /** The algorithm the receiver will use to verify ('s256m'). */
+  algo: 's256m';
 }
 
 export interface ChunkAckMessage {
@@ -200,6 +215,7 @@ export interface PongMessage {
 
 export type ControlMessage =
   | FileStartMessage
+  | HashOkMessage
   | ChunkAckMessage
   | FileEndMessage
   | FileCancelMessage

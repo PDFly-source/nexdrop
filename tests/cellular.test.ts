@@ -128,6 +128,7 @@ async function main(): Promise<void> {
     sendControlMessage: (msg: any) => {
       setTimeout(() => {
         if (msg.type === 'ACK') sender.handleAck(msg.index, msg.w, msg.q, msg.rb, msg.wb);
+        if (msg.type === 'HASH_OK') sender.handleHashOk(msg.algo);
       }, LATENCY_MS);
       return true;
     },
