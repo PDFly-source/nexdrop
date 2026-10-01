@@ -47,6 +47,10 @@ export interface SenderTelemetry {
   sctpMaxMessageSize: number;
   /** Whole-transfer average bytes/sec — the SUSTAINED headline metric. */
   sustainedBps: number;
+  /** EWMA of RTT sample variance (ms^2, from ACK timing) — measured jitter. */
+  rttVarianceMs: number;
+  /** Active SCTP file streams in the striping pool (1..4) — measured pool size. */
+  activeChannels: number;
   /** Highest healthy window reached this transfer (recovery target). */
   windowHighWaterBytes: number;
   /** 10 Hz collapse timeline (bounded, adaptively decimated). */

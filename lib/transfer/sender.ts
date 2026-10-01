@@ -783,6 +783,8 @@ export class SenderEngine {
           acksPerSec: this.acksPerSecEwma,
           sctpMaxMessageSize: this.negotiatedMaxMessageSize,
           sustainedBps: this.bytesAcked / Math.max(0.001, (Date.now() - this.startTime) / 1000),
+          rttVarianceMs: this.rttVarEwma,
+          activeChannels: this.activeChannels.length,
           windowHighWaterBytes: this.windowHighWater,
           timeline: this.timeline.length > 0 ? this.timeline.toJSON() : null,
           startedAt: this.startTime,

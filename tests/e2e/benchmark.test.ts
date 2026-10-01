@@ -112,6 +112,18 @@ interface Sample {
   writeMs: number;
   heapA: number;
   heapB: number;
+  // v2.2 validation set (all measured engine values):
+  sustainedBps: number;      // whole-transfer average (bytesAcked / elapsed)
+  rttVarMs: number;          // EWMA of RTT variance (jitter)
+  inFlight: number;          // sent - acked (real bytes on the wire)
+  channels: number;          // active SCTP streams in the striping pool
+  windowBytes: number;       // send window in bytes
+  queueDepth: number;        // receiver write-queue depth
+  retrans: number;           // selected-pair retransmissions (getStats)
+  outBitrate: number;        // availableOutgoingBitrate (getStats)
+  inBitrate: number;        // availableIncomingBitrate (getStats)
+  transportRttMs: number;    // selected-pair STUN RTT (getStats)
+  candidatePair: string;     // e.g. 'host:host (local)'
 }
 
 /**
@@ -265,11 +277,17 @@ async function main() {
   }
 
   const readTelemetry = (page: any) =>
-    page.evaluate(() => ({
-      s: (window as any).__NEXDROP_TELEMETRY__?.sender || null,
-      r: (window as any).__NEXDROP_TELEMETRY__?.receiver || null,
-      heap: (performance as any)?.memory?.usedJSHeapSize ?? 0,
-    }));
+    page.evaluate(() => {
+      const t = (window as any).__NEXDROP_TELEMETRY__;
+      return {
+        s: t?.sender || null,
+        r: t?.receiver || null,
+        // REAL getStats() transport truth (sampled by the session hook):
+        // selected-pair RTT, retransmissions, available bitrates, candidate type.
+        tr: t?.transport || null,
+        heap: (performance as any)?.memory?.usedJSHeapSize ?? 0,
+      };
+    });
 
   const results: Array<Record<string, unknown>> = [];
   let first = true;
@@ -344,6 +362,17 @@ async function main() {
               recvBytes: tb.r?.bytesReceived ?? 0, recvBps: tb.r?.throughputBps ?? 0,
               writeMs: tb.r?.writeMsEwma ?? 0,
               heapA: ta.heap, heapB: tb.heap,
+              sustainedBps: ta.s?.sustainedBps ?? 0,
+              rttVarMs: ta.s?.rttVarianceMs ?? 0,
+              inFlight: ta.s?.inFlightBytes ?? 0,
+              channels: ta.s?.activeChannels ?? 1,
+              windowBytes: ta.s?.windowBytes ?? 0,
+              queueDepth: tb.r?.queueDepth ?? 0,
+              retrans: ta.tr?.retransmissionsSent ?? -1,
+              outBitrate: ta.tr?.outgoingBitrateBps ?? -1,
+              inBitrate: tb.tr?.incomingBitrateBps ?? -1,
+              transportRttMs: ta.tr?.rttMs ?? -1,
+              candidatePair: (ta.tr?.transport || '?') + ':' + (ta.tr?.localCandidateType || '?') + '->' + (ta.tr?.remoteCandidateType || '?'),
             });
           } catch { /* page busy */ }
         }
@@ -403,9 +432,24 @@ async function main() {
       const peakRtt = rtts.reduce((m, x) => Math.max(m, x), 0);
       const maxBuf = samples.reduce((m, x) => Math.max(m, x.buffered), 0);
       const maxWin = samples.reduce((m, x) => Math.max(m, x.windowChunks), 0);
+      const maxWinBytesTotal = samples.reduce((m, x) => Math.max(m, x.windowBytes), 0);
       const chunkMin = samples.length ? samples.reduce((m, x) => Math.min(m, x.chunkSize || Infinity), Infinity) : 0;
       const chunkMax = samples.reduce((m, x) => Math.max(m, x.chunkSize), 0);
       const recvWriteMs = samples.length ? samples[samples.length - 1].writeMs : 0;
+      // v2.2 validation extras — all measured from the sample stream.
+      const sustainedBps = samples.length ? samples[samples.length - 1].sustainedBps : 0;
+      const rttVars = samples.map((x) => x.rttVarMs).filter((x) => x > 0);
+      const avgRttVar = rttVars.length ? rttVars.reduce((a, b) => a + b, 0) / rttVars.length : 0;
+      const maxInFlight = samples.reduce((m, x) => Math.max(m, x.inFlight), 0);
+      const channelsSeen = [...new Set(samples.map((x) => x.channels))].sort((a, b) => a - b);
+      const maxQueue = samples.reduce((m, x) => Math.max(m, x.queueDepth), 0);
+      const finalRetrans = samples.length ? samples[samples.length - 1].retrans : -1;
+      const maxOutBitrate = samples.reduce((m, x) => Math.max(m, x.outBitrate), 0);
+      const maxInBitrate = samples.reduce((m, x) => Math.max(m, x.inBitrate), 0);
+      const pairCounts: Record<string, number> = {};
+      for (const x of samples) pairCounts[x.candidatePair] = (pairCounts[x.candidatePair] || 0) + 1;
+      const candidatePair = Object.entries(pairCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '?';
+      const maxTransportRtt = samples.reduce((m, x) => Math.max(m, x.transportRttMs), 0);
       const peakHeapA = samples.reduce((m, x) => Math.max(m, x.heapA), 0);
       const peakHeapB = samples.reduce((m, x) => Math.max(m, x.heapB), 0);
       const stalls = samples.length ? samples[samples.length - 1].stalls : 0;
@@ -423,6 +467,17 @@ async function main() {
         receiverWriteMs: +recvWriteMs.toFixed(1),
         stalls, pauseResume: pausedResumed, shaVerified,
         peakHeapMB_A: +(peakHeapA / 1048576).toFixed(0), peakHeapMB_B: +(peakHeapB / 1048576).toFixed(0),
+        sustainedMBps: +(sustainedBps / 1048576).toFixed(2),
+        avgRttVarianceMs: +avgRttVar.toFixed(1),
+        maxInFlightKB: Math.round(maxInFlight / 1024),
+        maxWindowBytes: maxWinBytesTotal,
+        channelsSeen,
+        maxRecvQueueDepth: maxQueue,
+        retransmissions: finalRetrans,
+        availOutgoingMbps: +(maxOutBitrate / 1e6).toFixed(1),
+        availIncomingMbps: +(maxInBitrate / 1e6).toFixed(1),
+        candidatePair,
+        maxTransportRttMs: +maxTransportRtt.toFixed(1),
       };
       results.push(r);
       console.log('[BENCH] ' + JSON.stringify(r));
