@@ -28,6 +28,9 @@ check(sendFlowReducer('auto_pairing', 'CANCEL'), 'cancelled', 'explicit connecti
 check(sendFlowState('cancelled', 'idle', [file]), 'cancelled', 'queued file stays visible after cancellation');
 check(file.status, 'queued', 'projection never mutates the real queue');
 check(sendFlowReducer('cancelled', 'QUEUE'), 'file_queued', 'retry explicitly re-arms pairing');
+check(sendFlowReducer('failed', 'CANCEL'), 'failed', "late auto-cancel never overwrites the truthful 'failed' verdict");
+check(sendFlowReducer('cancelled', 'FAIL'), 'cancelled', "a failed create resolving after user Cancel keeps the user's verdict");
+check(sendFlowReducer('file_queued', 'FAIL'), 'failed', 'ordinary failure still lands in failed');
 check(sendFlowState('auto_pairing', 'hosting', [file, { ...file, id: 'b' }]), 'waiting_for_peer', 'multiple files share the same pairing state');
 check(pairingInProgress('hosting'), true, 'active pairing must not be recreated');
 check(pairingInProgress('awaiting-accept'), true, 'receiver consent remains in existing session machine');

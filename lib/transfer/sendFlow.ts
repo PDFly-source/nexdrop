@@ -11,8 +11,13 @@ export function sendFlowReducer(state: SendIntentState, event: SendFlowEvent): S
     case 'SEND': return state === 'idle' ? 'send_intent' : state;
     case 'QUEUE': return 'file_queued';
     case 'PAIR': return 'auto_pairing';
-    case 'FAIL': return 'failed';
-    case 'CANCEL': return 'cancelled';
+    // FAIL and CANCEL are terminal: whichever lands first wins. This closes a
+    // real race — when a failed create resolves, its FAIL dispatch and the
+    // auto-cancel effect (branch "session went idle") can commit in either
+    // order; a late CANCEL must never overwrite the truthful 'failed' state
+    // (and vice versa: a user Cancel must not later show "Couldn't connect").
+    case 'FAIL': return state === 'cancelled' ? state : 'failed';
+    case 'CANCEL': return state === 'failed' ? state : 'cancelled';
   }
 }
 export const pairingInProgress = (session: SessionState) =>

@@ -32,6 +32,10 @@ import os from 'os';
 
 const PORT = 3999;
 const OUT_DIR = path.join(process.cwd(), 'out');
+/** Header badge is live (connected/transferring/verifying) — phase-driven,
+ *  never text-driven (the label contains the real peer name). */
+const PHASE_LIVE_SELECTOR =
+  '[data-connection-phase="connected"], [data-connection-phase="transferring"], [data-connection-phase="verifying"], [data-connection-phase="completed"]';
 const REQUIRE_CONNECTION = process.env.NEXDROP_E2E_REQUIRE_CONNECTION !== '0';
 
 const MIME: Record<string, string> = {
@@ -396,8 +400,8 @@ async function main() {
       await pageE.getByRole('button', { name: /scan answer qr/i }).click();
       await submitViaPaste(pageE, fAnswer);
       if (REQUIRE_CONNECTION) {
-        await pageE.waitForSelector('text=Connected', { timeout: 45000 });
-        await pageF.waitForSelector('text=Connected', { timeout: 45000 });
+        await pageE.waitForSelector(PHASE_LIVE_SELECTOR, { timeout: 45000 });
+        await pageF.waitForSelector(PHASE_LIVE_SELECTOR, { timeout: 45000 });
         check(true, 'manual fallback completes a REAL connection when signaling is down');
       } else {
         check(true, 'manual fallback validated through real SDP exchange (no ICE in sandbox)');
@@ -424,8 +428,8 @@ async function main() {
 
   console.log('[two-device e2e] waiting for REAL DataChannel connection on both devices');
   try {
-    await pageA.waitForSelector('text=Connected', { timeout: 45000 });
-    await pageB.waitForSelector('text=Connected', { timeout: 45000 });
+    await pageA.waitForSelector(PHASE_LIVE_SELECTOR, { timeout: 45000 });
+    await pageB.waitForSelector(PHASE_LIVE_SELECTOR, { timeout: 45000 });
   } catch {
     const dumpA = await pageA.evaluate(() => document.body.innerText.slice(0, 300));
     const dumpB = await pageB.evaluate(() => document.body.innerText.slice(0, 300));
