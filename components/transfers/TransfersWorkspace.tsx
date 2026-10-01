@@ -49,6 +49,8 @@ interface TransfersWorkspaceProps {
   onCancelTransfer: () => void;
   onClearHistory: () => void;
   onPromptConnect: () => void;
+  /** Wall-clock ms when the active pairing expires (null = none). */
+  pairingExpiresAt: number | null;
   onPreviewFile: (file: FileItem) => void;
 }
 
@@ -69,16 +71,20 @@ export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
   onCancelTransfer,
   onClearHistory,
   onPromptConnect,
+  pairingExpiresAt,
   onPreviewFile,
 }) => {
   // Mobile Send / Receive segmented toggle
   const [mobileTransferMode, setMobileTransferMode] = useState<'send' | 'receive'>('send');
+  // "Send another" pulses this counter to open the file chooser instantly.
+  const [sendAnotherSignal, setSendAnotherSignal] = useState(0);
 
   const activeItem = activeTransfer?.direction === 'outgoing'
     ? sendQueue.find(file => file.id === activeTransfer.id)
     : incomingFiles.find(file => file.id === activeTransfer?.id);
   const completionItem = activeTransfer ? { ...activeTransfer,
     integrityVerified: activeItem?.integrityVerified,
+    blobUrl: activeItem?.blobUrl,
     status: activeTransfer.status === 'completed' && activeItem?.integrityVerified !== true
       ? 'verifying' : activeTransfer.status,
   } : null;
@@ -89,6 +95,7 @@ export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
       <TransferCompleteBanner
         activeTransfer={completionItem}
         onNavigateHome={onNavigateHome}
+        onSendAnother={() => setSendAnotherSignal(n => n + 1)}
       />
 
       {/* Active Transfer (highlighted at top when running) */}
@@ -153,10 +160,14 @@ export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
             onFilesSelected={onFilesSelected}
             onRemoveItem={onRemoveItem}
             onClearCompleted={onClearCompleted}
+            openSignal={sendAnotherSignal}
           />
           {(sendQueue.length > 0 || sendFlowState === 'auto_pairing') && (
             <SendPairingSurface state={sendFlowState} offerQr={offerQr} error={pairingError}
               queuedCount={sendQueue.filter(f => f.status === 'queued').length}
+              fileSummary={(() => { const q = sendQueue.filter(f => f.status === 'queued');
+                return q.length ? { firstName: q[0].name, totalBytes: q.reduce((n, f) => n + f.size, 0), count: q.length } : null; })()}
+              expiresAt={pairingExpiresAt}
               onCancel={onCancelConnection} onRetry={onRetryConnection} onOpenDevices={onPromptConnect}
               onRemoveFiles={() => sendQueue.filter(f => f.status === 'queued').forEach(f => onRemoveItem(f.id))} />
           )}

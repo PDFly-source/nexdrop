@@ -130,6 +130,8 @@ export function useNexDropSession() {
   const [pairingError, setPairingError] = useState<PairingError | string | null>(null);
   /** 'signal' = one-scan automatic pairing; 'manual' = legacy code flow. */
   const [pairingMode, setPairingMode] = useState<'signal' | 'manual' | null>(null);
+  /** Wall-clock ms when the active pairing session expires (null = none). */
+  const [pairingExpiresAt, setPairingExpiresAt] = useState<number | null>(null);
   /** HOST-side signaling session (kept in a ref — never re-rendered). */
   const signalHostRef = useRef<{
     hostToken: string;
@@ -452,9 +454,11 @@ export function useNexDropSession() {
 
   const schedulePairingExpiry = useCallback((expiresAt = Date.now() + 10 * 60 * 1000) => {
     if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current);
+    setPairingExpiresAt(expiresAt);
     expiryTimerRef.current = setTimeout(() => {
       // Pairing payloads expire after 10 minutes
       cleanup();
+      setPairingExpiresAt(null);
       setPairingError('expired');
       setSessionState('failed');
     }, Math.max(0, expiresAt - Date.now()));
@@ -1156,6 +1160,7 @@ export function useNexDropSession() {
     createPairing,
     createPairingManual,
     pairingMode,
+    pairingExpiresAt,
     signalUnavailable,
     signalJoinerAccepted,
     joinRequestInfo,

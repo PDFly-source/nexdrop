@@ -57,13 +57,17 @@ async function main() {
     const a=await fresh(); const b=await fresh();
     let creates=0;
     a.on('request',req=>{if(req.url().includes('nexdropSignal') && req.postDataJSON()?.action==='create') creates++;});
-    await a.getByRole('button',{name:/^Send Pick files/}).click();
+    await a.getByRole('button',{name:/^Send Photos/}).click();
     check(await a.getByRole('tab',{name:'Send (0)'}).getAttribute('aria-selected')==='true','Home Send opens Transfers with Send active');
     await a.waitForTimeout(500);check(creates===0,'no pairing before file selection');
     await choose(a,['phase21-a.txt','phase21-b.txt','phase21-c.txt']);
     const code=await decodeQr(a);
     check(creates===1,'three real Files create exactly one live pairing');
-    check(await a.getByText('phase21-a.txt',{exact:true}).count()===1,'real filename appears in outbound queue');
+    check(await a.getByRole('heading',{name:'Ready to share',exact:true}).isVisible(),'sender QR screen: Ready to share');
+    check(await a.getByText('phase21-a.txt +2 more',{exact:false}).isVisible(),'receiver sees file name and count before accepting');
+    check(await a.getByText(/Expires in \d:\d\d/).isVisible(),'live expiry countdown on QR screen');
+    check(await a.getByRole('button',{name:'Copy pairing code'}).isVisible(),'Copy pairing code available');
+    check(await a.getByText('phase21-a.txt',{exact:true}).count()>=1,'real filename appears in outbound queue');
     check(await a.locator('[data-testid="send-pairing"] img').count()===1,'exactly one QR in Transfers without Devices navigation');
     check(await a.getByLabel('Next QR code').count()===0,'no QR carousel');
     check(await a.getByRole('button',{name:/scan answer/i}).count()===0,'no answer QR or sender scan-back');
@@ -89,11 +93,23 @@ async function main() {
       await a.waitForFunction(() => document.querySelector('[data-testid="send-pairing"]')?.getAttribute('data-state') === 'completed' && document.body.innerText.split('Verified by receiver').length >= 5, undefined, {timeout:60000});
       check(creates===1,'already-connected file auto-sends without a new pairing');
       check(await a.getByText('· Verified by receiver',{exact:true}).count()>=4,'already-connected transfer is SHA-256 verified');
+      await a.getByRole('button',{name:'Send another',exact:true}).waitFor({timeout:30000});
+      const chooserP=a.waitForEvent('filechooser');
+      await a.getByRole('button',{name:'Send another',exact:true}).click();
+      check(await (await chooserP) !== null,'Send another opens the system file chooser');
     } else console.log('  SKIPPED: real DataChannel, transfer, and SHA-256 assertions (sandbox SDP-only diagnostic)');
     await a.context().close();await b.context().close();
 
+    console.log('[send-first e2e] Home RECEIVE opens the QR scanner directly');
+    const r=await fresh();
+    await r.getByRole('button',{name:/^Receive/}).click();
+    await r.locator('#qr-paste').waitFor({timeout:10000});
+    check(true,'one Home tap opens the scanner without visiting Devices');
+    check(await r.getByRole('heading',{name:'Connect a device',exact:true}).isVisible()===false,'Devices panel not the surface for Home RECEIVE');
+    await r.context().close();
+
     console.log('[send-first e2e] cancellation, receiver decline, retry, and Devices regression');
-    const c=await fresh();await c.getByRole('button',{name:/^Send Pick files/}).click();await choose(c);
+    const c=await fresh();await c.getByRole('button',{name:/^Send Photos/}).click();await choose(c);
     const old=await decodeQr(c);
     await c.getByRole('button',{name:'Cancel connection',exact:true}).click();
     await c.getByText('Connection cancelled',{exact:true}).waitFor();
@@ -119,7 +135,7 @@ async function main() {
 
     console.log('[send-first e2e] fault injection: unavailable signaling');
     const error=await fresh();await error.route('**/functions/nexdropSignal',route=>route.abort());
-    await error.getByRole('button',{name:/^Send Pick files/}).click();await choose(error);
+    await error.getByRole('button',{name:/^Send Photos/}).click();await choose(error);
     await error.getByText("Couldn't connect",{exact:true}).waitFor();
     check(await error.getByRole('button',{name:'Try again',exact:true}).isVisible(),'real fetch failure exposes retry');
     check(await error.getByRole('button',{name:'Open Devices',exact:true}).isVisible(),'failure exposes Open Devices');
@@ -133,7 +149,7 @@ async function main() {
       const response=await route.fetch();const body=await response.json();body.expiresAt=Date.now()+2500;
       await route.fulfill({response,json:body});
     });
-    await expiry.getByRole('button',{name:/^Send Pick files/}).click();await choose(expiry);await decodeQr(expiry);
+    await expiry.getByRole('button',{name:/^Send Photos/}).click();await choose(expiry);await decodeQr(expiry);
     await expiry.getByText('Pairing expired',{exact:true}).waitFor({timeout:10000});
     check(await expiry.getByRole('button',{name:'Try again',exact:true}).isVisible(),'existing session TTL drives visible expiry and retry');
     check(await expiry.getByText('phase21.txt',{exact:true}).count()===1,'expiry retains queued file');
@@ -147,7 +163,7 @@ async function main() {
       const response=await route.fetch();await new Promise(resolve=>setTimeout(resolve,1500));
       await route.fulfill({response});finished=true;
     });
-    await race.getByRole('button',{name:/^Send Pick files/}).click();await choose(race);
+    await race.getByRole('button',{name:/^Send Photos/}).click();await choose(race);
     await race.getByRole('button',{name:'Cancel connection',exact:true}).click();
     await race.waitForTimeout(2500);
     check(finished,'delayed live session creation returned after cancel');

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   UploadCloud,
   File,
@@ -24,6 +24,8 @@ interface SendDropzoneProps {
   onFilesSelected: (files: FileList | File[]) => void;
   onRemoveItem: (id: string) => void;
   onClearCompleted: () => void;
+  /** Increment to open the file chooser programmatically ("Send another"). */
+  openSignal?: number;
 }
 
 export const SendDropzone: React.FC<SendDropzoneProps> = ({
@@ -32,8 +34,14 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
   onFilesSelected,
   onRemoveItem,
   onClearCompleted,
+  openSignal = 0,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // "Send another" opens the system file chooser immediately — no detour.
+  useEffect(() => {
+    if (openSignal > 0) fileInputRef.current?.click();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSignal]);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
   const handleDragOver = (e: React.DragEvent) => {

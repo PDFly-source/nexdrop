@@ -81,6 +81,7 @@ function NexDropMainContent() {
     createPairing,
     createPairingManual,
     pairingMode,
+    pairingExpiresAt,
     signalUnavailable,
     signalJoinerAccepted,
     joinRequestInfo,
@@ -152,6 +153,10 @@ function NexDropMainContent() {
     sessionState, sendQueue, addFiles: addFilesToSend, createPairing, disconnect,
   });
   const openSend = () => { sendFlow.beginSend(); setActiveTab('transfers'); };
+  // Home → RECEIVE opens the QR scanner directly (camera permission is
+  // only requested when the scanner opens). One tap, zero technical steps.
+  const [receiveScanTick, setReceiveScanTick] = useState(0);
+  const openReceive = () => { setActiveTab('devices'); setReceiveScanTick((t) => t + 1); };
 
   // Handle invite links: #join=<pairing code> loads the offer automatically
   useEffect(() => {
@@ -229,6 +234,7 @@ function NexDropMainContent() {
               onBeginSend={openSend}
               onOpenText={() => setIsClipboardOpen(true)}
               onNavigate={(tab) => setActiveTab(tab)}
+              onReceiveScan={openReceive}
             />
           )}
 
@@ -255,6 +261,7 @@ function NexDropMainContent() {
               onCancelTransfer={cancelActiveTransfer}
               onClearHistory={clearHistory}
               onPromptConnect={() => setActiveTab('devices')}
+              pairingExpiresAt={pairingExpiresAt}
               onPreviewFile={(file) => setPreviewFile(file)}
             />
           )}
@@ -274,6 +281,7 @@ function NexDropMainContent() {
               onCreatePairing={() => void createPairing()}
               onCreatePairingManual={() => void createPairingManual()}
               pairingMode={pairingMode}
+              receiveScanTick={receiveScanTick}
               signalUnavailable={signalUnavailable}
               signalJoinerAccepted={signalJoinerAccepted}
               joinRequestInfo={joinRequestInfo}

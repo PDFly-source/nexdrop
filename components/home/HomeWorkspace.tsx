@@ -15,7 +15,6 @@ import {
   ArrowDownLeft,
   FileCheck,
   ShieldCheck,
-  QrCode,
 } from 'lucide-react';
 import { LocalHistoryItem } from '@/types/transfer';
 import { SessionState } from '@/types/session';
@@ -34,6 +33,8 @@ interface HomeWorkspaceProps {
   /** Opens the Text & Clipboard sheet. */
   onOpenText: () => void;
   onNavigate: (tab: 'transfers' | 'devices' | 'settings') => void;
+  /** Home → RECEIVE: opens the QR scanner directly. */
+  onReceiveScan: () => void;
 }
 
 const QUICK_ACTIONS: {
@@ -60,6 +61,7 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   onOpenText,
   onBeginSend,
   onNavigate,
+  onReceiveScan,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingAcceptRef = useRef<string>('');
@@ -130,7 +132,10 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
             </span>
           </div>
 
-          <h2 className="mt-3 text-2xl sm:text-3xl font-semibold tracking-tight text-nd-text-primary text-balance animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <p className="mt-3 text-[10px] font-semibold tracking-[0.25em] text-nd-teal animate-in fade-in duration-500">
+            PRIVATE • DIRECT • FAST
+          </p>
+          <h2 className="mt-1.5 text-2xl sm:text-3xl font-semibold tracking-tight text-nd-text-primary text-balance animate-in fade-in slide-in-from-bottom-2 duration-500">
             Send directly.
             <br />
             <span className="text-nd-text-secondary">Keep it private.</span>
@@ -150,11 +155,11 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 <span>Send</span>
               </span>
               <span className="text-[10px] font-medium text-nd-bg-0/70">
-                Pick files &amp; send to peer
+                Photos, videos, files &amp; apps
               </span>
             </button>
             <button
-              onClick={() => onNavigate('devices')}
+              onClick={onReceiveScan}
               className="nd-press group flex flex-col items-center justify-center gap-1 rounded-xl border border-white/[0.12] bg-nd-surface px-5 py-3.5 text-sm font-semibold text-nd-text-primary hover:bg-nd-surface-elevated transition-colors min-h-[56px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal focus-visible:ring-offset-2 focus-visible:ring-offset-nd-bg-0"
             >
               <span className="flex items-center gap-2">
@@ -162,21 +167,11 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 <span>Receive</span>
               </span>
               <span className="text-[10px] font-medium text-nd-text-secondary">
-                Connect via QR pairing
+                Accept files from another device
               </span>
             </button>
           </div>
 
-          {/* Device pairing shortcut */}
-          {!isPaired && (
-            <button
-              onClick={() => onNavigate('devices')}
-              className="mt-4 inline-flex items-center gap-2 text-xs text-nd-teal-bright hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal rounded px-1 animate-in fade-in duration-700"
-            >
-              <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Connect a device — one-scan QR pairing</span>
-            </button>
-          )}
         </div>
       </section>
 

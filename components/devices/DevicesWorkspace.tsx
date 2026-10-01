@@ -20,6 +20,8 @@ interface DevicesWorkspaceProps {
   onCreatePairing: () => void;
   onCreatePairingManual: () => void;
   pairingMode: 'signal' | 'manual' | null;
+  /** Increments when the user taps RECEIVE on Home — auto-opens the scanner. */
+  receiveScanTick: number;
   signalUnavailable: boolean;
   signalJoinerAccepted: boolean;
   joinRequestInfo: { deviceName: string; platform: string | null } | null;

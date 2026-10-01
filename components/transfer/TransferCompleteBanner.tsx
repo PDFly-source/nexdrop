@@ -12,12 +12,16 @@ interface EngineTransferLike {
   status: string;
   integrityVerified?: boolean;
   hashVerified?: boolean;
+  /** Receiver object URL — enables [Open file] after verification. */
+  blobUrl?: string;
 }
 
 interface TransferCompleteBannerProps {
   /** The engine's active transfer — completion is read from its REAL status. */
   activeTransfer: EngineTransferLike | null;
   onNavigateHome: () => void;
+  /** Opens the system file chooser immediately ("Send another"). */
+  onSendAnother?: () => void;
 }
 
 /**
@@ -27,6 +31,7 @@ interface TransferCompleteBannerProps {
 export const TransferCompleteBanner: React.FC<TransferCompleteBannerProps> = ({
   activeTransfer,
   onNavigateHome,
+  onSendAnother,
 }) => {
   const [justCompleted, setJustCompleted] = useState<EngineTransferLike | null>(null);
   const dismiss = () => setJustCompleted(null);
@@ -59,7 +64,7 @@ export const TransferCompleteBanner: React.FC<TransferCompleteBannerProps> = ({
           the success surface; status stays semantic green. */}
       <span aria-hidden="true" className="absolute right-4 top-4 h-1.5 w-1.5 rounded-full bg-nd-coral/70" />
       <div className="flex items-start gap-3.5">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nd-success/10 border border-nd-success/30 text-nd-teal">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nd-success/10 border border-nd-success/30 text-nd-teal motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-50 motion-safe:duration-300">
           <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
         </span>
 
@@ -89,9 +94,25 @@ export const TransferCompleteBanner: React.FC<TransferCompleteBannerProps> = ({
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            {isOutgoing && onSendAnother && (
+              <button
+                onClick={onSendAnother}
+                className="rounded-lg bg-nd-teal px-3.5 py-2 text-xs font-semibold text-nd-bg-0 hover:bg-nd-teal-bright transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
+              >
+                Send another
+              </button>
+            )}
+            {!isOutgoing && justCompleted.blobUrl && (
+              <button
+                onClick={() => { if (justCompleted.blobUrl) window.open(justCompleted.blobUrl, '_blank', 'noopener'); }}
+                className="rounded-lg bg-nd-teal px-3.5 py-2 text-xs font-semibold text-nd-bg-0 hover:bg-nd-teal-bright transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
+              >
+                Open file
+              </button>
+            )}
             <button
               onClick={onNavigateHome}
-              className="rounded-lg bg-nd-teal px-3.5 py-2 text-xs font-semibold text-nd-bg-0 hover:bg-nd-teal-bright transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
+              className="rounded-lg border border-white/[0.1] bg-nd-surface px-3.5 py-2 text-xs font-medium text-nd-text-secondary hover:text-nd-text-primary hover:border-white/20 transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
             >
               Done
             </button>

@@ -31,6 +31,8 @@ import type { PairingQr } from '@/hooks/useNexDropSession';
 
 interface ConnectionStatusAreaProps {
   sessionState: SessionState;
+  /** Increments when the user taps RECEIVE on Home — auto-opens the scanner. */
+  receiveScanTick?: number;
   offerQr: PairingQr | null;
   answerQr: PairingQr | null;
   pairingError: PairingError | string | null;
@@ -100,7 +102,7 @@ function pairingErrorMessage(err: PairingError | string | null): string {
     case 'already-joined':
       return 'This pairing was already used by another device. Ask for a new pairing.';
     case 'unsupported-browser':
-      return 'This browser does not support WebRTC data channels. Try a modern browser like Chrome, Edge, Firefox or Safari.';
+      return 'This browser does not support direct connections. Try a modern browser like Chrome, Edge, Firefox or Safari.';
     default:
       return err || 'Something went wrong. Please start pairing again.';
   }
@@ -108,6 +110,7 @@ function pairingErrorMessage(err: PairingError | string | null): string {
 
 export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
   sessionState,
+  receiveScanTick = 0,
   offerQr,
   answerQr,
   pairingError,
@@ -276,6 +279,14 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
     setIsScannerOpen(true);
   };
 
+  // Home → RECEIVE: one tap opens the scanner directly. Camera permission is
+  // requested only at this moment (the modal requests it when it opens).
+  useEffect(() => {
+    if (!receiveScanTick) return;
+    if (sessionState === 'idle' || sessionState === 'disconnected') openScanner('offer');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [receiveScanTick]);
+
   const handleScanComplete = async (code: string) => {
     setIsScannerOpen(false);
     if (scannerPurpose === 'answer') {
@@ -330,7 +341,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                   {peerInfo?.name || 'Remote Device'}
                 </h2>
                 <span className="text-xs text-nd-text-secondary">
-                  {peerInfo?.platform || 'WebRTC Peer'}
+                  {peerInfo?.platform || 'Connected device'}
                 </span>
               </div>
             </div>
@@ -415,7 +426,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                 <span className="px-1.5 py-0.5 rounded bg-white/[0.06]">text</span>
               </div>
               <p className="text-[11px] text-nd-text-secondary/80 mt-1">
-                Direct device-to-device WebRTC. Files never touch any server.
+                Direct device-to-device connection. Files never touch any server.
               </p>
             </div>
           </div>
@@ -695,7 +706,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
         </dl>
 
         <p className="mt-3 text-[11px] text-nd-text-secondary leading-relaxed">
-          Accepting opens a direct WebRTC connection between these two devices. No files, keys or
+          Accepting opens a direct, encrypted connection between these two devices. No files, keys or
           history are ever sent to any server.
         </p>
 
@@ -859,9 +870,8 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
 
           <div className="flex-1 min-w-0 flex flex-col gap-2.5">
             <p className="text-xs text-nd-text-secondary">
-              This code is the technical fallback of local pairing — WebRTC needs the answer
-              returned to the sender, and with no signaling server the return trip goes
-              through this QR or the copied code.
+              This code is the manual fallback of local pairing — the connection reply
+              travels back through this QR or the copied code instead of the pairing service.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -921,8 +931,8 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                 Establishing the secure peer-to-peer link
               </h2>
               <p className="text-xs text-nd-text-secondary" aria-live="polite">
-                Checking peer… verifying the shared security code… negotiating a direct
-                WebRTC connection. This can take a few seconds.
+                Verifying the shared security code… establishing a direct
+                connection. This can take a few seconds.
               </p>
             </div>
           </div>
