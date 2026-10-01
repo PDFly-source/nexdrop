@@ -62,6 +62,23 @@ export interface SenderTelemetry {
   pumpSliceMs: number;
   pumpHashMs: number;
   pumpEncodeMs: number;
+  /** ---- v2.4 hash-pipeline telemetry (all measured) ---- */
+  /** Negotiated hash engine for this transfer: inline | merkle | worker. */
+  hashMode: 'inline' | 'merkle' | 'worker';
+  /** Engine-internal hash CPU time (ms): pipeline modes; equals the pump's
+   *  inline hash time in legacy mode. */
+  hashCpuMs: number;
+  /** hashCpuMs / elapsed-wall share (%, live). */
+  hashPctOfWall: number;
+  /** Per-stage p95 durations (ms) — the honest tail of the pump profile. */
+  stages: {
+    sliceP95Ms: number;
+    hashP95Ms: number;
+    encodeP95Ms: number;
+    sendP95Ms: number;
+    bufferWaitP95Ms: number;
+    ackWaitP95Ms: number;
+  };
   /** Measured window utilization (inFlight/window) at the last update. */
   windowUtilization: number;
   /** Final window-utilization summary (avg/p50/p95/min/max), present once complete. */

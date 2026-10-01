@@ -139,6 +139,8 @@ interface Sample {
   sliceP95Ms: number;
   encodeP95Ms: number;
   sendP95Ms: number;
+  bufferWaitP95Ms: number;
+  ackWaitP95Ms: number;
 }
 
 /**
@@ -424,9 +426,11 @@ async function main() {
               hashCpuMs: ta.s?.hashCpuMs ?? 0,
               hashPctOfWall: ta.s?.hashPctOfWall ?? 0,
               hashQueueLag: ta.s?.inFlightBytes ?? 0,
-              sliceP95Ms: ta.s?.stages?.slice?.p95Ms ?? 0,
-              encodeP95Ms: ta.s?.stages?.encode?.p95Ms ?? 0,
-              sendP95Ms: ta.s?.stages?.send?.p95Ms ?? 0,
+              sliceP95Ms: ta.s?.stages?.sliceP95Ms ?? 0,
+              encodeP95Ms: ta.s?.stages?.encodeP95Ms ?? 0,
+              sendP95Ms: ta.s?.stages?.sendP95Ms ?? 0,
+              bufferWaitP95Ms: ta.s?.stages?.bufferWaitP95Ms ?? 0,
+              ackWaitP95Ms: ta.s?.stages?.ackWaitP95Ms ?? 0,
             });
           } catch { /* page busy */ }
         }
@@ -572,6 +576,8 @@ async function main() {
         sliceP95Ms: +samples.reduce((m, x) => Math.max(m, x.sliceP95Ms), 0).toFixed(1),
         encodeP95Ms: +samples.reduce((m, x) => Math.max(m, x.encodeP95Ms), 0).toFixed(1),
         sendP95Ms: +samples.reduce((m, x) => Math.max(m, x.sendP95Ms), 0).toFixed(1),
+        bufferWaitP95Ms: +samples.reduce((m, x) => Math.max(m, x.bufferWaitP95Ms), 0).toFixed(1),
+        ackWaitP95Ms: +samples.reduce((m, x) => Math.max(m, x.ackWaitP95Ms), 0).toFixed(1),
         benchConfig: `mode=${hashMode} chunk=${chunkKb || 'auto'}KB ra=${readAhead || 1} ch=${forceChannels || 'auto'}`,
       };
       results.push(r);

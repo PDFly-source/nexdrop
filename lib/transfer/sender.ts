@@ -1072,6 +1072,25 @@ export class SenderEngine {
           rttVarianceMs: this.rttVarEwma,
           activeChannels: this.activeChannels.length,
           windowHighWaterBytes: this.windowHighWater,
+          // ---- v2.4 measured hash pipeline ----
+          hashMode: this.hashMode,
+          hashCpuMs: this.hashPipeline ? this.hashPipeline.hashCpuMs() : this.hashStats.totalMsLive,
+          hashPctOfWall:
+            this.startTime > 0
+              ? Math.round(
+                  ((this.hashPipeline ? this.hashPipeline.hashCpuMs() : this.hashStats.totalMsLive) /
+                    Math.max(1, Date.now() - this.startTime)) *
+                    1000
+                ) / 10
+              : 0,
+          stages: {
+            sliceP95Ms: this.sliceStats.summary().p95Ms,
+            hashP95Ms: this.hashStats.summary().p95Ms,
+            encodeP95Ms: this.encodeStats.summary().p95Ms,
+            sendP95Ms: this.sendStats.summary().p95Ms,
+            bufferWaitP95Ms: this.bufferWaitStats.summary().p95Ms,
+            ackWaitP95Ms: this.ackWaitStats.summary().p95Ms,
+          },
           ackWaitMs: this.ackWaitMs,
           ackAvgBytes: this.ackBytesEwma,
           pumpSliceMs: this.sliceMsEwma,
