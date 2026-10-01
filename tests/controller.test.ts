@@ -22,7 +22,7 @@
  */
 import assert from 'node:assert';
 import { SenderEngine } from '../lib/transfer/sender';
-import { TransferTimeline, collapseCurve } from '../lib/transfer/timeline';
+import { TransferTimeline, collapseCurve, firstChangingVariable } from '../lib/transfer/timeline';
 import { INITIAL_WINDOW_BYTES, MAX_WINDOW_BYTES, MIN_WINDOW_BYTES } from '../types/transfer';
 
 let passed = 0;
@@ -181,6 +181,26 @@ function internals(sender: SenderEngine): any {
 {
   const s = makeSender();
   ok(win(s) === INITIAL_WINDOW_BYTES, 'fast start: initial window unchanged (1 MiB)');
+}
+
+// ---- 9. first-changing-variable analysis (v2.1 forensics) ---------------
+{
+  // Fields: t, sent, acked, inFlight, window, chunk, buffered, rtt, minRtt, bps, stalls, ackLatency, writeMs, queueDepth
+  const idx = { bps: 9, rtt: 7, window: 4, buffered: 6, inFlight: 3, ackLatency: 11, writeMs: 12, queueDepth: 13 };
+  const row = (t: number, bps: number, window: number, inFlight: number, rtt: number): number[] =>
+    [t * 100, 0, 0, inFlight, window, 65536, 0, rtt, rtt, bps, 0, 100, 5, 0];
+  // Ramp at 1.6 MB/s for 2 s; window collapses FIRST at t=2.1 s; throughput falls at t=2.4 s.
+  const rows: number[][] = [];
+  for (let t = 0; t < 21; t++) rows.push(row(t, 1_600_000, 1_048_576, 1_048_576, 100));
+  for (let t = 21; t < 24; t++) rows.push(row(t, 1_600_000, 500_000, 500_000, 100)); // window moved first
+  for (let t = 24; t < 32; t++) rows.push(row(t, 300_000, 500_000, 500_000, 100)); // collapse
+  const changes = firstChangingVariable({ fields: [], rows, intervalMs: 100 }, idx);
+  ok(changes.length >= 1 && changes[0].kind === 'fall', 'analysis detects the throughput fall');
+  ok(changes[0].variable === 'window', 'analysis names the window as first-changing variable');
+  ok(Math.abs(changes[0].toBps - 300_000) < 1000, 'fall magnitude recorded from real samples');
+
+  const none = firstChangingVariable({ fields: [], rows: rows.slice(0, 10), intervalMs: 100 }, idx);
+  ok(none.length === 0, 'stable throughput reports no fall/rise');
 }
 
 console.log(`[controller] ${passed} checks passed`);

@@ -6,6 +6,7 @@
  * local history metadata.
  */
 
+import { noteTestEvent } from '../lib/devicetest/recorder';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SenderEngine, SenderProgress } from '@/lib/transfer/sender';
 import { ReceiverEngine, ReceiverProgress } from '@/lib/transfer/receiver';
@@ -123,6 +124,9 @@ export function useTransferEngine(
     receiverEngineRef.current = new ReceiverEngine({
       getCipher: () => cipherRef.current,
       onProgress: (p: ReceiverProgress) => {
+        if (p.status === 'paused') noteTestEvent('paused');
+        if (p.status === 'cancelled') noteTestEvent('cancelled');
+        if (p.status === 'transferring') noteTestEvent('resumed');
         setActiveTransfer({
           id: p.transferId,
           name: p.name,
@@ -369,6 +373,9 @@ export function useTransferEngine(
         maxMessageSize: peerManager.getMaxMessageSize(),
         cipher: cipherRef.current,
         onProgress: (p: SenderProgress) => {
+          if (p.status === 'paused') noteTestEvent('paused');
+          if (p.status === 'cancelled') noteTestEvent('cancelled');
+          if (p.status === 'transferring') noteTestEvent('resumed');
           console.debug('[nexdrop] sender progress:', p.transferId.slice(0, 8), p.status, p.percentage + '%');
           setActiveTransfer({
             id: p.transferId,

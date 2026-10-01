@@ -17,7 +17,7 @@
  * localStorage (local-first, per-device).
  */
 
-import { collapseCurve } from '../transfer/timeline';
+import { collapseCurve, firstChangingVariable } from '../transfer/timeline';
 import type {
   DeviceTestFileRecord,
   DeviceTestMeta,
@@ -50,6 +50,21 @@ function defaultRecords(): DeviceTestRecord[] {
     receiverTimeline: null,
     sustainedBps: null,
     peakSustainedBps: null,
+    minBps: null,
+    avgRttMs: null,
+    maxRttMs: null,
+    rttSampleSum: 0,
+    rttSampleCount: 0,
+    maxAckLatencyMs: null,
+    initialWindowBytes: null,
+    maxWindowBytes: null,
+    finalWindowBytes: null,
+    maxBufferedBytes: null,
+    lastWriteMsEwma: null,
+    maxWriteMs: null,
+    maxQueueDepth: null,
+    events: [],
+    lastWindowBytes: null,
     peakBps: 0,
     lastSampleBps: 0,
     lastBytes: 0,
@@ -247,6 +262,24 @@ export function onTestTransferVerified(transferId: string, match: boolean): void
   updateRecord(rec.caseId, { files, shaVerified });
 }
 
+/**
+ * Real flow-event recorder (pause / resume / cancel). Called from the
+ * transfer hook's progress handler — the Device Test report then shows
+ * whether the owner actually exercised the flow controls, with honest
+ * timestamps. 'resumed' is only recorded after a real 'paused'.
+ */
+export function noteTestEvent(kind: string): void {
+  if (typeof window === 'undefined') return;
+  const rec = armedRecord();
+  if (!rec) return;
+  if (kind === 'resumed' && rec.events[rec.events.length - 1]?.kind !== 'paused') return;
+  const last = rec.events[rec.events.length - 1];
+  if (last && last.kind === kind && Date.now() - last.at < 1000) return;
+  rec.events.push({ at: Date.now(), kind });
+  if (rec.events.length > 50) rec.events.shift();
+  updateRecord(rec.caseId, { events: [...rec.events] });
+}
+
 function startSampler(): void {
   if (sampler !== null || typeof window === 'undefined') return;
   sampler = setInterval(sampleDeviceTestNow, SAMPLE_MS);
@@ -274,10 +307,32 @@ export function sampleDeviceTestNow(): void {
     ? `${transport.localCandidateType}↔${transport.remoteCandidateType}`
     : null;
   const sustained = sender?.sustainedBps ?? null;
+  const rttSample = transport?.rttMs ?? null;
+  const rttSum = rec.rttSampleSum + (rttSample ?? 0);
+  const rttCount = rec.rttSampleCount + (rttSample != null ? 1 : 0);
+  const windowBytes = sender?.windowBytes ?? null;
+  const ackLat = sender?.ackLatencyMs ?? null;
+  const buffered = sender?.bufferedAmount ?? null;
+  const writeMs = receiver?.writeMsEwma ?? null;
+  const queueDepth = receiver?.maxQueueDepth ?? null;
   const patch: Partial<DeviceTestRecord> = {
     peakBps: Math.max(rec.peakBps, bps || 0),
     sustainedBps: sustained,
     peakSustainedBps: Math.max(rec.peakSustainedBps ?? 0, sustained ?? 0) || null,
+    minBps: bytes > 0 && bps > 0 ? (rec.minBps == null ? bps : Math.min(rec.minBps, bps)) : rec.minBps,
+    rttSampleSum: rttSum,
+    rttSampleCount: rttCount,
+    avgRttMs: rttCount > 0 ? rttSum / rttCount : null,
+    maxRttMs: rttSample != null ? Math.max(rec.maxRttMs ?? 0, rttSample) || null : rec.maxRttMs,
+    maxAckLatencyMs: ackLat != null ? Math.max(rec.maxAckLatencyMs ?? 0, ackLat) || null : rec.maxAckLatencyMs,
+    initialWindowBytes: rec.initialWindowBytes ?? (windowBytes != null ? windowBytes : null),
+    maxWindowBytes: windowBytes != null ? Math.max(rec.maxWindowBytes ?? 0, windowBytes) || null : rec.maxWindowBytes,
+    finalWindowBytes: windowBytes ?? rec.finalWindowBytes,
+    lastWindowBytes: windowBytes ?? rec.lastWindowBytes,
+    maxBufferedBytes: buffered != null ? Math.max(rec.maxBufferedBytes ?? 0, buffered) || null : rec.maxBufferedBytes,
+    lastWriteMsEwma: writeMs ?? rec.lastWriteMsEwma,
+    maxWriteMs: writeMs != null ? Math.max(rec.maxWriteMs ?? 0, writeMs) || null : rec.maxWriteMs,
+    maxQueueDepth: queueDepth != null ? Math.max(rec.maxQueueDepth ?? 0, queueDepth) : rec.maxQueueDepth,
     lastSampleBps: bps || 0,
     lastBytes: Math.max(rec.lastBytes, bytes),
     transferStartedAt: rec.transferStartedAt ?? (bytes > 0 ? Date.now() : null),
@@ -392,6 +447,18 @@ export function buildDeviceTestReport(): string {
     `Peak: ${measured && measured.peakBps > 0 ? fmtMBps(measured.peakBps) : 'not measured'}`,
     `Sustained (final whole-transfer avg): ${measured?.sustainedBps ? fmtMBps(measured.sustainedBps) : 'not measured'}`,
     `Peak sustained: ${measured?.peakSustainedBps ? fmtMBps(measured.peakSustainedBps) : 'not measured'}`,
+    `Min sampled throughput: ${measured?.minBps ? fmtMBps(measured.minBps) : 'not sampled'}`,
+    `RTT avg/max: ${measured?.avgRttMs != null ? `${Math.round(measured.avgRttMs)} ms / ${Math.round(measured.maxRttMs ?? 0)} ms` : 'not sampled'}`,
+    `Window evolution: ${measured?.initialWindowBytes && measured?.maxWindowBytes ? `${fmtKiB(measured.initialWindowBytes)} → ${fmtKiB(measured.maxWindowBytes)} (max) → ${fmtKiB(measured.finalWindowBytes ?? 0)} (final)` : 'not sampled'}`,
+    `Max bufferedAmount: ${fmtMB(measured?.maxBufferedBytes)}`,
+    `ACK latency last/max: ${measured?.ackLatencyMs != null ? `${Math.round(measured.ackLatencyMs)} ms / ${Math.round(measured.maxAckLatencyMs ?? 0)} ms` : 'not sampled'}`,
+    `Receiver write EWMA last/max: ${measured?.lastWriteMsEwma != null ? `${measured.lastWriteMsEwma.toFixed(1)} ms / ${(measured.maxWriteMs ?? 0).toFixed(1)} ms` : 'not sampled'}`,
+    `Receiver max queue depth: ${measured?.maxQueueDepth != null ? String(measured.maxQueueDepth) : 'not sampled'}`,
+    `Flow controls exercised: ${
+      measured && measured.events.length > 0
+        ? measured.events.map((e) => `${e.kind} @ +${((e.at - (measured.transferStartedAt ?? e.at)) / 1000).toFixed(1)}s`).join(', ')
+        : 'none recorded (pause/resume/cancel not exercised this run)'
+    }`,
     `Transferred: ${fmtBytes(transferred)} / ${fmtBytes(transferredTotal)}`,
     `Stalls: ${measured?.lastStalls != null ? String(measured.lastStalls) : 'not sampled'}`,
     `Path network: ${measured?.networkType ?? 'not exposed by browser (candidate networkType)'} — 5G/Wi-Fi status icons are NOT WebRTC path evidence`,
@@ -416,6 +483,25 @@ export function buildDeviceTestReport(): string {
         t: 0, bps: 9, rtt: 7, window: 4, buffered: 6, inFlight: 3,
       })
     : [];
+  // FIRST-CHANGING VARIABLE (automatic, measured): for every significant
+  // throughput fall/rise in the timeline, the pipeline variable that
+  // left its stability band FIRST names the cause — never guessed.
+  const firstChanges = curveRec?.senderTimeline
+    ? firstChangingVariable(curveRec.senderTimeline, {
+        bps: 9, rtt: 7, window: 4, buffered: 6, inFlight: 3,
+        ackLatency: 11, writeMs: 12, queueDepth: 13,
+      })
+    : [];
+  const firstChangeLines = [
+    'FIRST-CHANGING VARIABLE (automatic analysis of the collapse timeline):',
+    ...(firstChanges.length === 0
+      ? ['  no significant throughput fall/rise detected (or no timeline)']
+      : firstChanges.map(
+          (c) =>
+            `  t=${c.tSec.toFixed(1).padStart(6)}s  ${c.kind.toUpperCase().padEnd(4)} ${fmtMBps(c.fromBps).padStart(10)} → ${fmtMBps(c.toBps).padStart(10)}  first: ${c.variable}${c.variable !== 'none-detected' ? ` (${(c.from / 1024).toFixed(0)}→${(c.to / 1024).toFixed(0)} KB)` : ''}`,
+        )),
+  ];
+
   const curveLines = [
     'THROUGHPUT COLLAPSE TIMELINE (largest measured transfer, 10 Hz sender telemetry):',
     ...(curve.length === 0
@@ -453,6 +539,8 @@ export function buildDeviceTestReport(): string {
     `Network: ${meta.network || '— (not entered)'}`,
     `Connection: ${connLabel}`,
     ...evidenceLines,
+    '',
+    ...firstChangeLines,
     '',
     ...curveLines,
     '',

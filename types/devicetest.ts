@@ -83,6 +83,30 @@ export interface DeviceTestRecord {
   sustainedBps: number | null;
   /** Peak of the sustained metric across samples. */
   peakSustainedBps: number | null;
+  /** Minimum sampled throughput while bytes were moving (collapse floor). */
+  minBps: number | null;
+  /** RTT average/max across real getStats samples (ms). */
+  avgRttMs: number | null;
+  maxRttMs: number | null;
+  rttSampleSum: number;
+  rttSampleCount: number;
+  /** Sender ACK-latency EWMA max across samples (ms). */
+  maxAckLatencyMs: number | null;
+  /** Window evolution: first / max / last sampled window bytes. */
+  initialWindowBytes: number | null;
+  maxWindowBytes: number | null;
+  finalWindowBytes: number | null;
+  /** Max SCTP bufferedAmount across samples. */
+  maxBufferedBytes: number | null;
+  /** Receiver write EWMA last/max (ms). */
+  lastWriteMsEwma: number | null;
+  maxWriteMs: number | null;
+  /** Receiver max queue depth across samples. */
+  maxQueueDepth: number | null;
+  /** Real owner-exercised flow events: pause / resume / cancel. */
+  events: Array<{ at: number; kind: string }>;
+  /** Last sampled sender window bytes (finalWindow convenience). */
+  lastWindowBytes: number | null;
   result: 'passed' | 'failed' | null;
   notes: string;
 }
