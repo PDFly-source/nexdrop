@@ -80,6 +80,7 @@ function NexDropMainContent() {
     soundEnabled,
     vibrationEnabled,
     rttMs,
+    transportKind,
     peerManager,
     cipher,
     createPairing,
@@ -290,6 +291,7 @@ function NexDropMainContent() {
               sasCode={sasCode}
               isSecurityVerified={isSecurityVerified}
               rttMs={rttMs}
+              transportKind={transportKind}
               onCreatePairing={() => void createPairing()}
               onCreatePairingManual={() => void createPairingManual()}
               pairingMode={pairingMode}

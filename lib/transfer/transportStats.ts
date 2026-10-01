@@ -27,6 +27,12 @@ export interface TransportStats {
   bytesReceived: number | null;
   /** candidate-pair availableOutgoingBitrate in bits/s (estimate, if exposed) */
   outgoingBitrateBps: number | null;
+  /** candidate-pair availableIncomingBitrate in bits/s (estimate, if exposed) */
+  incomingBitrateBps: number | null;
+  /** selected pair network protocol ('udp'|'tcp'), from the candidates */
+  protocol: string | null;
+  /** negotiated SCTP maxMessageSize (pc.sctp.maxMessageSize), when readable */
+  sctpMaxMessageSize: number | null;
   /** dtls transport state */
   dtlsState: string | null;
   /** sctp transport state */
@@ -42,6 +48,7 @@ interface CandidateLike {
   address?: string;
   relayProtocol?: string;
   url?: string;
+  protocol?: string;
 }
 interface PairLike {
   type?: string;
@@ -54,6 +61,7 @@ interface PairLike {
   bytesSent?: number;
   bytesReceived?: number;
   availableOutgoingBitrate?: number;
+  availableIncomingBitrate?: number;
 }
 
 export function transportLabel(t: TransportStats | null | undefined): string {
@@ -118,11 +126,25 @@ export async function sampleTransportStats(
         : 'direct'; // host/srflx/prflx candidates reach the peer directly
   }
 
+  // Negotiated SCTP max message size — read from the live object graph,
+  // never assumed (browsers negotiate 16 KiB..256 KiB depending on peer).
+  let sctpMaxMessageSize: number | null = null;
+  try {
+    const sctp = (pc as unknown as { sctp?: { maxMessageSize?: number } }).sctp;
+    if (sctp && typeof sctp.maxMessageSize === 'number' && sctp.maxMessageSize > 0) {
+      sctpMaxMessageSize = sctp.maxMessageSize;
+    }
+  } catch {
+    sctpMaxMessageSize = null;
+  }
+
   return {
     connected: !!(bestPair && (bestPair.state === 'succeeded' || bestPair.selected === true)),
     transport,
     localCandidateType: localType,
     remoteCandidateType: remoteType,
+    protocol: local?.protocol || remote?.protocol || null,
+    sctpMaxMessageSize,
     rttMs:
       typeof bestPair?.currentRoundTripTime === 'number' && bestPair.currentRoundTripTime >= 0
         ? Math.round(bestPair.currentRoundTripTime * 1000)
@@ -132,6 +154,10 @@ export async function sampleTransportStats(
     outgoingBitrateBps:
       typeof bestPair?.availableOutgoingBitrate === 'number'
         ? bestPair.availableOutgoingBitrate
+        : null,
+    incomingBitrateBps:
+      typeof bestPair?.availableIncomingBitrate === 'number'
+        ? bestPair.availableIncomingBitrate
         : null,
     dtlsState,
     sctpState,

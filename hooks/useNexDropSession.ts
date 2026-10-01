@@ -170,6 +170,10 @@ export function useNexDropSession() {
   /** HOST signal mode: request card shown once (notification guard). */
   const joinRequestShownRef = useRef(false);
   const [rttMs, setRttMs] = useState<number | null>(null);
+  /** REAL selected ICE path from getStats (1 Hz): 'relay' when a TURN relay
+   *  carries the traffic, 'direct' for host/srflx paths. The UI must never
+   *  claim P2P for a relayed connection. */
+  const [transportKind, setTransportKind] = useState<'direct' | 'relay' | 'unknown'>('unknown');
   const [activePeerManager, setActivePeerManager] = useState<PeerConnectionManager | null>(null);
 
   // Messages & Clipboard
@@ -301,6 +305,7 @@ export function useNexDropSession() {
     setAnswerQr(null);
     setPairingError(null);
     setRttMs(null);
+    setTransportKind('unknown');
     setSignalJoinerAccepted(false);
     setJoinRequestInfo(null);
     joinerBuildingRef.current = false;
@@ -1133,7 +1138,10 @@ export function useNexDropSession() {
     const tick = async () => {
       try {
         const stats = await sampleTransportStats(activePeerManager.getPeerConnection());
-        if (!stopped && stats) updateTransportTelemetry(stats);
+        if (!stopped && stats) {
+          updateTransportTelemetry(stats);
+          setTransportKind((prev) => (prev === stats.transport ? prev : stats.transport));
+        }
         if (!stopped)
           updateDataChannelState(activePeerManager.getChannel('file')?.readyState ?? null);
       } catch {
@@ -1248,6 +1256,7 @@ export function useNexDropSession() {
     soundEnabled,
     vibrationEnabled,
     rttMs,
+    transportKind,
     peerManager: activePeerManager,
     cipher: cipherRef,
     createPairing,

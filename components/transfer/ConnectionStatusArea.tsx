@@ -40,6 +40,8 @@ interface ConnectionStatusAreaProps {
   sasCode: string | null;
   isSecurityVerified: boolean;
   rttMs: number | null;
+  /** REAL selected ICE path from getStats — never a decorative label. */
+  transportKind: 'direct' | 'relay' | 'unknown';
   onCreatePairing: () => void;
   onCreatePairingManual: () => void;
   pairingMode: 'signal' | 'manual' | null;
@@ -118,6 +120,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
   sasCode,
   isSecurityVerified,
   rttMs,
+  transportKind,
   onCreatePairing,
   onCreatePairingManual,
   pairingMode,
@@ -336,7 +339,11 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                 <span className="text-white/45">·</span>
                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-nd-success/90 bg-nd-success/10 px-2 py-0.5 rounded-full border border-nd-success/20">
                   <Lock className="w-2.5 h-2.5" aria-hidden="true" />
-                  P2P · E2E Encrypted
+                  {transportKind === 'relay'
+                    ? 'Relay · E2E Encrypted'
+                    : transportKind === 'direct'
+                      ? 'P2P · E2E Encrypted'
+                      : 'E2E Encrypted'}
                 </span>
               </div>
 
@@ -651,7 +658,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
           ) : null}
           <div className="flex items-center justify-between gap-3">
             <span className="text-nd-text-secondary">Connection</span>
-            <span className="font-medium text-nd-text-primary text-right">Direct peer-to-peer</span>
+            <span className="font-medium text-nd-text-primary text-right">WebRTC peer connection</span>
           </div>
         </div>
 
@@ -701,7 +708,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
           ) : null}
           <div className="flex items-center justify-between gap-3">
             <dt className="text-nd-text-secondary">Connection</dt>
-            <dd className="font-medium text-nd-text-primary text-right">Direct peer connection</dd>
+            <dd className="font-medium text-nd-text-primary text-right">WebRTC peer connection</dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-nd-text-secondary">Security</dt>
@@ -775,7 +782,7 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
           ) : null}
           <div className="flex items-center justify-between gap-3">
             <dt className="text-nd-text-secondary">Connection</dt>
-            <dd className="font-medium text-nd-text-primary text-right">Direct peer-to-peer</dd>
+            <dd className="font-medium text-nd-text-primary text-right">WebRTC peer connection</dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-nd-text-secondary">Security</dt>

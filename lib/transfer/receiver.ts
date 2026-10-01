@@ -36,6 +36,12 @@ import { decodeBinaryChunk, simpleStringHash } from './protocol';
 import { base64UrlToBytes, ChunkCipher, decryptChunk, IncrementalSha256 } from '@/lib/crypto';
 import { updateReceiverTelemetry } from './telemetry';
 
+/** Coalesced storage-write batch target (bytes). Bounded memory: at most
+ *  ~this many queued plaintext bytes join one storage call. Larger batches
+ *  amortize the per-call storage latency; a single queued chunk still
+ *  writes immediately so slow links keep their prompt ACK cadence. */
+const WRITE_BATCH_TARGET_BYTES = 1024 * 1024; // 1 MiB
+
 export interface ReceiverProgress {
   transferId: string;
   name: string;
@@ -100,7 +106,7 @@ export class ReceiverEngine {
   private isCompleted = false;
   private callbacks: ReceiverCallbacks;
 
-  // ---- ordered, overlapped write pipeline ----
+  // ---- ordered, overlapped write pipeline (coalesced storage writes) ----
   /** Chunks (and FILE_END) that arrive while the storage writer is still
    *  initializing. startTransfer() creates the writer asynchronously, and on
    *  a fast link the whole in-flight window can land before that promise
@@ -110,16 +116,21 @@ export class ReceiverEngine {
   /** Decoded-order queue feeding the single drain loop. */
   private processQueue: ArrayBuffer[] = [];
   private draining = false;
-  /** Chained, strictly-ordered write pipeline. */
-  private writeChain: Promise<void> = Promise.resolve();
-  /** Writes chained but not yet resolved (real queue-depth feedback). */
+  /** Decoded, in-order chunks waiting for a durable storage write. */
+  private writeQueue: Array<{ payload: ArrayBuffer; index: number }> = [];
+  /** The single coalescing writer loop is running. */
+  private writing = false;
+  /** Chunks accepted but not yet durably written (real queue-depth feedback). */
   private writesQueued = 0;
+  /** Largest number of chunks coalesced into one storage call (diagnostics). */
+  private maxWriteBatch = 0;
 
   constructor(callbacks: ReceiverCallbacks) {
     this.callbacks = callbacks;
   }
 
-  /** Real receiver queue depth: everything accepted but not yet durably written. */
+  /** Real receiver queue depth: everything accepted but not yet durably
+   *  written (writer-queue chunks are counted by the writesQueued counter). */
   private queueDepth(): number {
     return this.pendingChunks.length + this.processQueue.length + this.writesQueued;
   }
@@ -175,8 +186,10 @@ export class ReceiverEngine {
     this.isCompleted = false;
     this.lastAckAt = Date.now();
     this.acksSent = 0;
-    this.writeChain = Promise.resolve();
+    this.writeQueue = [];
+    this.writing = false;
     this.writesQueued = 0;
+    this.maxWriteBatch = 0;
     this.processQueue = [];
     this.hasher = new IncrementalSha256();
     this.startTime = Date.now();
@@ -315,46 +328,13 @@ export class ReceiverEngine {
     this.bytesReceived += payload.byteLength;
     this.receivedChunksCount++;
 
-    // Chain the write — strictly in arrival order, never blocking the
-    // decrypt of the next chunk. The ACK for this chunk fires after the
-    // write is durable, at an adaptive cadence.
+    // Enqueue for the single ordered writer loop — never blocking the
+    // decrypt of the next chunk. The ACK for these bytes fires only after
+    // the durable write completes (see writerLoop).
     const chunkIndex = decoded.chunkIndex;
-    const toWrite = payload;
-    const isFinalChunk = chunkIndex === this.totalChunks - 1;
-    const isBatchBoundary = (chunkIndex + 1) % ACK_BATCH === 0;
     this.writesQueued++;
-    this.writeChain = this.writeChain.then(async () => {
-      if (this.isCancelled || this.isCompleted || !this.writer) return;
-      const wStart = Date.now();
-      await this.writer!.writeChunk(toWrite, chunkIndex);
-      const wSample = Date.now() - wStart;
-      this.writeMsEwma = this.writeMsEwma > 0 ? this.writeMsEwma * 0.8 + wSample * 0.2 : wSample;
-      this.writesQueued--;
-      this.writesQueued = Math.max(0, this.writesQueued);
-
-      // Adaptive ACK policy: batch boundary OR the timer expired OR final
-      // chunk OR our own queue is backing up (tell the sender NOW so it
-      // shrinks the window) — one small control frame per batch.
-      const queueNow = this.queueDepth();
-      if (queueNow > this.maxQueueDepthSeen) this.maxQueueDepthSeen = queueNow;
-      const timerDue = Date.now() - this.lastAckAt >= ACK_MAX_DELAY_MS;
-      if (isFinalChunk || isBatchBoundary || timerDue || queueNow > 8) {
-        this.lastAckAt = Date.now();
-        this.acksSent++;
-        this.callbacks.sendControlMessage({
-          type: 'ACK',
-          transferId: this.transferId,
-          index: chunkIndex,
-          w: Math.round(this.writeMsEwma * 10) / 10,
-          q: queueNow,
-        });
-      }
-    }).catch((err: any) => {
-      this.writesQueued = Math.max(0, this.writesQueued - 1);
-      if (this.isCancelled || this.isCompleted) return;
-      console.error('Failed writing received data:', err);
-      this.callbacks.onError(this.transferId, `Failed writing received data: ${err?.message || err}`);
-    });
+    this.writeQueue.push({ payload, index: chunkIndex });
+    void this.writerLoop();
 
     // Real speed & ETA from actual counters, throttled to 100ms
     const now = Date.now();
@@ -396,12 +376,110 @@ export class ReceiverEngine {
     }
   }
 
+  /**
+   * Single ordered, COALESCING writer loop.
+   *
+   * Measured evidence (CI two-device benchmark): per-chunk storage calls
+   * cost ~4-9 ms of async latency EACH — not raw disk bandwidth — and that
+   * call overhead was the real receiver-side throughput ceiling (64-128 KiB
+   * chunks / 8.7 ms ≈ 7-15 MB/s). Consecutive queued chunks are therefore
+   * coalesced into ONE storage call (bounded at WRITE_BATCH_TARGET_BYTES),
+   * which amortizes the per-call latency across the whole batch. When the
+   * queue holds a single chunk it is written immediately, so slow links
+   * keep the same prompt ACK cadence as before.
+   */
+  private async writerLoop(): Promise<void> {
+    if (this.writing) return;
+    this.writing = true;
+    try {
+      while (this.writeQueue.length > 0) {
+        if (this.isCancelled || this.isCompleted || !this.writer) {
+          this.writeQueue = [];
+          return;
+        }
+
+        // Gather consecutive chunks into one bounded batch.
+        const batch = [this.writeQueue.shift()!];
+        let batchBytes = batch[0].payload.byteLength;
+        while (
+          this.writeQueue.length > 0 &&
+          batchBytes < WRITE_BATCH_TARGET_BYTES &&
+          this.writeQueue[0].index === batch[batch.length - 1].index + 1
+        ) {
+          const next = this.writeQueue.shift()!;
+          batchBytes += next.payload.byteLength;
+          batch.push(next);
+        }
+        if (batch.length > this.maxWriteBatch) this.maxWriteBatch = batch.length;
+        const lastIndex = batch[batch.length - 1].index;
+
+        const wStart = Date.now();
+        try {
+          if (batch.length === 1) {
+            await this.writer.writeChunk(batch[0].payload, batch[0].index);
+          } else {
+            await this.writer.writeChunks(
+              batch.map((b) => b.payload),
+              batch[0].index
+            );
+          }
+        } catch (err: any) {
+          // The whole batch is abandoned — the stream cannot continue past
+          // a hole. Report the honest failure.
+          this.writeQueue = [];
+          this.writesQueued = 0;
+          if (this.isCancelled || this.isCompleted) return;
+          console.error('Failed writing received data:', err);
+          this.callbacks.onError(
+            this.transferId,
+            `Failed writing received data: ${err?.message || err}`
+          );
+          return;
+        }
+        // Per-chunk write cost, amortized across the batch.
+        const wSample = (Date.now() - wStart) / batch.length;
+        this.writeMsEwma = this.writeMsEwma > 0 ? this.writeMsEwma * 0.8 + wSample * 0.2 : wSample;
+        this.writesQueued = Math.max(0, this.writesQueued - batch.length);
+
+        // Adaptive ACK policy (unchanged semantics, evaluated per durable
+        // batch): batch boundary OR the timer expired OR final chunk OR our
+        // own queue is backing up (tell the sender NOW so it shrinks its
+        // window) — one small control frame covering the whole batch.
+        const queueNow = this.queueDepth();
+        if (queueNow > this.maxQueueDepthSeen) this.maxQueueDepthSeen = queueNow;
+        const timerDue = Date.now() - this.lastAckAt >= ACK_MAX_DELAY_MS;
+        const isFinalChunk = lastIndex === this.totalChunks - 1;
+        const isBatchBoundary = (lastIndex + 1) % ACK_BATCH === 0;
+        if (isFinalChunk || isBatchBoundary || timerDue || queueNow > 8) {
+          this.lastAckAt = Date.now();
+          this.acksSent++;
+          this.callbacks.sendControlMessage({
+            type: 'ACK',
+            transferId: this.transferId,
+            index: lastIndex,
+            w: Math.round(this.writeMsEwma * 10) / 10,
+            q: queueNow,
+          });
+        }
+      }
+    } finally {
+      this.writing = false;
+    }
+  }
+
   /** Wait until the pipeline is fully drained (bounded; used by finishTransfer). */
   private async awaitSettled(timeoutMs = 60000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (this.isCancelled || this.isCompleted) return;
-      if (!this.draining && this.processQueue.length === 0 && this.writesQueued === 0) return;
+      if (
+        !this.draining &&
+        this.processQueue.length === 0 &&
+        this.writeQueue.length === 0 &&
+        !this.writing
+      ) {
+        return;
+      }
       await new Promise((r) => setTimeout(r, 20));
     }
   }
@@ -468,7 +546,8 @@ export class ReceiverEngine {
       this.ivPrefix = null;
       if (this.writer) {
         try {
-          this.writeChain = this.writeChain.catch(() => undefined);
+          this.writeQueue = [];
+          this.writesQueued = 0;
           await this.writer.abort();
         } catch {
           // best-effort cleanup
@@ -542,8 +621,10 @@ export class ReceiverEngine {
     const id = this.transferId;
     this.transferId = '';
     if (this.writer) {
-      // Swallow in-flight pipeline writes — the abort below invalidates them.
-      this.writeChain = this.writeChain.catch(() => undefined);
+      // Drop queued writes — the abort below invalidates them; the writer
+      // loop itself checks isCancelled and abandons its batch.
+      this.writeQueue = [];
+      this.writesQueued = 0;
       await this.writer.abort();
       this.writer = null;
     }

@@ -33,6 +33,12 @@ export interface SenderTelemetry {
   ackCount: number;
   /** Real backpressure events (long buffer drains / ACK starvation). */
   stalls: number;
+  /** Chunk send rate (chunks/sec, EWMA) — measured runtime cadence. */
+  chunksPerSec: number;
+  /** ACK rate (ACKs/sec, EWMA) — measured runtime cadence. */
+  acksPerSec: number;
+  /** Negotiated SCTP maxMessageSize (pc.sctp.maxMessageSize) — read, never assumed. */
+  sctpMaxMessageSize: number;
   startedAt: number;
   updatedAt: number;
 }
@@ -45,8 +51,10 @@ export interface ReceiverTelemetry {
   chunkSize: number;
   bytesReceived: number;
   chunksReceived: number;
-  /** EWMA ms per chunk write — real receiver write cost. */
+  /** EWMA ms per chunk write (amortized across coalesced batches) — real receiver write cost. */
   writeMsEwma: number;
+  /** Largest number of chunks coalesced into one storage write call. */
+  maxWriteBatch: number;
   /** Chunks decrypted but not yet durably written. */
   queueDepth: number;
   maxQueueDepth: number;
@@ -69,6 +77,12 @@ export interface TransportTelemetry {
   bytesSent: number | null;
   bytesReceived: number | null;
   outgoingBitrateBps: number | null;
+  /** availableIncomingBitrate estimate (bits/s) when the browser exposes it. */
+  incomingBitrateBps: number | null;
+  /** Selected pair network protocol ('udp' | 'tcp' | null) — read from candidates. */
+  protocol: string | null;
+  /** Negotiated SCTP maxMessageSize when readable from pc.sctp. */
+  sctpMaxMessageSize: number | null;
   dtlsState: string | null;
   sctpState: string | null;
   pairState: string | null;

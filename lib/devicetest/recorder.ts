@@ -52,6 +52,10 @@ function defaultRecords(): DeviceTestRecord[] {
     iceCandidates: null,
     rttMs: null,
     dataChannelState: null,
+    protocol: null,
+    outgoingCapacityBps: null,
+    incomingCapacityBps: null,
+    sctpMaxMessageSize: null,
     shaVerified: null,
     result: null,
     notes: '',
@@ -258,6 +262,12 @@ export function sampleDeviceTestNow(): void {
     iceCandidates: ice ?? rec.iceCandidates,
     rttMs: transport?.rttMs ?? rec.rttMs,
     dataChannelState: t.dataChannelState ?? rec.dataChannelState,
+    protocol: transport?.protocol ?? rec.protocol,
+    outgoingCapacityBps:
+      transport?.outgoingBitrateBps != null ? transport.outgoingBitrateBps / 8 : rec.outgoingCapacityBps,
+    incomingCapacityBps:
+      transport?.incomingBitrateBps != null ? transport.incomingBitrateBps / 8 : rec.incomingCapacityBps,
+    sctpMaxMessageSize: transport?.sctpMaxMessageSize ?? rec.sctpMaxMessageSize,
   };
   updateRecord(rec.caseId, patch, false);
 }
@@ -306,11 +316,21 @@ export function buildDeviceTestReport(): string {
       ? 'Verified ✓ (engine SHA-256 on every completed file)'
       : '— (no completed transfer recorded a verification verdict)';
 
-  const measuredConn = records.find((r) => r.connection && r.files.length > 0)?.connection;
+  const measured = records.find((r) => r.connection && r.files.length > 0);
+  const measuredConn = measured?.connection;
   const connLabel =
     measuredConn === 'direct' ? 'Direct (getStats() host/srflx candidates)'
     : measuredConn === 'relay' ? 'Relay (getStats() relay candidates)'
     : 'Unknown (no measured transport evidence)';
+  // Measured bottleneck evidence: protocol + network capacity ceiling.
+  const fmtCapacity = (bps: number | null | undefined): string =>
+    bps && bps > 0 ? fmtMBps(bps) : 'not reported by browser';
+  const evidenceLines = [
+    `Network protocol: ${measured?.protocol ? measured.protocol.toUpperCase() : 'not reported by browser'}`,
+    `Network capacity out/in: ${fmtCapacity(measured?.outgoingCapacityBps)} / ${fmtCapacity(measured?.incomingCapacityBps)}`,
+    `SCTP max message size: ${measured?.sctpMaxMessageSize ? `${measured.sctpMaxMessageSize} bytes (read from pc.sctp)` : 'not readable'}`,
+    `Measured RTT: ${measured?.rttMs != null ? `${measured.rttMs} ms (getStats candidate-pair)` : 'not reported'}`,
+  ];
 
   const caseLines = records.map((r) => {
     const avg = deviceTestAvgBps(r);
@@ -338,6 +358,7 @@ export function buildDeviceTestReport(): string {
     `Device B: ${meta.deviceB || '— (not entered)'}`,
     `Network: ${meta.network || '— (not entered)'}`,
     `Connection: ${connLabel}`,
+    ...evidenceLines,
     '',
     'Tests:',
     ...caseLines,

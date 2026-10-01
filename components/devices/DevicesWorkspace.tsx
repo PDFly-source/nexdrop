@@ -17,6 +17,8 @@ interface DevicesWorkspaceProps {
   sasCode: string | null;
   isSecurityVerified: boolean;
   rttMs: number | null;
+  /** REAL selected ICE path from getStats — passed through to the status area. */
+  transportKind: 'direct' | 'relay' | 'unknown';
   onCreatePairing: () => void;
   onCreatePairingManual: () => void;
   pairingMode: 'signal' | 'manual' | null;

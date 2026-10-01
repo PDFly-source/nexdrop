@@ -76,8 +76,11 @@ export default function DiagnosticsPanel() {
     ['Pair state', t?.pairState || '—'],
     ['DTLS / SCTP', `${t?.dtlsState || '—'} / ${t?.sctpState || '—'}`],
     ['DataChannel', dc || '—'],
+    ['Protocol', t?.protocol ? t.protocol.toUpperCase() : '—'],
     ['Transport bytes', t ? `${fmtBytes(t.bytesSent)} ↓ ${fmtBytes(t.bytesReceived)}` : '—'],
-    ['Outgoing bitrate', t?.outgoingBitrateBps ? fmtBps(t.outgoingBitrateBps / 8) : '—'],
+    ['Outgoing capacity', t?.outgoingBitrateBps ? fmtBps(t.outgoingBitrateBps / 8) : 'n/a'],
+    ['Incoming capacity', t?.incomingBitrateBps ? fmtBps(t.incomingBitrateBps / 8) : 'n/a'],
+    ['SCTP max message', t?.sctpMaxMessageSize ? fmtBytes(t.sctpMaxMessageSize) : '—'],
   ];
   const senderRows: Array<[string, string]> = [
     ['Throughput (ACK clock)', fmtBps(s?.throughputBps)],
@@ -89,6 +92,8 @@ export default function DiagnosticsPanel() {
     ['bufferedAmount', fmtBytes(s?.bufferedAmount)],
     ['Max buffered', fmtBytes(s?.maxBufferedAmount)],
     ['ACKs', s?.ackCount ? String(s.ackCount) : '—'],
+    ['ACK rate', s?.acksPerSec ? `${s.acksPerSec.toFixed(1)}/s` : '—'],
+    ['Chunk rate', s?.chunksPerSec ? `${s.chunksPerSec.toFixed(1)}/s` : '—'],
     ['Stalls', s?.stalls !== undefined ? String(s.stalls) : '—'],
     ['Sent / acked', s ? `${fmtBytes(s.bytesSent)} / ${fmtBytes(s.bytesAcked)}` : '—'],
   ];
@@ -98,6 +103,7 @@ export default function DiagnosticsPanel() {
     ['Queue depth', r?.queueDepth !== undefined ? String(r.queueDepth) : '—'],
     ['Max queue', r?.maxQueueDepth !== undefined ? String(r.maxQueueDepth) : '—'],
     ['ACKs sent', r?.acksSent ? String(r.acksSent) : '—'],
+    ['Max write batch', r?.maxWriteBatch !== undefined ? `${r.maxWriteBatch} chunks` : '—'],
     ['Received', fmtBytes(r?.bytesReceived)],
     ['Writer', r?.writerType || '—'],
     ['Heap', r?.heapBytes ? fmtBytes(r.heapBytes) : '—'],

@@ -219,6 +219,11 @@ export class IncrementalSha256 {
   private h = new Uint32Array([
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
   ]);
+  /** Reusable message-schedule scratch — hoisted out of processBlock so the
+   *  per-64-byte-block hot path performs ZERO allocations (one Uint32Array
+   *  per block previously meant ~16k allocations/MiB hashed — measurable
+   *  GC pressure on the mobile main thread at high chunk rates). */
+  private w = new Uint32Array(64);
   private buffer = new Uint8Array(64);
   private bufferLength = 0;
   private bytesProcessed = 0; // total bytes (use BigInt-safe number up to 2^53)
@@ -257,7 +262,8 @@ export class IncrementalSha256 {
   }
 
   private processBlock(bytes: Uint8Array, offset: number): void {
-    const w = new Uint32Array(64);
+    const w = this.w;
+    w.fill(0);
     for (let i = 0; i < 16; i++) {
       w[i] =
         (bytes[offset + i * 4] << 24) |

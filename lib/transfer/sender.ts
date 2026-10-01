@@ -11,8 +11,8 @@
  *
  * Flow control (all MEASURED, nothing synthesized):
  * - Byte-based in-flight window (not chunk-count based, so high RTT can
- *   never collapse it into stop-and-wait). Starts at 1 MiB and grows ×1.5
- *   each time a full window drains cleanly, up to a 16 MiB memory cap.
+ *   never collapse it into stop-and-wait). Starts at 1 MiB and doubles each
+ *   time a full window drains cleanly, up to a 16 MiB memory cap.
  * - Shrinks only on REAL pressure: SCTP buffer stalls, receiver write
  *   backlog (q in ACKs), or ACK starvation. A single RTT spike never
  *   shrinks it (EWMA + stall cooldown, not instantaneous reactions).
@@ -95,6 +95,8 @@ export class SenderEngine {
   private chunkSteps0: number;
   /** Largest chunk this link may ever send: negotiated SCTP limit − protocol/crypto headroom. */
   private readonly chunkCap: number;
+  /** Raw negotiated SCTP max message size (diagnostics — never assumed). */
+  private readonly negotiatedMaxMessageSize: number;
 
   private currentChunkIndex = 0;
   /** Cumulative byte offset of chunk `i` start (from chunkSteps). */
@@ -136,6 +138,11 @@ export class SenderEngine {
   /** Backpressure events (buffer stalls / ACK starvation). */
   private stallCount = 0;
   private lastStallAt = 0;
+  /** ACK frequency (ACKs/sec, EWMA) and chunk rate (chunks/sec, EWMA) —
+   *  real runtime diagnostics for the physical-bottleneck matrix. */
+  private acksPerSecEwma = 0;
+  private chunksPerSecEwma = 0;
+  private lastChunkRateAt = 0;
   /** Woken by handleAck — the window wait is event-driven, polls only as a failsafe. */
   private windowWaiters: Set<() => void> = new Set();
 
@@ -162,6 +169,7 @@ export class SenderEngine {
     // Never send a frame larger than the negotiated SCTP limit. Headroom
     // covers the 16-byte chunk header, the 6-byte IV prefix and the GCM tag.
     const negotiated = options.maxMessageSize && options.maxMessageSize > 0 ? options.maxMessageSize : 65536;
+    this.negotiatedMaxMessageSize = negotiated;
     this.chunkCap = Math.max(16 * 1024, Math.min(256 * 1024, negotiated - 256));
     // Start conservative (64 KiB, or a size learned from a previous clean
     // transfer in this session) — growth happens per measured stability.
@@ -189,6 +197,12 @@ export class SenderEngine {
     const previouslyAckedChunk = this.acknowledgedChunkIndex;
     this.acknowledgedChunkIndex = Math.max(this.acknowledgedChunkIndex, index);
     this.ackCount++;
+    // ACK frequency (real measured cadence, EWMA-smoothed).
+    const ackNow = Date.now();
+    if (this.ackedAt > 0 && ackNow > this.ackedAt) {
+      const instAcks = 1000 / (ackNow - this.ackedAt);
+      this.acksPerSecEwma = this.acksPerSecEwma > 0 ? this.acksPerSecEwma * 0.7 + instAcks * 0.3 : instAcks;
+    }
 
     // Byte-accurate accounting even across mid-transfer chunk-size changes.
     const newlyAckedBytes =
@@ -244,8 +258,12 @@ export class SenderEngine {
     if (this.bytesAcked - this.lastGrowthBytes >= this.windowBytes) {
       this.lastGrowthBytes = this.bytesAcked;
       if (this.windowBytes < MAX_WINDOW_BYTES) {
-        // Grow the byte window until the pipeline stays full.
-        this.windowBytes = Math.min(MAX_WINDOW_BYTES, Math.ceil(this.windowBytes * 1.5));
+        // Grow the byte window until the pipeline stays full. Doubling
+        // (not +50%) reaches the memory cap in 4 drains instead of 8 —
+        // measured ramp time was a real share of short-transfer averages
+        // (CI: 100 MiB avg 6.5 MB/s vs 50 MB/s bursts). Shrink rules are
+        // unchanged, so jittery links still back off multiplicatively.
+        this.windowBytes = Math.min(MAX_WINDOW_BYTES, this.windowBytes * 2);
       } else if (
         this.chunkSize < this.chunkCap &&
         (queueDepth === undefined || queueDepth <= 2) &&
@@ -274,17 +292,22 @@ export class SenderEngine {
 
   /** Measured link metrics (for diagnostics — never faked). */
   public get metrics(): {
-    rttMs: number; window: number; windowBytes: number; chunkSize: number;
+    rttMs: number; minRttMs: number; window: number; windowBytes: number; chunkSize: number;
     throughputBps: number; stalls: number; bufferedAmount: number;
+    chunksPerSec: number; acksPerSec: number; sctpMaxMessageSize: number;
   } {
     return {
       rttMs: this.rttEwmaMs,
+      minRttMs: this.minRttMs,
       window: Math.ceil(this.windowBytes / this.chunkSize),
       windowBytes: this.windowBytes,
       chunkSize: this.chunkSize,
       throughputBps: this.throughputBps,
       stalls: this.stallCount,
       bufferedAmount: this.fileChannel?.bufferedAmount ?? 0,
+      chunksPerSec: this.chunksPerSecEwma,
+      acksPerSec: this.acksPerSecEwma,
+      sctpMaxMessageSize: this.negotiatedMaxMessageSize,
     };
   }
 
@@ -336,6 +359,9 @@ export class SenderEngine {
     this.acknowledgedChunkIndex = -1;
     this.currentChunkIndex = 0;
     this.maxBufferedAmount = 0;
+    this.acksPerSecEwma = 0;
+    this.chunksPerSecEwma = 0;
+    this.lastChunkRateAt = 0;
 
     // Fresh random IV prefix per transfer — the receiver derives identical
     // IVs from this value. Without it, every file would reuse the same
@@ -478,10 +504,26 @@ export class SenderEngine {
         const avgSpeed =
           this.recentSpeeds.reduce((a, b) => a + b, 0) / this.recentSpeeds.length;
 
-        const remainingBytes = this.file.size - this.bytesSent;
-        const eta = avgSpeed > 0 ? Math.ceil(remainingBytes / avgSpeed) : 0;
+        // Displayed speed is the ACK-based NETWORK truth (bytes the
+        // receiver durably wrote per second) once ACK samples exist —
+        // feeding the SCTP buffer faster than the link drains would
+        // overstate it. The sent-based rolling average is only the
+        // pre-ACK fallback.
+        const displaySpeed = this.throughputBps > 0 ? this.throughputBps : avgSpeed;
 
-        this.emitProgress('transferring', avgSpeed, eta);
+        // Chunk send rate (real cadence, EWMA-smoothed).
+        if (this.lastChunkRateAt > 0 && now > this.lastChunkRateAt) {
+          const instChunks =
+            bytesDiff / Math.max(1, this.chunkSize) / ((now - this.lastChunkRateAt) / 1000);
+          this.chunksPerSecEwma =
+            this.chunksPerSecEwma > 0 ? this.chunksPerSecEwma * 0.7 + instChunks * 0.3 : instChunks;
+        }
+        this.lastChunkRateAt = now;
+
+        const remainingBytes = this.file.size - this.bytesSent;
+        const eta = displaySpeed > 0 ? Math.ceil(remainingBytes / displaySpeed) : 0;
+
+        this.emitProgress('transferring', displaySpeed, eta);
         this.lastProgressEmit = now;
         lastBytes = this.bytesSent;
         lastTime = now;
@@ -502,6 +544,9 @@ export class SenderEngine {
           maxBufferedAmount: this.maxBufferedAmount,
           ackCount: this.ackCount,
           stalls: this.stallCount,
+          chunksPerSec: this.chunksPerSecEwma,
+          acksPerSec: this.acksPerSecEwma,
+          sctpMaxMessageSize: this.negotiatedMaxMessageSize,
           startedAt: this.startTime,
         });
       }

@@ -42,6 +42,16 @@ export interface DeviceTestRecord {
   iceCandidates: string | null;
   rttMs: number | null;
   dataChannelState: string | null;
+  /** Selected pair network protocol from getStats ('udp'/'tcp') — null when
+   *  not exposed. Bottleneck evidence: relay/TCP paths explain slow links. */
+  protocol: string | null;
+  /** availableOutgoingBitrate / availableIncomingBitrate (bytes/sec) when the
+   *  browser exposes them — the measured network capacity ceiling. Null =
+   *  browser did not report an estimate. */
+  outgoingCapacityBps: number | null;
+  incomingCapacityBps: number | null;
+  /** Negotiated SCTP maxMessageSize read from pc.sctp — the real chunk ceiling. */
+  sctpMaxMessageSize: number | null;
   /** Receiver's real VERIFY verdict (sender devices learn it via VERIFY). */
   shaVerified: boolean | null;
   result: 'passed' | 'failed' | null;

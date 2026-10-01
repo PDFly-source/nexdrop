@@ -12,13 +12,19 @@ export function formatBytes(bytes: number, decimals: number = 2): string {
   return `${parseFloat((bytes / Math.pow(k, idx)).toFixed(dm))} ${sizes[idx]}`;
 }
 
+/**
+ * ONE consistent binary-unit speed formatter for the whole app:
+ * < 1 MiB/s → whole KB/s ("850 KB/s"), ≥ 1 MiB/s → "1.24 MB/s",
+ * ≥ 1 GiB/s → "1.24 GB/s". 1024 KB/s is never shown — it is 1.00 MB/s.
+ * The underlying measured value is never scaled or smoothed here.
+ */
 export function formatSpeed(bytesPerSec: number): string {
   if (!bytesPerSec || bytesPerSec <= 0) return '0 KB/s';
   if (bytesPerSec >= 1024 * 1024 * 1024) {
-    return `${(bytesPerSec / (1024 * 1024 * 1024)).toFixed(1)} GB/s`;
+    return `${(bytesPerSec / (1024 * 1024 * 1024)).toFixed(2)} GB/s`;
   }
   if (bytesPerSec >= 1024 * 1024) {
-    return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
+    return `${(bytesPerSec / (1024 * 1024)).toFixed(2)} MB/s`;
   }
   return `${(bytesPerSec / 1024).toFixed(0)} KB/s`;
 }
