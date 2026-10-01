@@ -296,6 +296,11 @@ async function main() {
   for (const [pkey, pg] of [['A', pageA], ['B', pageB]] as const) {
     pg.on('console', (msg: any) => {
       if (msg.type() === 'error') consoleErrors[pkey].push(msg.text().slice(0, 300));
+      // Relay the multi-channel gate's measured A/B verdicts (engine
+      // console.debug) into the CI log — real in-run measurement data.
+      if (msg.type() === 'debug' && msg.text().includes('channel A/B')) {
+        console.log(`[CHANNEL-AB ${pkey}] ${msg.text()}`);
+      }
     });
   }
   const dumpStallState = async (label: string) => {

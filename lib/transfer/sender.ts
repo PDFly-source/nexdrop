@@ -957,9 +957,17 @@ export class SenderEngine {
       const bpsNow = ackedSince / Math.max(0.001, secs);
       const bpsBase = this.channelBaselineBps;
       const gain = bpsBase > 0 ? bpsNow / bpsBase : 0;
+      // Measured A/B verdict — logged so benchmark runs report the exact
+      // 1-vs-N channel gain (telemetry, never asserted).
+      console.debug(
+        `[nexdrop] channel A/B: pool ${this.activeChannels.length}, base ${(this.channelBaselineBps / 1048576).toFixed(2)} MiB/s -> pooled ${(bpsNow / 1048576).toFixed(2)} MiB/s, gain ${(gain * 100).toFixed(1)}%`
+      );
       if (gain < 1.12 || this.stallCount > this.channelBaselineStalls) {
         // No material improvement (or new stalls): FALL BACK to the
         // previous pool — never keep complexity that does not pay.
+        console.debug(
+          `[nexdrop] channel A/B verdict: FALL BACK (pool -> ${this.activeChannels.length - 1}), gain ${(gain * 100).toFixed(1)}% < 12%`
+        );
         this.shrinkPool(1);
         this.channelsFrozen = true;
         this.lastChannelChangeAt = now;
