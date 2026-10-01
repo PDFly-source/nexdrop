@@ -87,6 +87,7 @@ export default function DiagnosticsPanel() {
     ['SCTP max message', t?.sctpMaxMessageSize ? fmtBytes(t.sctpMaxMessageSize) : '—'],
   ];
   const senderRows: Array<[string, string]> = [
+    ['Sustained (whole transfer)', fmtBps(s?.sustainedBps)],
     ['Throughput (ACK clock)', fmtBps(s?.throughputBps)],
     ['Peak (session max)', fmtBps(peakBps)],
     ['Smoothed RTT', fmtMs(s?.srttMs)],
@@ -95,6 +96,7 @@ export default function DiagnosticsPanel() {
     ['Min RTT', fmtMs(s?.minRttMs)],
     ['Chunk size', fmtKib(s?.chunkSize)],
     ['Window', s?.windowBytes ? `${fmtBytes(s.windowBytes)} (${s.windowChunks} chunks)` : '—'],
+    ['Window high-water', fmtBytes(s?.windowHighWaterBytes)],
     ['bufferedAmount', fmtBytes(s?.bufferedAmount)],
     ['Max buffered', fmtBytes(s?.maxBufferedAmount)],
     ['ACKs', s?.ackCount ? String(s.ackCount) : '—'],

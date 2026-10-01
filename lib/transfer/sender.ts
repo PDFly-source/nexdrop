@@ -42,6 +42,7 @@ import { encodeBinaryChunk } from './protocol';
 import { bytesToBase64Url, ChunkCipher, encryptChunk, generateIvPrefix, IncrementalSha256 } from '@/lib/crypto';
 import { initialChunkSize, noteTransferSuccess, noteTransferFailure } from './tuner';
 import { updateSenderTelemetry } from './telemetry';
+import { TransferTimeline } from './timeline';
 
 export interface SenderProgress {
   transferId: string;
@@ -129,6 +130,23 @@ export class SenderEngine {
   private minRttMs = 0;
   /** Adaptive in-flight window in BYTES (not chunks — chunk-count windows collapse under high RTT). */
   private windowBytes = INITIAL_WINDOW_BYTES;
+  /** Highest healthy window reached this transfer — recovery target. */
+  private windowHighWater = INITIAL_WINDOW_BYTES;
+  /** Consecutive ACKs reporting slow receiver writes (sustained pressure). */
+  private slowWriteStreak = 0;
+  /** Last receiver-reported per-chunk write cost (ms), -1 before first ACK. */
+  private lastAckWriteMs = -1;
+  /** Last receiver-reported write-queue depth, -1 before first ACK. */
+  private lastAckQueueDepth = -1;
+  /** Consecutive ACKs reporting a deep receiver write queue. */
+  private deepQueueStreak = 0;
+  /** Last time of ANY real pressure signal (stall or sustained shrink). */
+  private lastPressureAt = 0;
+  /** High-resolution collapse timeline (10 Hz, adaptively decimated). */
+  readonly timeline = new TransferTimeline(
+    ['t','sent','acked','inFlight','window','chunk','buffered','rtt','minRtt','bps','stalls','ackLatency','writeMs','queueDepth'],
+  );
+  private timelineTimer: ReturnType<typeof setInterval> | null = null;
   /** ACK frontier when the window last grew — grows once per clean window drain. */
   private lastGrowthBytes = 0;
   /** Measured throughput from the ACK cadence (bytes/sec). */
@@ -222,6 +240,9 @@ export class SenderEngine {
       this.ackedAt = now;
     }
 
+    if (writeMs !== undefined) this.lastAckWriteMs = writeMs;
+    if (queueDepth !== undefined) this.lastAckQueueDepth = queueDepth;
+
     this.tune(index, writeMs, queueDepth);
     // Wake the pump: the window has slid forward.
     for (const wake of [...this.windowWaiters]) wake();
@@ -236,26 +257,61 @@ export class SenderEngine {
   private tune(index: number, writeMs?: number, queueDepth?: number): void {
     const stable = Date.now() - this.lastStallAt > STALL_COOLDOWN_MS;
 
-    // Receiver is falling behind (its write queue is backing up): shrink.
-    // The receiver ACKs only after durable writes, so a growing queue on
-    // its side means the sender's window exceeds its sustained write rate.
-    if (queueDepth !== undefined && queueDepth > 4 && this.windowBytes > MIN_WINDOW_BYTES) {
-      this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.8));
-      this.lastGrowthBytes = this.bytesAcked;
-      return;
+    // ---- v2: SUSTAINED-pressure shrink (never single-sample reactions).
+    // Physical 341 MB collapse evidence (2026-10-01): one transient 40 ms+
+    // write or a one-off queue spike on Android OPFS immediately shrank the
+    // window, and growth then needed a full clean drain + 1.5 s cooldown —
+    // on a jittery cellular path those almost never arrive together, so
+    // the window pinned at the 512 KiB floor and the transfer settled at
+    // ~295 KB/s. Now pressure must persist across consecutive ACKs before
+    // the controller reacts, and it reacts gently.
+    if (queueDepth !== undefined && queueDepth > 4) {
+      this.deepQueueStreak++;
+      if (this.deepQueueStreak >= 2 && this.windowBytes > MIN_WINDOW_BYTES) {
+        this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.85));
+        this.lastGrowthBytes = this.bytesAcked;
+        this.lastPressureAt = Date.now();
+        this.deepQueueStreak = 0;
+        return;
+      }
+    } else if (queueDepth !== undefined && queueDepth <= 2) {
+      this.deepQueueStreak = 0;
     }
-    // Receiver disk is very slow per chunk (write-bound far below the
-    // network): shrink gently so its buffer stays bounded.
-    if (writeMs !== undefined && writeMs > 40 && this.windowBytes > MIN_WINDOW_BYTES) {
-      this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.85));
-      this.lastGrowthBytes = this.bytesAcked;
-      return;
+    if (writeMs !== undefined && writeMs > 40) {
+      this.slowWriteStreak++;
+      if (this.slowWriteStreak >= 3 && this.windowBytes > MIN_WINDOW_BYTES) {
+        this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.9));
+        this.lastGrowthBytes = this.bytesAcked;
+        this.lastPressureAt = Date.now();
+        this.slowWriteStreak = 0;
+        return;
+      }
+    } else if (writeMs !== undefined && writeMs <= 25) {
+      this.slowWriteStreak = 0;
     }
 
     if (!stable) return;
 
-    // One clean full-window drain since the last change: grow.
-    if (this.bytesAcked - this.lastGrowthBytes >= this.windowBytes) {
+    // Floor-probe: if the window is pinned at the floor but nothing has
+    // signalled pressure for 3 s, probe one step up. A single early stall
+    // must not freeze the whole transfer at the minimum window forever.
+    if (
+      this.windowBytes <= MIN_WINDOW_BYTES &&
+      this.lastPressureAt > 0 &&
+      Date.now() - this.lastPressureAt > 3000 &&
+      this.windowBytes < MAX_WINDOW_BYTES
+    ) {
+      this.windowBytes = Math.min(MAX_WINDOW_BYTES, Math.ceil(this.windowBytes * 1.25));
+      this.lastGrowthBytes = this.bytesAcked;
+      return;
+    }
+
+    // One clean full-window drain since the last change: grow. Below the
+    // high-water mark (recovering from a transient stall) a HALF drain is
+    // enough — recovery must be faster than first-time discovery.
+    const recovering = this.windowBytes < this.windowHighWater;
+    const drainNeeded = recovering ? this.windowBytes / 2 : this.windowBytes;
+    if (this.bytesAcked - this.lastGrowthBytes >= drainNeeded) {
       this.lastGrowthBytes = this.bytesAcked;
       if (this.windowBytes < MAX_WINDOW_BYTES) {
         // Grow the byte window +50% per clean full-window drain. A faster
@@ -265,6 +321,7 @@ export class SenderEngine {
         // transfers). The x1.5 ramp is the measured-safe rate: loopback CI
         // benchmark 100 MiB avg ~6.5 MB/s, all sizes green.
         this.windowBytes = Math.min(MAX_WINDOW_BYTES, Math.ceil(this.windowBytes * 1.5));
+        this.windowHighWater = Math.max(this.windowHighWater, this.windowBytes);
       }
       // NOTE: chunk size NEVER grows mid-transfer (2026-10-01 incident).
       // A mid-transfer grow races the pump's one-slice read-ahead: a chunk
@@ -279,13 +336,28 @@ export class SenderEngine {
     }
   }
 
-  /** Real backpressure: a long buffer wait or ACK starvation. */
-  private noteStall(): void {
+  /**
+   * Real backpressure event. v2 distinguishes the two physical causes:
+   *
+   * - 'buffer'  (SCTP buffer drained > 1 s): genuine congestion inside the
+   *   transport — multiplicative decrease is the correct response.
+   * - 'starvation' (window-wait failsafe): ALL in-flight bytes are simply
+   *   waiting for ACKs on a high-latency path. The window already equals
+   *   the bandwidth-delay product the ACKs permit; shrinking it can only
+   *   push throughput BELOW the path's sustainable rate — which is exactly
+   *   how the 341 MB physical transfer settled at 295 KB/s (window pinned
+   *   at the 512 KiB floor while the receiver still consumed ~500 KB/s).
+   *   The stall is recorded (diagnostics + cooldown), but the window HOLDS.
+   */
+  private noteStall(kind: 'buffer' | 'starvation'): void {
     this.lastStallAt = Date.now();
     this.stallCount++;
-    // Multiplicative decrease on real pressure — with a floor that keeps
-    // high-RTT links well above stop-and-wait.
-    this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.7));
+    this.lastPressureAt = Date.now();
+    if (kind === 'buffer') {
+      // Multiplicative decrease on real transport congestion — with a floor
+      // that keeps high-RTT links well above stop-and-wait.
+      this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.7));
+    }
     this.lastGrowthBytes = this.bytesAcked;
   }
 
@@ -294,12 +366,18 @@ export class SenderEngine {
     rttMs: number; minRttMs: number; window: number; windowBytes: number; chunkSize: number;
     throughputBps: number; stalls: number; bufferedAmount: number;
     chunksPerSec: number; acksPerSec: number; sctpMaxMessageSize: number;
+    windowHighWaterBytes: number; sustainedBps: number; slowWriteStreak: number;
   } {
+    const elapsedS = (Date.now() - this.startTime) / 1000;
     return {
       rttMs: this.rttEwmaMs,
       minRttMs: this.minRttMs,
       window: Math.ceil(this.windowBytes / this.chunkSize),
       windowBytes: this.windowBytes,
+      windowHighWaterBytes: this.windowHighWater,
+      // Sustained = whole-transfer average, the headline metric (never the peak).
+      sustainedBps: this.bytesAcked > 0 && elapsedS > 0 ? this.bytesAcked / elapsedS : 0,
+      slowWriteStreak: this.slowWriteStreak,
       chunkSize: this.chunkSize,
       throughputBps: this.throughputBps,
       stalls: this.stallCount,
@@ -308,6 +386,41 @@ export class SenderEngine {
       acksPerSec: this.acksPerSecEwma,
       sctpMaxMessageSize: this.negotiatedMaxMessageSize,
     };
+  }
+
+  /** 10 Hz collapse-curve recorder (Phase 1/2 instrumentation). */
+  private startTimeline(): void {
+    this.stopTimeline();
+    if (typeof setInterval !== 'function') return; // non-browser (unit tests may stub)
+    const sample = () => {
+      if (this.isDone || this.isCancelled) { this.stopTimeline(); return; }
+      this.timeline.push([
+        Date.now() - this.startTime,
+        this.bytesSent,
+        this.bytesAcked,
+        this.bytesSent - this.bytesAcked,
+        this.windowBytes,
+        this.chunkSize,
+        this.fileChannel?.bufferedAmount ?? 0,
+        this.rttEwmaMs,
+        this.minRttMs,
+        this.throughputBps,
+        this.stallCount,
+        this.rttEwmaMs,
+        this.lastAckWriteMs,
+        this.lastAckQueueDepth,
+      ]);
+    };
+    // First sample immediately (t=0), then on the timeline's own cadence.
+    sample();
+    this.timelineTimer = setInterval(sample, this.timeline.currentIntervalMs);
+  }
+
+  private stopTimeline(): void {
+    if (this.timelineTimer !== null) {
+      clearInterval(this.timelineTimer);
+      this.timelineTimer = null;
+    }
   }
 
   public pause() {
@@ -335,6 +448,7 @@ export class SenderEngine {
 
   /** Real transfer failure — resets the learned link profile (conservative). */
   private fail(reason: string): void {
+    this.stopTimeline();
     noteTransferFailure();
     this.onError(this.transferId, reason);
   }
@@ -342,6 +456,7 @@ export class SenderEngine {
   public cancel(reason: string = 'Cancelled by sender') {
     if (this.isDone) return;
     this.isCancelled = true;
+    this.stopTimeline();
     for (const wake of [...this.windowWaiters]) wake();
     this.sendControlMessage({ type: 'CANCEL', transferId: this.transferId, reason });
     this.emitProgress('cancelled', 0, 0);
@@ -349,6 +464,7 @@ export class SenderEngine {
 
   public async start(): Promise<void> {
     this.startTime = Date.now();
+    this.startTimeline();
     this.isDone = false;
     this.isCancelled = false;
     this.isPaused = false;
@@ -558,6 +674,9 @@ export class SenderEngine {
           chunksPerSec: this.chunksPerSecEwma,
           acksPerSec: this.acksPerSecEwma,
           sctpMaxMessageSize: this.negotiatedMaxMessageSize,
+          sustainedBps: this.bytesAcked / Math.max(0.001, (Date.now() - this.startTime) / 1000),
+          windowHighWaterBytes: this.windowHighWater,
+          timeline: this.timeline.length > 0 ? this.timeline.toJSON() : null,
           startedAt: this.startTime,
         });
       }
@@ -578,6 +697,7 @@ export class SenderEngine {
 
     if (this.isCancelled) return;
     this.isDone = true;
+    this.stopTimeline();
 
     // Incremental hash — computed while streaming, no extra full read needed
     let hash = '';
@@ -618,11 +738,14 @@ export class SenderEngine {
           return;
         }
         // Still blocked — if this was the failsafe, it is real starvation.
+        // v2: counted as a stall (diagnostics + cooldown) but the window
+        // HOLDS — shrinking below the ACK-permitted operating point only
+        // reduces throughput (341 MB collapse root cause).
         if (Date.now() > deadline) {
           settled = true;
           this.windowWaiters.delete(wake);
           clearTimeout(failsafe);
-          this.noteStall();
+          this.noteStall('starvation');
           resolve();
         }
       };
@@ -652,7 +775,7 @@ export class SenderEngine {
         clearTimeout(failsafe);
         this.fileChannel.removeEventListener('bufferedamountlow', done);
         this.fileChannel.removeEventListener('close', done);
-        if (Date.now() - waitStart > 1000) this.noteStall();
+        if (Date.now() - waitStart > 1000) this.noteStall('buffer');
         resolve();
       };
 

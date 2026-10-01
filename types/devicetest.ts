@@ -75,6 +75,14 @@ export interface DeviceTestRecord {
   remoteAddress: string | null;
   /** Receiver's real VERIFY verdict (sender devices learn it via VERIFY). */
   shaVerified: boolean | null;
+  /** 10 Hz collapse curve from the sender engine (bounded, decimated). */
+  senderTimeline: import('../lib/transfer/timeline').TimelineSeries | null;
+  /** 10 Hz receiver pipeline curve (bounded, decimated). */
+  receiverTimeline: import('../lib/transfer/timeline').TimelineSeries | null;
+  /** Whole-transfer average bytes/sec at the final sample (sustained). */
+  sustainedBps: number | null;
+  /** Peak of the sustained metric across samples. */
+  peakSustainedBps: number | null;
   result: 'passed' | 'failed' | null;
   notes: string;
 }

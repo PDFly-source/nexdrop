@@ -35,6 +35,7 @@ import { createOptimalStorageWriter, StorageWriter } from './writer';
 import { decodeBinaryChunk, simpleStringHash } from './protocol';
 import { base64UrlToBytes, ChunkCipher, decryptChunk, IncrementalSha256 } from '@/lib/crypto';
 import { updateReceiverTelemetry } from './telemetry';
+import { TransferTimeline } from './timeline';
 
 /** Coalesced storage-write batch target (bytes). Bounded memory: at most
  *  ~this many queued plaintext bytes join one storage call. Larger batches
@@ -118,6 +119,11 @@ export class ReceiverEngine {
   private draining = false;
   /** Decoded, in-order chunks waiting for a durable storage write. */
   private writeQueue: Array<{ payload: ArrayBuffer; index: number }> = [];
+  /** 10 Hz collapse-curve recorder (receiver view of the pipeline). */
+  readonly timeline = new TransferTimeline(
+    ['t','received','queueDepth','writeMs','bps','acks','chunks'],
+  );
+  private timelineTimer: ReturnType<typeof setInterval> | null = null;
   /** The single coalescing writer loop is running. */
   private writing = false;
   /** Chunks accepted but not yet durably written (real queue-depth feedback). */
@@ -193,6 +199,7 @@ export class ReceiverEngine {
     this.processQueue = [];
     this.hasher = new IncrementalSha256();
     this.startTime = Date.now();
+    this.startTimeline();
     this.lastTime = this.startTime;
     this.lastBytes = 0;
     this.recentSpeeds = [];
@@ -371,8 +378,36 @@ export class ReceiverEngine {
         throughputBps: avgSpeed,
         writerType: this.writer.getType(),
         heapBytes: (performance as any)?.memory?.usedJSHeapSize ?? 0,
+        timeline: this.timeline.length > 0 ? this.timeline.toJSON() : null,
         startedAt: this.startTime,
       });
+    }
+  }
+
+  /** 10 Hz collapse-curve recorder (Phase 1/2 instrumentation). */
+  private startTimeline(): void {
+    this.stopTimeline();
+    if (typeof setInterval !== 'function') return;
+    const sample = () => {
+      if (this.isCompleted || this.isCancelled) { this.stopTimeline(); return; }
+      this.timeline.push([
+        Date.now() - this.startTime,
+        this.bytesReceived,
+        this.queueDepth(),
+        this.writeMsEwma,
+        this.bytesReceived / Math.max(0.001, (Date.now() - this.startTime) / 1000),
+        this.acksSent,
+        this.receivedChunksCount,
+      ]);
+    };
+    sample();
+    this.timelineTimer = setInterval(sample, this.timeline.currentIntervalMs);
+  }
+
+  private stopTimeline(): void {
+    if (this.timelineTimer !== null) {
+      clearInterval(this.timelineTimer);
+      this.timelineTimer = null;
     }
   }
 
@@ -528,6 +563,7 @@ export class ReceiverEngine {
     if (this.isCancelled || this.isCompleted) return;
 
     this.isCompleted = true;
+    this.stopTimeline();
 
     // Byte-count honesty check: FILE_END only counts as complete when the
     // number of plaintext bytes actually written equals the size announced
@@ -618,6 +654,7 @@ export class ReceiverEngine {
     if (this.isCompleted) return;
     if (!this.transferId) return; // nothing active — never emit or notify
     this.isCancelled = true;
+    this.stopTimeline();
     const id = this.transferId;
     this.transferId = '';
     if (this.writer) {

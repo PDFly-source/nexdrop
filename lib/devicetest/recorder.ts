@@ -17,6 +17,7 @@
  * localStorage (local-first, per-device).
  */
 
+import { collapseCurve } from '../transfer/timeline';
 import type {
   DeviceTestFileRecord,
   DeviceTestMeta,
@@ -45,6 +46,10 @@ function defaultRecords(): DeviceTestRecord[] {
     totalBytes: 0,
     transferStartedAt: null,
     transferEndedAt: null,
+    senderTimeline: null,
+    receiverTimeline: null,
+    sustainedBps: null,
+    peakSustainedBps: null,
     peakBps: 0,
     lastSampleBps: 0,
     lastBytes: 0,
@@ -219,11 +224,15 @@ export function onTestTransferComplete(info: {
   const startedAt =
     rec.transferStartedAt ?? rec.armedAt; // honest fallback: arm time
   const totalBytes = rec.totalBytes + info.size;
+  const tl = (window as any).__NEXDROP_TELEMETRY__;
   updateRecord(rec.caseId, {
     files,
     totalBytes,
     transferEndedAt: Date.now(),
     transferStartedAt: startedAt,
+    senderTimeline: tl?.sender?.timeline ?? rec.senderTimeline,
+    receiverTimeline: tl?.receiver?.timeline ?? rec.receiverTimeline,
+    sustainedBps: tl?.sender?.sustainedBps ?? rec.sustainedBps,
   });
 }
 
@@ -264,8 +273,11 @@ export function sampleDeviceTestNow(): void {
   const ice = transport?.localCandidateType && transport?.remoteCandidateType
     ? `${transport.localCandidateType}↔${transport.remoteCandidateType}`
     : null;
+  const sustained = sender?.sustainedBps ?? null;
   const patch: Partial<DeviceTestRecord> = {
     peakBps: Math.max(rec.peakBps, bps || 0),
+    sustainedBps: sustained,
+    peakSustainedBps: Math.max(rec.peakSustainedBps ?? 0, sustained ?? 0) || null,
     lastSampleBps: bps || 0,
     lastBytes: Math.max(rec.lastBytes, bytes),
     transferStartedAt: rec.transferStartedAt ?? (bytes > 0 ? Date.now() : null),
@@ -378,6 +390,8 @@ export function buildDeviceTestReport(): string {
     `Window: ${measured?.lastWindowChunks != null ? `${measured.lastWindowChunks} chunks` : 'not sampled'}`,
     `Actual: ${measuredAvg != null ? fmtMBps(measuredAvg) : 'not measured'}`,
     `Peak: ${measured && measured.peakBps > 0 ? fmtMBps(measured.peakBps) : 'not measured'}`,
+    `Sustained (final whole-transfer avg): ${measured?.sustainedBps ? fmtMBps(measured.sustainedBps) : 'not measured'}`,
+    `Peak sustained: ${measured?.peakSustainedBps ? fmtMBps(measured.peakSustainedBps) : 'not measured'}`,
     `Transferred: ${fmtBytes(transferred)} / ${fmtBytes(transferredTotal)}`,
     `Stalls: ${measured?.lastStalls != null ? String(measured.lastStalls) : 'not sampled'}`,
     `Path network: ${measured?.networkType ?? 'not exposed by browser (candidate networkType)'} — 5G/Wi-Fi status icons are NOT WebRTC path evidence`,
@@ -388,6 +402,28 @@ export function buildDeviceTestReport(): string {
     `Network capacity out/in: ${fmtCapacity(measured?.outgoingCapacityBps)} / ${fmtCapacity(measured?.incomingCapacityBps)}`,
     `SCTP max message size: ${measured?.sctpMaxMessageSize ? `${measured.sctpMaxMessageSize} bytes (read from pc.sctp)` : 'not readable'}`,
     `SHA-256: ${shaState}`,
+  ];
+
+  // COLLAPSE CURVE (Phase 1/2 instrumentation): the 10 Hz sender timeline
+  // for the largest measured transfer, decimated to ~40 rows. Shows the
+  // first-changing variable at any throughput rise/fall: t, actual bps,
+  // RTT, window, bufferedAmount, in-flight. Never synthesized.
+  const curveRec = transferTests.length > 0
+    ? transferTests.reduce((a, b) => ((deviceTestAvgBps(b) || 0) > (deviceTestAvgBps(a) || 0) ? b : a))
+    : null;
+  const curve = curveRec?.senderTimeline
+    ? collapseCurve(curveRec.senderTimeline, {
+        t: 0, bps: 9, rtt: 7, window: 4, buffered: 6, inFlight: 3,
+      })
+    : [];
+  const curveLines = [
+    'THROUGHPUT COLLAPSE TIMELINE (largest measured transfer, 10 Hz sender telemetry):',
+    ...(curve.length === 0
+      ? ['  not recorded (timeline needs a completed transfer in this session)']
+      : curve.map(
+          (c) =>
+            `  t=${c.tSec.toFixed(1).padStart(6)}s  ${fmtMBps(c.bps).padStart(10)}  rtt=${String(Math.round(c.rttMs)).padStart(5)}ms  win=${(c.windowBytes / 1048576).toFixed(1).padStart(5)}MiB  buf=${(c.buffered / 1024).toFixed(0).padStart(6)}KB  infl=${(c.inFlight / 1024).toFixed(0).padStart(6)}KB`,
+        )),
   ];
 
   const caseLines = records.map((r) => {
@@ -417,6 +453,8 @@ export function buildDeviceTestReport(): string {
     `Network: ${meta.network || '— (not entered)'}`,
     `Connection: ${connLabel}`,
     ...evidenceLines,
+    '',
+    ...curveLines,
     '',
     'Tests:',
     ...caseLines,

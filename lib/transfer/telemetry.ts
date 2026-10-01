@@ -9,6 +9,8 @@
  * snapshot object per update.
  */
 
+import type { TimelineSeries } from './timeline';
+
 export interface SenderTelemetry {
   role: 'sender';
   transferId: string;
@@ -43,6 +45,12 @@ export interface SenderTelemetry {
   acksPerSec: number;
   /** Negotiated SCTP maxMessageSize (pc.sctp.maxMessageSize) — read, never assumed. */
   sctpMaxMessageSize: number;
+  /** Whole-transfer average bytes/sec — the SUSTAINED headline metric. */
+  sustainedBps: number;
+  /** Highest healthy window reached this transfer (recovery target). */
+  windowHighWaterBytes: number;
+  /** 10 Hz collapse timeline (bounded, adaptively decimated). */
+  timeline: TimelineSeries | null;
   startedAt: number;
   updatedAt: number;
 }
@@ -69,6 +77,8 @@ export interface ReceiverTelemetry {
   heapBytes: number;
   startedAt: number;
   updatedAt: number;
+  /** 10 Hz collapse timeline — receiver view (bounded, decimated). */
+  timeline: TimelineSeries | null;
 }
 
 /** REAL transport stats from RTCPeerConnection.getStats() (see transportStats.ts). */
