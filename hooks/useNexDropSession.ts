@@ -35,6 +35,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { PeerConnectionManager } from '@/lib/webrtc/peer';
+import { ConnectionPhase, TransferActivity, TransferDirection } from '@/types/session';
+import { sampleTransportStats } from '@/lib/transfer/transportStats';
+import { updateTransportTelemetry, updateDataChannelState } from '@/lib/transfer/telemetry';
 import { BrowserCapabilities, DeviceInfo } from '@/lib/detection/capabilities';
 import { useBrowserCapabilities, useDeviceInfo } from '@/hooks/useCapabilities';
 import {
@@ -95,6 +98,12 @@ function buildDeviceLabel(info: DeviceInfo): string {
 
 export function useNexDropSession() {
   const [sessionState, setSessionState] = useState<SessionState>('idle');
+  /** REAL engine activity — the second input of the authoritative phase. */
+  const [transferActivity, setTransferActivityState] = useState<TransferActivity>({
+    active: false,
+    direction: null,
+    verifying: false,
+  });
   const detectedDeviceInfo = useDeviceInfo();
   const [customDeviceName, setCustomDeviceName] = useState<string | null>(() => {
     try {
@@ -284,6 +293,7 @@ export function useNexDropSession() {
     setPendingOfferInfo(null);
     cipherRef.current = null;
     setSessionState('idle');
+    setTransferActivityState({ active: false, direction: null, verifying: false });
     setPeerInfo(null);
     setSasCode(null);
     setIsSecurityVerified(false);
@@ -1047,15 +1057,96 @@ export function useNexDropSession() {
     sounds.playError();
   }, [stopSignalPolling]);
 
-  /** Session-level transfer activity for the explicit state machine:
-   *  CONNECTED → TRANSFERRING → COMPLETED (next transfer returns to
-   *  TRANSFERRING). Driven by the transfer engine, never faked. */
-  const setTransferActivity = useCallback((active: boolean) => {
-    setSessionState((prev) => {
-      if (active) return prev === 'connected' || prev === 'completed' ? 'transferring' : prev;
-      return prev === 'transferring' ? 'completed' : prev;
-    });
-  }, []);
+  /**
+   * Session-level transfer activity, driven ONLY by the transfer engines —
+   * never faked. Feeds both the legacy SessionState machine and the
+   * authoritative ConnectionPhase (see connectionPhase below).
+   */
+  const setTransferActivity = useCallback(
+    (active: boolean, direction?: TransferDirection, verifying?: boolean) => {
+      setTransferActivityState((prev) => ({
+        active,
+        direction: active ? (direction ?? prev.direction) : null,
+        verifying: active && !!verifying,
+      }));
+      setSessionState((prev) => {
+        if (active && !verifying) {
+          return prev === 'connected' || prev === 'completed' ? 'transferring' : prev;
+        }
+        return prev === 'transferring' && !active ? 'completed' : prev;
+      });
+    },
+    []
+  );
+
+  /**
+   * AUTHORITATIVE connection phase — derived in exactly ONE place, from the
+   * real peer-connection lifecycle plus live engine activity. Any
+   * user-facing connection status (header, diagnostics) may read ONLY this.
+   *
+   * An open DataChannel with an actively pumping engine IS a live
+   * connection: a transient ICE 'disconnected' blip must never show
+   * "Not connected" while bytes are verifiably flowing.
+   */
+  const connectionPhase = useMemo<ConnectionPhase>(() => {
+    if (transferActivity.active) {
+      if (transferActivity.verifying) return 'verifying';
+      return 'transferring';
+    }
+    switch (sessionState) {
+      case 'hosting':
+      case 'hosting-offer':
+      case 'awaiting-accept':
+        return 'pairing';
+      case 'waiting-for-join':
+      case 'joiner-answer':
+        return 'waiting_for_peer';
+      case 'join-requested':
+        return 'incoming_request';
+      case 'accepted':
+      case 'connecting':
+        return 'connecting';
+      case 'connected':
+        return 'connected';
+      case 'transferring':
+        return 'transferring';
+      case 'completed':
+        return 'completed';
+      case 'disconnected':
+        return 'disconnected';
+      case 'failed':
+      case 'declined':
+        return 'failed';
+      default:
+        return 'idle'; // idle, closed
+    }
+  }, [sessionState, transferActivity.active, transferActivity.verifying]);
+
+  /**
+   * REAL transport stats via getStats() — 1 Hz while a peer connection
+   * exists. Feeds the dev diagnostics panel (direct/relay, ICE candidate
+   * types, candidate-pair RTT, transport byte counters). Read-only, honest.
+   */
+  useEffect(() => {
+    if (!activePeerManager) return;
+    let stopped = false;
+    const tick = async () => {
+      try {
+        const stats = await sampleTransportStats(activePeerManager.getPeerConnection());
+        if (!stopped && stats) updateTransportTelemetry(stats);
+        if (!stopped)
+          updateDataChannelState(activePeerManager.getChannel('file')?.readyState ?? null);
+      } catch {
+        /* stats are best-effort diagnostics */
+      }
+    };
+    void tick();
+    const timer = setInterval(tick, 1000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [activePeerManager]);
 
   /** JOINER decline: terminate the pending session completely. Nothing was
    *  created yet (no RTCPeerConnection ever existed), and cleanup discards
@@ -1141,6 +1232,8 @@ export function useNexDropSession() {
 
   return {
     sessionState,
+    connectionPhase,
+    transferActivity,
     transferHistory,
     peerInfo,
     sasCode,

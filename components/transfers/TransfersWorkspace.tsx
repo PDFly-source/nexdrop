@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { UploadCloud, Download, ShieldCheck, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { SendDropzone } from '@/components/transfer/SendDropzone';
@@ -75,7 +75,37 @@ export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
   onPreviewFile,
 }) => {
   // Mobile Send / Receive segmented toggle
-  const [mobileTransferMode, setMobileTransferMode] = useState<'send' | 'receive'>('send');
+  const [baseMobileMode, setMobileTransferMode] = useState<'send' | 'receive'>('send');
+
+  /**
+   * Mobile priority during an active transfer: the segmented control follows
+   * the REAL transfer direction (pure derivation — no effect needed), so the
+   * incoming file's progress is visible without hunting for the right tab.
+   * A tap during the transfer pins the user's explicit choice for THAT
+   * transfer; the next transfer auto-follows again.
+   */
+  const transferActive =
+    activeTransfer?.status === 'transferring' || activeTransfer?.status === 'paused';
+  const activeTransferId = transferActive ? activeTransfer?.id : undefined;
+  const [modeOverride, setModeOverride] = useState<{
+    mode: 'send' | 'receive';
+    transferId: string | undefined;
+  } | null>(null);
+  const mobileTransferMode =
+    modeOverride && modeOverride.transferId === activeTransferId
+      ? modeOverride.mode
+      : transferActive
+        ? activeTransfer!.direction === 'incoming'
+          ? 'receive'
+          : 'send'
+        : baseMobileMode;
+  const handleMobileMode = (mode: 'send' | 'receive') => {
+    if (transferActive) setModeOverride({ mode, transferId: activeTransfer?.id });
+    else {
+      setModeOverride(null);
+      setMobileTransferMode(mode);
+    }
+  };
   // "Send another" pulses this counter to open the file chooser instantly.
   const [sendAnotherSignal, setSendAnotherSignal] = useState(0);
 
@@ -120,7 +150,7 @@ export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
           <button
             role="tab"
             aria-selected={mobileTransferMode === 'send'}
-            onClick={() => setMobileTransferMode('send')}
+            onClick={() => handleMobileMode('send')}
             className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all min-h-[44px] ${
               mobileTransferMode === 'send'
                 ? 'bg-nd-teal text-nd-bg-0 shadow-sm'
@@ -133,7 +163,7 @@ export const TransfersWorkspace: React.FC<TransfersWorkspaceProps> = ({
           <button
             role="tab"
             aria-selected={mobileTransferMode === 'receive'}
-            onClick={() => setMobileTransferMode('receive')}
+            onClick={() => handleMobileMode('receive')}
             className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all min-h-[44px] ${
               mobileTransferMode === 'receive'
                 ? 'bg-nd-teal text-nd-bg-0 shadow-sm'

@@ -59,9 +59,27 @@ export interface ReceiverTelemetry {
   updatedAt: number;
 }
 
+/** REAL transport stats from RTCPeerConnection.getStats() (see transportStats.ts). */
+export interface TransportTelemetry {
+  connected: boolean;
+  transport: 'direct' | 'relay' | 'unknown';
+  localCandidateType: string | null;
+  remoteCandidateType: string | null;
+  rttMs: number | null;
+  bytesSent: number | null;
+  bytesReceived: number | null;
+  outgoingBitrateBps: number | null;
+  dtlsState: string | null;
+  sctpState: string | null;
+  pairState: string | null;
+  timestamp: number;
+}
+
 export interface NexDropTelemetry {
   sender: Partial<SenderTelemetry> | null;
   receiver: Partial<ReceiverTelemetry> | null;
+  transport: TransportTelemetry | null;
+  dataChannelState: string | null;
 }
 
 declare global {
@@ -71,8 +89,9 @@ declare global {
 }
 
 function root(): NexDropTelemetry {
-  if (typeof window === 'undefined') return { sender: null, receiver: null };
-  if (!window.__NEXDROP_TELEMETRY__) window.__NEXDROP_TELEMETRY__ = { sender: null, receiver: null };
+  if (typeof window === 'undefined') return { sender: null, receiver: null, transport: null, dataChannelState: null };
+  if (!window.__NEXDROP_TELEMETRY__)
+    window.__NEXDROP_TELEMETRY__ = { sender: null, receiver: null, transport: null, dataChannelState: null };
   return window.__NEXDROP_TELEMETRY__;
 }
 
@@ -86,7 +105,18 @@ export function updateReceiverTelemetry(snapshot: Partial<ReceiverTelemetry>): v
   root().receiver = { role: 'receiver', ...(root().receiver || {}), ...snapshot, updatedAt: Date.now() };
 }
 
+export function updateTransportTelemetry(snapshot: TransportTelemetry): void {
+  if (typeof window === 'undefined') return;
+  root().transport = snapshot;
+}
+
+/** File DataChannel readyState — 'open' while the transfer path is live. */
+export function updateDataChannelState(state: string | null): void {
+  if (typeof window === 'undefined') return;
+  root().dataChannelState = state;
+}
+
 export function clearTelemetry(): void {
   if (typeof window === 'undefined') return;
-  window.__NEXDROP_TELEMETRY__ = { sender: null, receiver: null };
+  window.__NEXDROP_TELEMETRY__ = { sender: null, receiver: null, transport: null, dataChannelState: null };
 }

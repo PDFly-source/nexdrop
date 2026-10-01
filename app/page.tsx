@@ -62,6 +62,8 @@ function NexDropMainContent() {
   // Master Session Hook
   const {
     sessionState,
+    connectionPhase,
+    transferActivity,
     peerInfo,
     sasCode,
     isSecurityVerified,
@@ -209,8 +211,10 @@ function NexDropMainContent() {
         <Navbar
           activeTab={activeTab}
           onTabChange={(tab) => setActiveTab(tab)}
-          sessionState={sessionState}
+          connectionPhase={connectionPhase}
+          transferDirection={transferActivity.direction}
           peerName={peerInfo?.name}
+          peerPlatform={peerInfo?.platform}
           onOpenConnectionDetails={() => setActiveTab('devices')}
           onStartPairing={() => {
             setActiveTab('devices');

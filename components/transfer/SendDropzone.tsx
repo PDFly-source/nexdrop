@@ -18,6 +18,12 @@ import {
 import { FileItem } from '@/types/transfer';
 import { formatBytes, getFileCategory } from '@/lib/utils/format';
 
+/** Extension badge helper: 'recording.MP4' → 'MP4'. */
+const fileExtension = (name: string): string | null => {
+  const m = name.match(/\.([A-Za-z0-9]{1,8})$/);
+  return m ? m[1].toUpperCase() : null;
+};
+
 interface SendDropzoneProps {
   sendQueue: FileItem[];
   isConnected: boolean;
@@ -42,6 +48,15 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
     if (openSignal > 0) fileInputRef.current?.click();
   }, [openSignal]);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
+  /** Tapped rows reveal the FULL filename (no ellipsis truncation). */
+  const [expandedNames, setExpandedNames] = useState<Set<string>>(new Set());
+  const toggleName = (id: string) =>
+    setExpandedNames((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -176,16 +191,32 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
             {sendQueue.map((item) => (
               <div
                 key={item.id}
-                className="group flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-nd-bg-1 p-2.5 text-xs transition-colors hover:border-white/10"
+                role="button"
+                tabIndex={0}
+                title={item.name}
+                aria-label={`File ${item.name}, ${formatBytes(item.size)}, ${item.status}. Tap for full filename.`}
+                onClick={() => toggleName(item.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleName(item.id); }}
+                className="group flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-nd-bg-1 p-2.5 text-xs transition-colors hover:border-white/10 text-left w-full"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="shrink-0">{renderFileIcon(item.name, item.type)}</div>
                   <div className="min-w-0 text-left">
-                    <p className="truncate font-medium text-nd-text-primary text-xs">
+                    <p
+                      className={`${
+                        expandedNames.has(item.id) ? 'break-all' : 'truncate'
+                      } font-medium text-nd-text-primary text-xs`}
+                    >
                       {item.name}
                     </p>
                     <div className="flex items-center gap-2 text-[11px] text-nd-text-secondary">
                       <span>{formatBytes(item.size)}</span>
+                      <span>·</span>
+                      {fileExtension(item.name) && (
+                        <span className="rounded bg-white/[0.06] px-1 font-mono tracking-wide">
+                          {fileExtension(item.name)}
+                        </span>
+                      )}
                       <span>·</span>
                       <span className="capitalize">{item.status}</span>
                       {item.progress > 0 && item.status === 'transferring' && (

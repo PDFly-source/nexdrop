@@ -69,7 +69,9 @@ export const TransferCompleteBanner: React.FC<TransferCompleteBannerProps> = ({
         </span>
 
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-nd-text-primary">Transfer complete</p>
+          <p className="text-sm font-semibold text-nd-text-primary">
+            {isOutgoing ? 'Transfer complete' : 'Transfer received'}
+          </p>
           <p className="mt-0.5 text-xs text-nd-text-secondary">
             <span className="inline-flex items-center gap-1">
               {isOutgoing ? (
@@ -99,28 +101,31 @@ export const TransferCompleteBanner: React.FC<TransferCompleteBannerProps> = ({
                 onClick={onSendAnother}
                 className="rounded-lg bg-nd-teal px-3.5 py-2 text-xs font-semibold text-nd-bg-0 hover:bg-nd-teal-bright transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
               >
-                Send another
+                Send more
               </button>
             )}
             {!isOutgoing && justCompleted.blobUrl && (
-              <button
-                onClick={() => { if (justCompleted.blobUrl) window.open(justCompleted.blobUrl, '_blank', 'noopener'); }}
-                className="rounded-lg bg-nd-teal px-3.5 py-2 text-xs font-semibold text-nd-bg-0 hover:bg-nd-teal-bright transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
-              >
-                Open file
-              </button>
+              <>
+                <button
+                  onClick={() => { if (justCompleted.blobUrl) window.open(justCompleted.blobUrl, '_blank', 'noopener'); }}
+                  className="rounded-lg bg-nd-teal px-3.5 py-2 text-xs font-semibold text-nd-bg-0 hover:bg-nd-teal-bright transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
+                >
+                  Open file
+                </button>
+                <a
+                  href={justCompleted.blobUrl}
+                  download={justCompleted.name}
+                  className="rounded-lg border border-white/[0.1] bg-nd-surface px-3.5 py-2 text-xs font-medium text-nd-text-secondary hover:text-nd-text-primary hover:border-white/20 transition-colors min-h-[36px] inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
+                >
+                  Save
+                </a>
+              </>
             )}
             <button
               onClick={onNavigateHome}
               className="rounded-lg border border-white/[0.1] bg-nd-surface px-3.5 py-2 text-xs font-medium text-nd-text-secondary hover:text-nd-text-primary hover:border-white/20 transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
             >
               Done
-            </button>
-            <button
-              onClick={dismiss}
-              className="rounded-lg border border-white/[0.1] bg-nd-surface px-3.5 py-2 text-xs font-medium text-nd-text-secondary hover:text-nd-text-primary hover:border-white/20 transition-colors min-h-[36px] focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal"
-            >
-              Keep sending
             </button>
           </div>
         </div>

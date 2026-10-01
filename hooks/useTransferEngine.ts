@@ -18,6 +18,7 @@ import {
   FileResumeMessage,
 } from '@/types/transfer';
 import { PeerConnectionManager } from '@/lib/webrtc/peer';
+import type { TransferDirection } from '@/types/session';
 import { sounds } from '@/lib/utils/sound';
 
 export interface ActiveTransferState {
@@ -53,8 +54,14 @@ export function useTransferEngine(
   cipherRef: React.MutableRefObject<ChunkCipher | null>,
   onTransferComplete?: (item: TransferCompleteInfo) => void,
   onTransferVerified?: (transferId: string, match: boolean) => void,
-  /** Session state machine: CONNECTED → TRANSFERRING → COMPLETED (sender side). */
-  onTransferActivity?: (active: boolean) => void
+  /** Authoritative connection-phase feed: (active, direction, verifying).
+   * Reports the engines' REAL activity so the session hook can derive the
+   * user-facing connection phase. Never synthesized. */
+  onTransferActivity?: (
+    active: boolean,
+    direction?: TransferDirection,
+    verifying?: boolean
+  ) => void
 ) {
   const [sendQueue, setSendQueue] = useState<FileItem[]>([]);
   const [incomingFiles, setIncomingFiles] = useState<FileItem[]>([]);
@@ -62,6 +69,26 @@ export function useTransferEngine(
 
   const activeSenderRef = useRef<SenderEngine | null>(null);
   const receiverEngineRef = useRef<ReceiverEngine | null>(null);
+  /** TransferId whose SHA-256 verdict already arrived (VERIFY can beat the
+   *  sender's own completion callback across the control channel). */
+  const verifyArrivedRef = useRef<string | null>(null);
+  /** Monotonic token so a verifying-phase failsafe never clobbers a newer activity report. */
+  const activityTokenRef = useRef(0);
+  const reportActivity = useCallback(
+    (active: boolean, direction?: TransferDirection, verifying?: boolean) => {
+      activityTokenRef.current += 1;
+      onTransferActivity?.(active, direction, verifying);
+    },
+    [onTransferActivity]
+  );
+  /** Failsafe: if the receiver never delivers a VERIFY verdict (peer gone),
+   *  end the verifying phase after 15 s instead of lying about it forever. */
+  const scheduleVerifyFailsafe = useCallback(() => {
+    const token = activityTokenRef.current;
+    setTimeout(() => {
+      if (activityTokenRef.current === token) reportActivity(false);
+    }, 15000);
+  }, [reportActivity]);
 
   // The consumer (app/page.tsx) passes onTransferComplete / onTransferVerified
   // as inline arrows, so their identity changes on every render. Referencing
@@ -75,7 +102,7 @@ export function useTransferEngine(
   useEffect(() => {
     onTransferCompleteRef.current = onTransferComplete;
     onTransferVerifiedRef.current = onTransferVerified;
-  }, [onTransferComplete, onTransferVerified, onTransferActivity]);
+  }, [onTransferComplete, onTransferVerified]);
   const isTransferringRef = useRef<boolean>(false);
   const peerManagerRef = useRef<PeerConnectionManager | null>(null);
 
@@ -216,6 +243,7 @@ export function useTransferEngine(
             }
             return next;
           });
+          reportActivity(true, 'incoming');
           void receiver.startTransfer(msg);
           break;
 
@@ -227,10 +255,17 @@ export function useTransferEngine(
           );
           break;
 
-        case 'FILE_END':
+        case 'FILE_END': {
           console.debug('[nexdrop] FILE_END received for', (msg as { transferId?: string }).transferId?.slice(0, 8));
-          void receiver?.finishTransfer(msg);
+          // The receiver must now hash the received bytes for the SHA-256
+          // verdict — truthfully a VERIFYING phase, then idle.
+          const verifyToken = activityTokenRef.current + 1;
+          reportActivity(true, 'incoming', true);
+          void receiver?.finishTransfer(msg).finally(() => {
+            if (activityTokenRef.current === verifyToken) reportActivity(false);
+          });
           break;
+        }
 
         case 'PAUSE':
           receiver?.handlePause(msg as FilePauseMessage);
@@ -255,7 +290,7 @@ export function useTransferEngine(
           if (r) void receiver?.cancel(msg.reason || 'Cancelled by peer');
           if (s || r) {
             isTransferringRef.current = false;
-    onTransferActivity?.(false);
+    reportActivity(false);
             setActiveTransfer((prev) =>
               prev && prev.id === (cancelId ?? prev.id) ? { ...prev, status: 'cancelled' } : prev
             );
@@ -266,12 +301,16 @@ export function useTransferEngine(
         case 'VERIFY': {
           // Receiver's integrity verdict about OUR outgoing file
           const v = msg as FileVerifyMessage;
+          verifyArrivedRef.current = v.transferId;
           setSendQueue((q) =>
             q.map((item) =>
               item.id === v.transferId ? { ...item, integrityVerified: v.match } : item
             )
           );
           onTransferVerified?.(v.transferId, v.match);
+          // Sender already streamed everything and is in the verifying phase:
+          // the verdict is the honest end of the activity.
+          if (!isTransferringRef.current) reportActivity(false);
           break;
         }
 
@@ -284,7 +323,7 @@ export function useTransferEngine(
       onFileChunkCallbackRef.current = null;
       onControlCallbackRef.current = null;
     };
-  }, [onFileChunkCallbackRef, onControlCallbackRef, onTransferVerified, onTransferActivity]);
+  }, [onFileChunkCallbackRef, onControlCallbackRef, onTransferVerified, reportActivity]);
 
   // -----------------------------------------------------------------------
   // Send queue processing
@@ -315,7 +354,7 @@ export function useTransferEngine(
       }
 
       isTransferringRef.current = true;
-      onTransferActivity?.(true);
+      reportActivity(true, 'outgoing');
       console.debug('[nexdrop] queue: starting transfer', targetItem.id, targetItem.name);
 
       const sender = new SenderEngine({
@@ -357,8 +396,15 @@ export function useTransferEngine(
           console.debug('[nexdrop] sender completed:', transferId.slice(0, 8));
           sounds.playComplete();
           isTransferringRef.current = false;
-    onTransferActivity?.(false);
           activeSenderRef.current = null;
+          // The receiver still has to hash the received bytes and send its
+          // SHA-256 verdict — the session is truthfully VERIFYING, not idle.
+          if (verifyArrivedRef.current === transferId) {
+            reportActivity(false);
+          } else {
+            reportActivity(true, 'outgoing', true);
+            scheduleVerifyFailsafe();
+          }
 
           setSendQueue((q) =>
             q.map((item) =>
@@ -393,7 +439,7 @@ export function useTransferEngine(
           console.debug('[nexdrop] sender ERROR:', transferId.slice(0, 8), err);
           sounds.playError();
           isTransferringRef.current = false;
-    onTransferActivity?.(false);
+    reportActivity(false);
           activeSenderRef.current = null;
 
           setSendQueue((q) =>
@@ -419,7 +465,7 @@ export function useTransferEngine(
         idx === nextIndex && item.id === targetItem.id ? { ...item, status: 'transferring' } : item
       );
     }
-  }, [peerManager, isPeerConnected, cipherRef, onTransferActivity]);
+  }, [peerManager, isPeerConnected, cipherRef, reportActivity, scheduleVerifyFailsafe]);
 
   useEffect(() => {
     processNextQueueItemRef.current = processNextQueueItem;
@@ -429,7 +475,7 @@ export function useTransferEngine(
     if (isPeerConnected && !isTransferringRef.current) {
       processNextQueueItem();
     }
-  }, [sendQueue, isPeerConnected, processNextQueueItem, onTransferActivity]);
+  }, [sendQueue, isPeerConnected, processNextQueueItem, reportActivity]);
 
   // The peer connection dropped (disconnect/failure): abort the in-flight
   // transfer immediately instead of letting the sender keep pushing the
@@ -453,7 +499,7 @@ export function useTransferEngine(
 
     activeSenderRef.current = null;
     isTransferringRef.current = false;
-    onTransferActivity?.(false);
+    reportActivity(false);
 
     if (sender) {
       void sender.cancel('Connection lost');
@@ -479,7 +525,7 @@ export function useTransferEngine(
       )
     );
     setActiveTransfer((prev) => (prev ? { ...prev, status: 'failed' } : prev));
-  }, [isPeerConnected, onTransferActivity]);
+  }, [isPeerConnected, reportActivity]);
 
   // -----------------------------------------------------------------------
   // Public queue operations
@@ -509,13 +555,13 @@ export function useTransferEngine(
       if (target?.status === 'transferring' && activeSenderRef.current) {
         activeSenderRef.current.cancel();
         isTransferringRef.current = false;
-    onTransferActivity?.(false);
+    reportActivity(false);
         activeSenderRef.current = null;
       }
       return prev.filter((i) => i.id !== id);
     });
-    onTransferActivity?.(false);
-  }, [onTransferActivity]);
+    reportActivity(false);
+  }, [reportActivity]);
 
   const reorderSendQueue = useCallback((fromIndex: number, toIndex: number) => {
     setSendQueue((prev) => {
@@ -544,13 +590,13 @@ export function useTransferEngine(
     if (activeSenderRef.current) {
       activeSenderRef.current.cancel();
       isTransferringRef.current = false;
-    onTransferActivity?.(false);
+    reportActivity(false);
       activeSenderRef.current = null;
     }
     void receiverEngineRef.current?.cancel();
     setActiveTransfer(null);
-    onTransferActivity?.(false);
-  }, [onTransferActivity]);
+    reportActivity(false);
+  }, [reportActivity]);
 
   return {
     sendQueue,

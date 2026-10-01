@@ -89,6 +89,8 @@ export const IncomingTransfersCard: React.FC<IncomingTransfersCardProps> = ({
             {incomingFiles.map((file) => (
               <div
                 key={file.id}
+                title={file.name}
+                aria-label={`Received file ${file.name}, ${formatBytes(file.size)}, ${file.status}`}
                 className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-nd-bg-1 p-3 text-xs"
               >
                 <div className="flex items-center gap-2.5 min-w-0">

@@ -68,6 +68,11 @@ export class PeerConnectionManager {
     return this.channels[name];
   }
 
+  /** Raw peer connection for REAL getStats() transport sampling. */
+  public getPeerConnection(): RTCPeerConnection | null {
+    return this.pc;
+  }
+
   public isChannelReady(name: ChannelName): boolean {
     return this.channels[name]?.readyState === 'open';
   }

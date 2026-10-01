@@ -3,15 +3,18 @@
 import React from 'react';
 import { PWAInstallButton } from '@/components/ui/PWAInstallButton';
 import { Home, ArrowDownUp, MonitorSmartphone, Settings } from 'lucide-react';
-import { SessionState } from '@/types/session';
+import { ConnectionPhase, TransferDirection } from '@/types/session';
 
 export type WorkspaceTab = 'home' | 'transfers' | 'devices' | 'settings';
 
 interface NavbarProps {
   activeTab: WorkspaceTab;
   onTabChange: (tab: WorkspaceTab) => void;
-  sessionState: SessionState;
+  /** AUTHORITATIVE connection phase — the badge derives ONLY from this. */
+  connectionPhase: ConnectionPhase;
+  transferDirection?: TransferDirection | null;
   peerName?: string;
+  peerPlatform?: string;
   onOpenConnectionDetails?: () => void;
   onStartPairing?: () => void;
 }
@@ -26,18 +29,67 @@ const DESKTOP_TABS: { id: WorkspaceTab; label: string; icon: React.ComponentType
 export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   onTabChange,
-  sessionState,
+  connectionPhase,
+  transferDirection,
   peerName,
+  peerPlatform,
   onOpenConnectionDetails,
   onStartPairing,
 }) => {
-  const isConnected = sessionState === 'connected';
-  const isConnecting = sessionState === 'connecting';
-  const isReconnecting = sessionState === 'disconnected';
-  const isPairing = sessionState === 'hosting-offer' || sessionState === 'joiner-answer';
+  /**
+   * The badge is a pure function of the authoritative phase — NO local
+   * re-derivation from raw states, so it can never contradict the actual
+   * connection (e.g. "Not connected" while a transfer is verifiably running).
+   */
+  const livePhases: ConnectionPhase[] = ['connected', 'transferring', 'verifying', 'completed'];
+  const isLive = livePhases.includes(connectionPhase);
+  const isBusy =
+    connectionPhase === 'connecting' ||
+    connectionPhase === 'pairing' ||
+    connectionPhase === 'waiting_for_peer' ||
+    connectionPhase === 'incoming_request';
+
+  const peerLabel = peerName || peerPlatform?.split(' · ')[0] || 'peer';
+  const platformShort = peerPlatform?.split(' · ')[1] || '';
+  let label: string;
+  switch (connectionPhase) {
+    case 'pairing':
+      label = 'Waiting for receiver…';
+      break;
+    case 'waiting_for_peer':
+      label = 'Waiting for peer…';
+      break;
+    case 'incoming_request':
+      label = 'Incoming request…';
+      break;
+    case 'connecting':
+      label = 'Connecting…';
+      break;
+    case 'connected':
+    case 'completed':
+      label = platformShort ? `${peerLabel} · ${platformShort}` : peerLabel;
+      break;
+    case 'transferring':
+      label =
+        transferDirection === 'incoming'
+          ? `Receiving from ${peerLabel}`
+          : `Sending to ${peerLabel}`;
+      break;
+    case 'verifying':
+      label = 'Verifying…';
+      break;
+    case 'disconnected':
+      label = 'Not connected';
+      break;
+    case 'failed':
+      label = 'Connection failed';
+      break;
+    default:
+      label = 'Ready';
+  }
 
   const handleStatusBadgeClick = () => {
-    if (isConnected) {
+    if (isLive) {
       onOpenConnectionDetails?.();
     } else {
       onStartPairing?.();
@@ -96,41 +148,39 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Connection status badge */}
           <button
             onClick={handleStatusBadgeClick}
+            data-connection-phase={connectionPhase}
+            title={connectionPhase === 'transferring' || connectionPhase === 'verifying' ? 'Transfer active over an open DataChannel' : undefined}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-              isConnected
-                ? 'border-nd-success/30 bg-nd-success/10 text-nd-teal-bright hover:bg-nd-success/15'
-                : isConnecting
+              isLive
+                ? connectionPhase === 'transferring' || connectionPhase === 'verifying'
+                  ? 'border-nd-teal/40 bg-nd-teal/10 text-nd-teal-bright'
+                  : 'border-nd-success/30 bg-nd-success/10 text-nd-teal-bright hover:bg-nd-success/15'
+                : isBusy
                 ? 'border-nd-warning/30 bg-nd-warning/10 text-nd-warning hover:bg-nd-warning/15'
-                : isReconnecting
-                ? 'border-nd-warning/30 bg-nd-warning/10 text-nd-warning'
-                : isPairing
-                ? 'border-nd-teal/30 bg-nd-teal/10 text-nd-teal'
+                : connectionPhase === 'failed'
+                ? 'border-nd-coral/30 bg-nd-coral/10 text-nd-coral'
                 : 'border-white/[0.08] bg-nd-surface text-nd-text-secondary hover:text-nd-text-primary hover:border-white/20'
             }`}
           >
             <span
               aria-hidden="true"
               className={`h-1.5 w-1.5 rounded-full ${
-                isConnected
+                isLive
                   ? 'bg-nd-teal animate-pulse'
-                  : isConnecting
+                  : isBusy
                   ? 'bg-nd-warning animate-ping'
-                  : isPairing
-                  ? 'bg-nd-teal animate-ping'
                   : 'bg-white/30'
               }`}
             />
-            <span className="text-[11px] sm:text-xs">
-              {isConnected
-                ? peerName || 'Connected'
-                : isConnecting
-                ? 'Connecting…'
-                : isReconnecting
-                ? 'Reconnecting…'
-                : isPairing
-                ? 'Waiting for Peer…'
-                : 'Not connected'}
-            </span>
+            {connectionPhase === 'transferring' && (
+              <span aria-hidden="true" className="text-nd-teal-bright">
+                {transferDirection === 'incoming' ? '↓' : '↑'}
+              </span>
+            )}
+            {isLive && connectionPhase !== 'transferring' && (
+              <span aria-hidden="true" className="text-nd-teal-bright">●</span>
+            )}
+            <span className="text-[11px] sm:text-xs max-w-[10rem] sm:max-w-none truncate">{label}</span>
           </button>
 
           {/* PWA Install Button */}

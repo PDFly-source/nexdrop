@@ -4,15 +4,18 @@
  * Development-only transfer diagnostics panel.
  *
  * Opt-in: localStorage 'nexdrop:diagnostics' = '1' or ?diag=1 in the URL.
- * Renders ONLY values the engines measured in real time (live from
- * window.__NEXDROP_TELEMETRY__, refreshed 5×/second): RTT, smoothed RTT,
- * chunk size, window size, bufferedAmount, ACK count/rate, receiver write
- * latency + queue depth, throughput, bytes, stalls. '—' when a value is
- * not being produced. No synthesized, averaged-away or cosmetic numbers.
+ * Renders ONLY values measured in real time:
+ *  - Connection: getStats() transport truth — direct/relay, ICE candidate
+ *    types, candidate-pair RTT, transport byte counters, DataChannel state.
+ *  - Sender: ACK-cadence throughput, RTT, window, chunk, buffering, stalls.
+ *  - Receiver: write latency, queue depth, writer type, heap.
+ * Refreshed 5x/second from window.__NEXDROP_TELEMETRY__. '—' when a value
+ * is not being produced. No synthesized, averaged-away or cosmetic numbers.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { NexDropTelemetry } from '@/lib/transfer/telemetry';
+import { transportLabel } from '@/lib/transfer/transportStats';
 
 function isDiagnosticsEnabled(): boolean {
   if (typeof window === 'undefined') return false;
@@ -24,31 +27,40 @@ function isDiagnosticsEnabled(): boolean {
   }
 }
 
-const fmtBytes = (b: number | undefined): string => {
-  if (b === undefined || Number.isNaN(b)) return '—';
+const fmtBytes = (b: number | undefined | null): string => {
+  if (b === undefined || b === null || Number.isNaN(b)) return '—';
   if (b < 1024) return `${Math.round(b)} B`;
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KiB`;
   return `${(b / 1024 / 1024).toFixed(1)} MiB`;
 };
 const fmtBps = (v: number | undefined): string => {
   if (!v || v <= 0) return '—';
+  if (v < 1024 * 1024) return `${(v / 1024).toFixed(0)} KiB/s`;
   return `${(v / 1024 / 1024).toFixed(2)} MiB/s`;
 };
-const fmtMs = (v: number | undefined): string => (v === undefined || v <= 0 ? '—' : `${Math.round(v)} ms`);
+const fmtMs = (v: number | undefined | null): string =>
+  v === undefined || v === null || v <= 0 ? '—' : `${Math.round(v)} ms`;
 const fmtKib = (v: number | undefined): string =>
   v === undefined || v <= 0 ? '—' : `${(v / 1024).toFixed(0)} KiB`;
 
 export default function DiagnosticsPanel() {
   const [enabled] = useState(isDiagnosticsEnabled);
   const [data, setData] = useState<NexDropTelemetry | null>(null);
+  /** Measured peak throughput this session (running max of real samples). */
+  const [peakBps, setPeakBps] = useState(0);
+  const peakRef = useRef(0);
 
   useEffect(() => {
     if (!enabled) return;
     const timer = setInterval(() => {
-      setData((prev) => ({
-        sender: (window as any).__NEXDROP_TELEMETRY__?.sender ?? prev?.sender ?? null,
-        receiver: (window as any).__NEXDROP_TELEMETRY__?.receiver ?? prev?.receiver ?? null,
-      }));
+      const t = (window as any).__NEXDROP_TELEMETRY__ as NexDropTelemetry | undefined;
+      if (!t) return;
+      const live = Math.max(t.sender?.throughputBps ?? 0, t.receiver?.throughputBps ?? 0);
+      if (live > peakRef.current) {
+        peakRef.current = live;
+        setPeakBps(live);
+      }
+      setData({ ...t });
     }, 200);
     return () => clearInterval(timer);
   }, [enabled]);
@@ -56,9 +68,28 @@ export default function DiagnosticsPanel() {
   if (!enabled) return null;
   const s = data?.sender;
   const r = data?.receiver;
+  const t = data?.transport;
+  const dc = data?.dataChannelState;
 
+  const connectionRows: Array<[string, string]> = [
+    ['WebRTC', t?.connected ? '✓ connected' : 'not connected'],
+    ['Transport', t ? transportLabel(t) : '—'],
+    [
+      'ICE candidates',
+      t?.localCandidateType && t?.remoteCandidateType
+        ? `${t.localCandidateType} → ${t.remoteCandidateType}`
+        : '—',
+    ],
+    ['Pair RTT', fmtMs(t?.rttMs)],
+    ['Pair state', t?.pairState || '—'],
+    ['DTLS / SCTP', `${t?.dtlsState || '—'} / ${t?.sctpState || '—'}`],
+    ['DataChannel', dc || '—'],
+    ['Transport bytes', t ? `${fmtBytes(t.bytesSent)} ↓ ${fmtBytes(t.bytesReceived)}` : '—'],
+    ['Outgoing bitrate', t?.outgoingBitrateBps ? fmtBps(t.outgoingBitrateBps / 8) : '—'],
+  ];
   const senderRows: Array<[string, string]> = [
     ['Throughput (ACK clock)', fmtBps(s?.throughputBps)],
+    ['Peak (session max)', fmtBps(peakBps)],
     ['Smoothed RTT', fmtMs(s?.srttMs)],
     ['Min RTT', fmtMs(s?.minRttMs)],
     ['Chunk size', fmtKib(s?.chunkSize)],
@@ -89,13 +120,13 @@ export default function DiagnosticsPanel() {
         <p className="text-[10px] text-nd-text-secondary">refresh 5 Hz</p>
       </div>
       <div className="flex flex-wrap gap-8">
+        <DiagSection title="Connection" rows={connectionRows} />
         <DiagSection title="Sender" rows={senderRows} />
         <DiagSection title="Receiver" rows={receiverRows} />
       </div>
     </div>
   );
 }
-
 
 function DiagSection({ title, rows }: { title: string; rows: Array<[string, string]> }) {
   return (

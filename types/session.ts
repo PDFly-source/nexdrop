@@ -92,3 +92,38 @@ export type PairingError =
   | 'signal-unavailable'
   | 'signal-network'
   | 'already-joined';
+
+/**
+ * AUTHORITATIVE connection phase — the single source of truth for any
+ * user-facing connection status (header badge, diagnostics). Derived in
+ * exactly one place (useNexDropSession) from the real RTCPeerConnection
+ * lifecycle plus the transfer engines' activity. The header may ONLY read
+ * this — never re-derive from SessionState.
+ *
+ * An open DataChannel with an actively pumping transfer engine IS a live
+ * connection: a transient ICE 'disconnected' blip must never show
+ * "Not connected" while bytes are verifiably flowing.
+ */
+export type ConnectionPhase =
+  | 'idle' // nothing happening — "Ready"
+  | 'pairing' // share created, ONE QR visible, waiting for a receiver — "Waiting for receiver…"
+  | 'waiting_for_peer' // join request filed, waiting for the host's decision
+  | 'incoming_request' // host: a join request is pending Accept/Decline
+  | 'connecting' // SDP/ICE exchange or DataChannels opening — "Connecting…"
+  | 'connected' // DataChannels open (real, verified)
+  | 'transferring' // transfer engine actively streaming file bytes
+  | 'verifying' // receiver computing the SHA-256 verdict / verdict in flight
+  | 'completed' // transfer(s) finished and verified, link still up
+  | 'disconnected' // peer connection genuinely dropped, no data flowing
+  | 'failed'; // connection or pairing failed
+
+/** Direction of the actively-streaming transfer (drives ↑/↓ header labels). */
+export type TransferDirection = 'outgoing' | 'incoming';
+
+/** What the transfer engines report about live activity — never faked. */
+export interface TransferActivity {
+  active: boolean;
+  direction: TransferDirection | null;
+  /** Receiver is hashing the completed file for the SHA-256 verdict. */
+  verifying: boolean;
+}
