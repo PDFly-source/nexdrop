@@ -32,16 +32,16 @@ const copy: Record<SendFlowState, string> = {
 export function SendPairingSurface({ state, offerQr, error, queuedCount, fileSummary, expiresAt, onCancel, onRetry, onOpenDevices, onRemoveFiles }: Props) {
   const [image, setImage] = useState<{ code: string; url: string } | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  // Live countdown to the pairing's real expiry — derived from a 1s clock
+  // tick, never a decorative timer, and never setState inside the effect body.
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [codeCopied, setCodeCopied] = useState(false);
-  // Live countdown to the pairing's real expiry — never a decorative timer.
   useEffect(() => {
-    if (!expiresAt) { setSecondsLeft(null); return; }
-    const tick = () => setSecondsLeft(Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)));
-    tick();
-    const id = setInterval(tick, 1000);
+    if (!expiresAt) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
   }, [expiresAt]);
+  const secondsLeft = expiresAt ? Math.max(0, Math.ceil((expiresAt - nowMs) / 1000)) : null;
   const copyCode = async () => {
     if (!code || typeof navigator === 'undefined' || !navigator.clipboard) return;
     try { await navigator.clipboard.writeText(code); setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000); } catch { /* paste fallbacks remain */ }

@@ -283,7 +283,11 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
   // requested only at this moment (the modal requests it when it opens).
   useEffect(() => {
     if (!receiveScanTick) return;
-    if (sessionState === 'idle' || sessionState === 'disconnected') openScanner('offer');
+    // Cross-component Home tap signal: defer the modal open to a microtask so
+    // the effect body never calls setState synchronously (cascading renders).
+    queueMicrotask(() => {
+      if (sessionState === 'idle' || sessionState === 'disconnected') openScanner('offer');
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receiveScanTick]);
 

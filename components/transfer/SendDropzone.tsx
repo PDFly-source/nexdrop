@@ -40,7 +40,6 @@ export const SendDropzone: React.FC<SendDropzoneProps> = ({
   // "Send another" opens the system file chooser immediately — no detour.
   useEffect(() => {
     if (openSignal > 0) fileInputRef.current?.click();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openSignal]);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
