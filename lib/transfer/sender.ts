@@ -68,6 +68,9 @@ export interface SenderOptions {
   cipher?: ChunkCipher | null;
   /** Negotiated SCTP max message size (pc.sctp.maxMessageSize). 0/undefined = unknown. */
   maxMessageSize?: number;
+  /** TURBO multi-channel: accessor for extra open file streams (file-1..file-3).
+   * Polled when the scaling gate fires; absence means single-channel mode. */
+  extraFileChannels?: () => RTCDataChannel[];
 }
 
 /** Real backpressure stall: buffer drain wait / ACK starvation. */
@@ -101,6 +104,22 @@ export class SenderEngine {
 
   private currentChunkIndex = 0;
   /** Cumulative byte offset of chunk `i` start (from chunkSteps). */
+  /** The step table's OWN size for this chunk index — NOT the current
+   * trailing size. sliceOf() MUST use this: slicing chunk F-1 with the new
+   * step's size desyncs the byte stream from bytesAtChunkStart() (the
+   * 2026-10-01 incident class; caught by the cellular harness 2026-10-01
+   * as a one-chunk shift between the pump and the ACK accounting). */
+  private chunkSizeFor(index: number): number {
+    let prevFirst = 0;
+    let prevSize = this.chunkSteps0;
+    for (const step of this.chunkSteps) {
+      if (index < step.firstIndex) return prevSize;
+      prevFirst = step.firstIndex;
+      prevSize = step.size;
+    }
+    return prevSize;
+  }
+
   private bytesAtChunkStart(index: number): number {
     // Simple linear walk (chunkSteps is tiny — 3-4 entries max)
     let offset = 0;
@@ -163,6 +182,26 @@ export class SenderEngine {
   private lastChunkRateAt = 0;
   /** Woken by handleAck — the window wait is event-driven, polls only as a failsafe. */
   private windowWaiters: Set<() => void> = new Set();
+  // ---- TURBO multi-channel pool (2026-10-01) ----
+  private getActiveChannels: () => RTCDataChannel[];
+  /** Striping pool. Order is stable; chunk index % length picks the stream. */
+  private activeChannels: RTCDataChannel[];
+  private channelsFrozen = false;
+  private lastChannelChangeAt = 0;
+  private channelBaselineAcked = 0;
+  private channelBaselineAt = 0;
+  private channelEvaluating = false;
+  private channelBaselineBps = 0;
+  private channelBaselineStalls = 0;
+  private lastScalingBps = 0;
+  private lastWriteMsEwma = 0;
+  private lastQueueDepth = 0;
+  // ---- TURBO adaptive chunk ladder (2026-10-01) ----
+  /** Corruption-risk freeze: any stall/pressure/shrink freezes the ladder. */
+  private chunkFrozen = false;
+  private drainsSinceChunkStep = 0;
+  // ---- BDP + RTT variance (measured, telemetry + scaling gate) ----
+  private rttVarEwma = 0;
 
   private isPaused = false;
   private isCancelled = false;
@@ -195,18 +234,27 @@ export class SenderEngine {
     this.chunkSteps = [{ firstIndex: 0, size: this.chunkSteps0 }];
 
     this.totalChunks = Math.max(1, Math.ceil(this.file.size / this.chunkSteps0));
+    this.getActiveChannels = options.extraFileChannels
+      ? () => [this.fileChannel, ...options.extraFileChannels!().slice(0, 3)]
+      : () => [this.fileChannel];
+    this.activeChannels = [this.fileChannel];
+    for (const ch of this.activeChannels) ch.bufferedAmountLowThreshold = BUFFER_LOW_WATER;
     // Event-driven SCTP buffer pacing: fill to BUFFER_HIGH_WATER, then wait
     // for 'bufferedamountlow' which fires once the buffer drains to this.
     this.fileChannel.bufferedAmountLowThreshold = BUFFER_LOW_WATER;
   }
 
   public handleAck(index: number, writeMs?: number, queueDepth?: number) {
+    if (writeMs !== undefined) this.lastWriteMsEwma = writeMs;
+    if (queueDepth !== undefined) this.lastQueueDepth = queueDepth;
     const sentAt = this.sendTimes.get(index);
     if (sentAt !== undefined) {
       const sample = Date.now() - sentAt;
       if (sample > 0 && sample < 30000) {
         this.rttEwmaMs = this.rttEwmaMs > 0 ? this.rttEwmaMs * 0.75 + sample * 0.25 : sample;
         if (this.minRttMs === 0 || sample < this.minRttMs) this.minRttMs = sample;
+        const jitter = Math.abs(sample - (this.minRttMs || sample));
+        this.rttVarEwma = this.rttVarEwma > 0 ? this.rttVarEwma * 0.8 + jitter * 0.2 : jitter;
       }
       for (let i = index; i >= index - 64 && i >= 0; i--) this.sendTimes.delete(i);
       if (this.sendTimes.size > 512) this.sendTimes.clear();
@@ -222,13 +270,17 @@ export class SenderEngine {
       this.acksPerSecEwma = this.acksPerSecEwma > 0 ? this.acksPerSecEwma * 0.7 + instAcks * 0.3 : instAcks;
     }
 
-    // Byte-accurate accounting even across mid-transfer chunk-size changes.
+    // Byte-accurate accounting even across mid-transfer chunk-size steps.
+    // ABSOLUTE assignment (2026-10-01): ACK index is always the receiver's
+    // contiguous durable frontier, so bytesAcked = boundary(frontier+1).
+    // The old DIFF form recomputed the previous frontier boundary under the
+    // CURRENT step table — when a ladder step landed between two ACKs, the
+    // old boundary shifted and the accounting corrupted by exactly one
+    // stale-size chunk (cellular harness: 8323072/8388608 stall).
+    const frontier = this.acknowledgedChunkIndex;
     const newlyAckedBytes =
-      this.acknowledgedChunkIndex > previouslyAckedChunk
-        ? this.bytesAtChunkStart(this.acknowledgedChunkIndex + 1) -
-          this.bytesAtChunkStart(previouslyAckedChunk + 1)
-        : 0;
-    this.bytesAcked += newlyAckedBytes;
+      frontier > previouslyAckedChunk ? Math.max(0, this.bytesAtChunkStart(frontier + 1) - this.bytesAcked) : 0;
+    this.bytesAcked = Math.max(this.bytesAcked, this.bytesAtChunkStart(frontier + 1));
 
     // Measured throughput from the ACK cadence (real bytes, real time).
     const now = Date.now();
@@ -268,6 +320,7 @@ export class SenderEngine {
     if (queueDepth !== undefined && queueDepth > 4) {
       this.deepQueueStreak++;
       if (this.deepQueueStreak >= 2 && this.windowBytes > MIN_WINDOW_BYTES) {
+        this.chunkFrozen = true; // sustained receiver pressure = risk condition
         this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.85));
         this.lastGrowthBytes = this.bytesAcked;
         this.lastPressureAt = Date.now();
@@ -280,6 +333,7 @@ export class SenderEngine {
     if (writeMs !== undefined && writeMs > 40) {
       this.slowWriteStreak++;
       if (this.slowWriteStreak >= 3 && this.windowBytes > MIN_WINDOW_BYTES) {
+        this.chunkFrozen = true; // sustained storage pressure = risk condition
         this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.9));
         this.lastGrowthBytes = this.bytesAcked;
         this.lastPressureAt = Date.now();
@@ -323,6 +377,33 @@ export class SenderEngine {
         this.windowBytes = Math.min(MAX_WINDOW_BYTES, Math.ceil(this.windowBytes * 1.5));
         this.windowHighWater = Math.max(this.windowHighWater, this.windowBytes);
       }
+      this.drainsSinceChunkStep++;
+
+      // ---- TURBO adaptive chunk ladder (race-free by construction) ----
+      // The 2026-10-01 desync incident happened because a step landed AT
+      // the pump's read-ahead horizon. A step at firstIndex F never
+      // changes bytesAtChunkStart(i) for i < F, and read-ahead only ever
+      // slices currentChunkIndex+1 — so F = currentChunkIndex + 2 is
+      // provably race-free with the in-flight pre-read slice.
+      if (
+        !this.chunkFrozen &&
+        this.chunkSteps.length > 0 &&
+        this.drainsSinceChunkStep >= 2 &&
+        this.currentChunkIndex + 2 > this.chunkSteps[this.chunkSteps.length - 1].firstIndex
+      ) {
+        const cur = this.chunkSize;
+        const ladder = [128 * 1024, 256 * 1024];
+        const next = ladder.find((sz) => sz > cur && sz <= this.chunkCap);
+        if (next) {
+          this.chunkSteps.push({ firstIndex: this.currentChunkIndex + 2, size: next });
+          this.drainsSinceChunkStep = 0;
+        } else {
+          this.chunkFrozen = true; // ceiling reached — no more steps
+        }
+      }
+
+      // ---- TURBO multi-channel scaling gate (measured, never blind) ----
+      this.evaluateChannelScaling();
       // NOTE: chunk size NEVER grows mid-transfer (2026-10-01 incident).
       // A mid-transfer grow races the pump's one-slice read-ahead: a chunk
       // pre-read under the old size is then counted under the new step
@@ -350,6 +431,7 @@ export class SenderEngine {
    *   The stall is recorded (diagnostics + cooldown), but the window HOLDS.
    */
   private noteStall(kind: 'buffer' | 'starvation'): void {
+    this.chunkFrozen = true; // any stall freezes the chunk ladder (2026-10-01 rule)
     this.lastStallAt = Date.now();
     this.stallCount++;
     this.lastPressureAt = Date.now();
@@ -367,6 +449,7 @@ export class SenderEngine {
     throughputBps: number; stalls: number; bufferedAmount: number;
     chunksPerSec: number; acksPerSec: number; sctpMaxMessageSize: number;
     windowHighWaterBytes: number; sustainedBps: number; slowWriteStreak: number;
+    rttVarianceMs: number; activeChannels: number;
   } {
     const elapsedS = (Date.now() - this.startTime) / 1000;
     return {
@@ -385,6 +468,8 @@ export class SenderEngine {
       chunksPerSec: this.chunksPerSecEwma,
       acksPerSec: this.acksPerSecEwma,
       sctpMaxMessageSize: this.negotiatedMaxMessageSize,
+      rttVarianceMs: this.rttVarEwma,
+      activeChannels: this.activeChannels.length,
     };
   }
 
@@ -513,10 +598,11 @@ export class SenderEngine {
     // encrypt/send of chunk N.
     let readAhead: Promise<ArrayBuffer> | null = null;
     let readAheadIndex = -1;
+    let readAheadLastStepCount = 1;
 
     const sliceOf = (index: number): Promise<ArrayBuffer> => {
       const start = this.bytesAtChunkStart(index);
-      const end = Math.min(start + this.chunkSize, this.file.size);
+      const end = Math.min(start + this.chunkSizeFor(index), this.file.size);
       return this.file.slice(start, end).arrayBuffer();
     };
 
@@ -544,6 +630,10 @@ export class SenderEngine {
       // ---- read (with one-slice read-ahead) ----
       const index = this.currentChunkIndex;
       if (readAheadIndex !== index) readAhead = null; // stale (e.g. after pause)
+      // TURBO ladder: a step landing at/below the pre-read index changes
+      // that slice's boundary — discard it; sliceOf re-reads with the
+      // per-index size from the CURRENT table.
+      if (readAheadIndex === index && readAheadLastStepCount !== this.chunkSteps.length) readAhead = null;
       const pending = readAhead;
       readAhead = null;
       let chunkBuffer: ArrayBuffer;
@@ -575,6 +665,7 @@ export class SenderEngine {
       if (this.bytesAtChunkStart(index) + chunkBuffer.byteLength < this.file.size) {
         readAhead = sliceOf(index + 1);
         readAheadIndex = index + 1;
+        readAheadLastStepCount = this.chunkSteps.length;
       }
 
       // Incremental hash of the PLAINTEXT content
@@ -594,9 +685,26 @@ export class SenderEngine {
 
       const packet = encodeBinaryChunk(index, this.totalChunks, this.transferId, payload);
 
+      // TURBO striping: per-stream SCTP buffer backpressure, then send.
+      const stripe = this.activeChannels[index % this.activeChannels.length];
+      if (stripe.readyState !== 'open') {
+        this.shrinkPool(this.activeChannels.indexOf(stripe));
+      }
+      const sendCh =
+        this.activeChannels[index % this.activeChannels.length] ?? this.fileChannel;
+      if (sendCh.readyState !== 'open') {
+        this.fail('Connection lost during transfer');
+        this.emitProgress('failed', 0, 0);
+        return;
+      }
+      if (sendCh.bufferedAmount > BUFFER_HIGH_WATER) {
+        await this.waitForBufferLow(sendCh);
+        if (this.isCancelled || this.isPaused) return;
+      }
+
       this.sendTimes.set(index, Date.now());
       try {
-        this.fileChannel.send(packet);
+        this.sendPacket(packet, index);
       } catch (err: any) {
         this.fail(`Send error: ${err?.message || err}`);
         this.emitProgress('failed', 0, 0);
@@ -763,27 +871,138 @@ export class SenderEngine {
    * buffer and stalls the pipeline. Channel close and a hard 3 s failsafe
    * (counted as a real stall) end the wait.
    */
-  private waitForBufferLow(): Promise<void> {
+  private waitForBufferLow(channel?: RTCDataChannel): Promise<void> {
+    const ch = channel ?? this.fileChannel;
     return new Promise((resolve) => {
-      if (this.fileChannel.readyState !== 'open') return resolve();
-      if (this.fileChannel.bufferedAmount <= this.fileChannel.bufferedAmountLowThreshold) return resolve();
+      if (ch.readyState !== 'open') return resolve();
+      if (ch.bufferedAmount <= ch.bufferedAmountLowThreshold) return resolve();
 
       let settled = false;
       const done = () => {
         if (settled) return;
         settled = true;
         clearTimeout(failsafe);
-        this.fileChannel.removeEventListener('bufferedamountlow', done);
-        this.fileChannel.removeEventListener('close', done);
+        ch.removeEventListener('bufferedamountlow', done);
+        ch.removeEventListener('close', done);
         if (Date.now() - waitStart > 1000) this.noteStall('buffer');
         resolve();
       };
 
       const waitStart = Date.now();
       const failsafe = setTimeout(done, 3000);
-      this.fileChannel.addEventListener('bufferedamountlow', done);
-      this.fileChannel.addEventListener('close', done);
+      ch.addEventListener('bufferedamountlow', done);
+      ch.addEventListener('close', done);
     });
+  }
+
+  /**
+   * TURBO striping send: chunk index → stream by modulo. Per-stream SCTP
+   * buffer backpressure (each stream has its own bufferedAmount and
+   * bufferedamountlow). All streams carry identical ordered/reliable
+   * semantics; the RECEIVER's bounded reorder buffer restores global order.
+   */
+  private sendPacket(packet: ArrayBuffer, index: number): boolean {
+    const ch = this.activeChannels[index % this.activeChannels.length];
+    if (ch.readyState !== 'open') {
+      // A parallel stream died mid-transfer: fall back to the primary
+      // (always required) rather than failing an otherwise healthy link.
+      this.shrinkPool(this.activeChannels.indexOf(ch));
+      if (this.fileChannel.readyState !== 'open') return false;
+    }
+    try {
+      ch.send(packet);
+      return true;
+    } catch (err: any) {
+      try {
+        this.fileChannel.send(packet);
+        return true;
+      } catch {
+        this.fail(`DataChannel send error: ${err?.message || err}`);
+        return false;
+      }
+    }
+  }
+
+  /** Activate/deactivate pool members (never touches 'file' itself). */
+  private shrinkPool(at: number): void {
+    if (at <= 0) return; // 'file' (index 0) always stays
+    this.activeChannels.splice(at, 1);
+    this.channelsFrozen = true; // pool change mid-transfer: freeze further scaling briefly
+    this.lastChannelChangeAt = Date.now();
+  }
+
+  /**
+   * TURBO multi-channel scaling gate (2026-10-01). NEVER blindly adds
+   * streams: a second SCTP stream is activated only when the measured link
+   * shows (a) no stalls/shrinks recently, (b) calm receiver, (c) per-stream
+   * SCTP buffers healthy, (d) throughput PLATEAUED on the current pool —
+   * i.e. the single stream is demonstrably the limiter — and (e) the last
+   * pool change is old. After activation a 4 s measured A/B decides:
+   * keep only on >= 12% sustained improvement, else fall back and cool
+   * down. Max 4 streams. All decisions from real counters.
+   */
+  private evaluateChannelScaling(): void {
+    const now = Date.now();
+    const available = this.getActiveChannels();
+    const active = this.activeChannels.length;
+
+    // Evaluating a just-activated stream: measured A/B after 4 s.
+    if (this.channelEvaluating) {
+      if (now - this.channelBaselineAt < 4000) return;
+      this.channelEvaluating = false;
+      const ackedSince = this.bytesAcked - this.channelBaselineAcked;
+      const secs = (now - this.channelBaselineAt) / 1000;
+      const bpsNow = ackedSince / Math.max(0.001, secs);
+      const bpsBase = this.channelBaselineBps;
+      const gain = bpsBase > 0 ? bpsNow / bpsBase : 0;
+      if (gain < 1.12 || this.stallCount > this.channelBaselineStalls) {
+        // No material improvement (or new stalls): FALL BACK to the
+        // previous pool — never keep complexity that does not pay.
+        this.shrinkPool(1);
+        this.channelsFrozen = true;
+        this.lastChannelChangeAt = now;
+      } else {
+        this.lastChannelChangeAt = now; // keep; gate re-arms below
+      }
+      return;
+    }
+
+    if (this.channelsFrozen) {
+      if (now - this.lastChannelChangeAt > 10000) this.channelsFrozen = false;
+      else return;
+    }
+    if (active >= 4) return;
+    if (available.length <= active) return;
+    if (now - this.lastChannelChangeAt < 6000) return;
+
+    // Measured health: no stall recently, calm receiver, healthy buffers.
+    if (now - this.lastStallAt < 4000) return;
+    if (this.lastPressureAt > 0 && now - this.lastPressureAt < 4000) return;
+    if (this.lastWriteMsEwma > 30) return;
+    if (this.lastQueueDepth > 2) return;
+    for (const ch of this.activeChannels) {
+      if (ch.readyState !== 'open' || ch.bufferedAmount > BUFFER_LOW_WATER * 2) return;
+    }
+
+    // Plateau detection: the current pool is saturated if sustained ACK
+    // throughput barely moved across the last two full window drains.
+    const bpsNow = this.throughputBps;
+    const plateau = this.lastScalingBps > 0 && bpsNow > 0
+      ? bpsNow / this.lastScalingBps
+      : 0;
+    this.lastScalingBps = bpsNow;
+    if (plateau > 0 && (plateau < 0.9 || plateau > 1.1)) return; // still moving — not a single-stream ceiling
+
+    // Activate the next stream + arm the measured A/B.
+    const next = available[this.activeChannels.length];
+    if (!next || next.readyState !== 'open') return;
+    next.bufferedAmountLowThreshold = BUFFER_LOW_WATER;
+    this.activeChannels.push(next);
+    this.channelEvaluating = true;
+    this.channelBaselineAt = now;
+    this.channelBaselineAcked = this.bytesAcked;
+    this.channelBaselineBps = Math.max(bpsNow, this.channelBaselineBps);
+    this.channelBaselineStalls = this.stallCount;
   }
 
   private emitProgress(

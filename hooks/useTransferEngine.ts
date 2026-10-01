@@ -371,6 +371,13 @@ export function useTransferEngine(
         fileChannel,
         sendControlMessage: (msg: any) => peerManager.sendControl(msg),
         maxMessageSize: peerManager.getMaxMessageSize(),
+        // TURBO multi-channel pool: extra parallel file streams, opened by
+        // the same offer. The scaling gate activates them only on measured
+        // single-stream plateau; absence degrades cleanly to one stream.
+        extraFileChannels: () =>
+          peerManager
+            .getOpenFileChannels()
+            .filter((ch) => ch.label !== 'file'),
         cipher: cipherRef.current,
         onProgress: (p: SenderProgress) => {
           if (p.status === 'paused') noteTestEvent('paused');

@@ -12,6 +12,7 @@
 import {
   ChannelName,
   DATA_CHANNELS,
+  FILE_CHANNELS,
   DEFAULT_RTC_CONFIG,
   REQUIRED_CHANNELS,
   WebRTCConnectionState,
@@ -62,6 +63,16 @@ export class PeerConnectionManager {
 
   public getState(): WebRTCConnectionState {
     return this.state;
+  }
+
+  /** All currently-open parallel file channels (TURBO striping pool). */
+  public getOpenFileChannels(): RTCDataChannel[] {
+    const out: RTCDataChannel[] = [];
+    for (const name of FILE_CHANNELS) {
+      const ch = this.channels[name];
+      if (ch && ch.readyState === 'open') out.push(ch);
+    }
+    return out;
   }
 
   public getChannel(name: ChannelName): RTCDataChannel | undefined {
@@ -156,6 +167,10 @@ export class PeerConnectionManager {
     if (this.isClosed) return;
     switch (channelName) {
       case 'file':
+      case 'file-1':
+      case 'file-2':
+      case 'file-3':
+        // TURBO: all parallel file streams feed the same reordering receiver.
         if (data instanceof ArrayBuffer) {
           this.fileChunksReceived++;
           this.callbacks.onFileChunk(data);

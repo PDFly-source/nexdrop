@@ -141,7 +141,10 @@ function internals(sender: SenderEngine): any {
   ok(win(s) === Math.floor(1.5 * 1024 * 1024 * 0.7), 'stall shrinks below high-water');
   i.lastStallAt -= 2000; // cooldown elapsed
   // HALF drain while below high-water is enough to start recovering.
-  i.bytesAcked += Math.ceil(win(s) / 2) - 1;
+  // NOTE: ACK credit is now ABSOLUTE (frontier-derived, 2026-10-01) — the
+  // synthetic +65536 the old additive accounting added no longer appears, so
+  // a genuine half drain is expressed exactly.
+  i.bytesAcked += Math.ceil(win(s) / 2);
   s.handleAck(2, 5, 0);
   const postStall = Math.floor(1.5 * 1024 * 1024 * 0.7);
   ok(win(s) > postStall, 'half drain below high-water recovers (x1.5 growth)');

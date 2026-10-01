@@ -84,6 +84,16 @@ export class ReceiverEngine {
   private writer: StorageWriter | null = null;
   private hasher: IncrementalSha256 | null = null;
   private receivedChunksCount = 0;
+  // ---- TURBO multi-channel reorder buffer (2026-10-01) ----
+  // Parallel file streams interleave arrival, so out-of-order chunks are
+  // EXPECTED. Bounded stash keyed by chunk index; drained contiguously.
+  // In-flight bytes are capped by the sender's 16 MiB window, so the cap
+  // below can never be hit on a healthy link — overflow fails honestly.
+  private reorderMap = new Map<number, ArrayBuffer>();
+  private reorderBytes = 0;
+  private maxReorderDepth = 0;
+  private static readonly REORDER_MAX_ENTRIES = 512;
+  private static readonly REORDER_MAX_BYTES = 32 * 1024 * 1024;
   /** EWMA ms per chunk write (receiver write throughput, honestly measured). */
   private writeMsEwma = 0;
   private expectedTransferIdHash = 0;
@@ -297,13 +307,25 @@ export class ReceiverEngine {
       return;
     }
 
-    // The file channel is ordered+reliable, so a gap means real data loss.
-    if (decoded.chunkIndex !== this.nextExpectedChunkIndex) {
-      this.callbacks.onError(
-        this.transferId,
-        `Missing chunk data (expected #${this.nextExpectedChunkIndex}, got #${decoded.chunkIndex})`
-      );
-      void this.cancel('Protocol error: chunk gap detected');
+    // TURBO (2026-10-01): with parallel file streams, out-of-order arrival
+    // is normal — stash and wait for the frontier. Overflow beyond the
+    // in-flight cap means the sender misbehaved; fail honestly rather than
+    // silently corrupting the stream.
+    if (decoded.chunkIndex > this.nextExpectedChunkIndex) {
+      if (
+        this.reorderMap.size >= ReceiverEngine.REORDER_MAX_ENTRIES ||
+        this.reorderBytes + packetBuffer.byteLength > ReceiverEngine.REORDER_MAX_BYTES
+      ) {
+        this.callbacks.onError(
+          this.transferId,
+          `Reorder buffer overflow (expected #${this.nextExpectedChunkIndex}, got #${decoded.chunkIndex})`
+        );
+        void this.cancel('Protocol error: reorder buffer overflow');
+        return;
+      }
+      this.reorderMap.set(decoded.chunkIndex, packetBuffer);
+      this.reorderBytes += packetBuffer.byteLength;
+      this.maxReorderDepth = Math.max(this.maxReorderDepth, this.reorderMap.size);
       return;
     }
     this.nextExpectedChunkIndex = decoded.chunkIndex + 1;
@@ -381,6 +403,21 @@ export class ReceiverEngine {
         timeline: this.timeline.length > 0 ? this.timeline.toJSON() : null,
         startedAt: this.startTime,
       });
+    }
+
+    // TURBO: contiguous reorder drain — process any buffered chunks that
+    // the frontier just unlocked. Strictly sequential, same pipeline.
+    while (this.reorderMap.size > 0 && this.reorderMap.has(this.nextExpectedChunkIndex)) {
+      const buf = this.reorderMap.get(this.nextExpectedChunkIndex)!;
+      this.reorderMap.delete(this.nextExpectedChunkIndex);
+      this.reorderBytes -= buf.byteLength;
+      const d = decodeBinaryChunk(buf);
+      if (!d) {
+        this.callbacks.onError(this.transferId, 'Received a malformed buffered data chunk');
+        void this.cancel('Protocol error: malformed buffered chunk');
+        return;
+      }
+      await this.processChunk(buf);
     }
   }
 
@@ -483,9 +520,17 @@ export class ReceiverEngine {
         const queueNow = this.queueDepth();
         if (queueNow > this.maxQueueDepthSeen) this.maxQueueDepthSeen = queueNow;
         const timerDue = Date.now() - this.lastAckAt >= ACK_MAX_DELAY_MS;
-        const isFinalChunk = lastIndex === this.totalChunks - 1;
+        // TURBO adaptive chunks (2026-10-01): the FILE_START totalChunks is
+        // an UPPER-BOUND estimate — mid-transfer chunk growth makes the real
+        // last-chunk index smaller. Completion is decided by BYTES: once
+        // every byte of the file has been processed AND this batch flushed
+        // the write queue, this batch IS the final batch — always ACK it.
+        // (Old index-based check left the true final chunk un-ACKed forever
+        // when growth shrank the real count below the estimate.)
+        const allBytesArrived = this.bytesReceived >= this.size;
+        const isFinalBatch = allBytesArrived && this.writesQueued === 0 && this.writeQueue.length === 0;
         const isBatchBoundary = (lastIndex + 1) % ACK_BATCH === 0;
-        if (isFinalChunk || isBatchBoundary || timerDue || queueNow > 8) {
+        if (isFinalBatch || isBatchBoundary || timerDue || queueNow > 8) {
           this.lastAckAt = Date.now();
           this.acksSent++;
           this.callbacks.sendControlMessage({

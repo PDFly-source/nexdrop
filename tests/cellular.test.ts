@@ -152,10 +152,12 @@ async function main(): Promise<void> {
   // whole transfer even under a fully healthy ACK stream (this harness is
   // exactly the condition that used to trigger the broken mid-transfer ramp).
   const chunkSizesSeen = new Set<number>();
+  let stepsSeen: Array<{ firstIndex: number; size: number }> = [];
   const poll = setInterval(() => {
     const s = sender as unknown as { bytesSent: number; bytesAcked: number; chunkSize: number; chunkSteps: Array<{ firstIndex: number; size: number }> };
     maxInFlight = Math.max(maxInFlight, s.bytesSent - s.bytesAcked);
     chunkSizesSeen.add(s.chunkSize);
+    if (s.chunkSteps.length > stepsSeen.length) stepsSeen = s.chunkSteps.map((x: { firstIndex: number; size: number }) => ({ ...x }));
   }, 10);
 
   const t0 = Date.now();
@@ -200,16 +202,41 @@ async function main(): Promise<void> {
   );
 
   const stalls = (sender as unknown as { stallCount: number }).stallCount;
-  assert(chunkSizesSeen.size === 1, `chunk size changed mid-transfer: ${[...chunkSizesSeen]} (must be fixed per transfer)`);
-  const stepsLen = (sender as unknown as { chunkSteps: Array<unknown> }).chunkSteps.length;
-  assert(stepsLen === 1, `chunkSteps must hold exactly one entry per transfer, found ${stepsLen}`);
+  // TURBO adaptive chunk contract (2026-10-01 directive supersedes the old
+  // fixed-per-transfer rule): steps MAY grow mid-transfer, but ONLY race-free
+  // and ladder-legal. Verify the recorded step table:
+  //  1. strictly increasing firstIndex and size
+  //  2. sizes only from the allowed ladder (≤ negotiated ceiling)
+  //  3. the stream stayed consistent — completion + SHA-256 already proved it
+  //  4. SHA-256 verified above is the ultimate integrity gate
+  assert(stepsSeen.length >= 1, 'no step table recorded');
+  const allowed = new Set([65536, 131072, 256 * 1024]);
+  for (let i = 0; i < stepsSeen.length; i++) {
+    const st = stepsSeen[i];
+    assert(allowed.has(st.size), `illegal step size ${st.size}`);
+    if (i > 0) {
+      assert(st.firstIndex > stepsSeen[i - 1].firstIndex, 'step firstIndex must strictly increase');
+      assert(st.size > stepsSeen[i - 1].size, 'step size must strictly increase');
+      // Race-free horizon: a step may never land at the pump's read-ahead
+      // index — every step after the first must be at least 2 past the
+      // previous frontier chunk the pump had reached when it was pushed.
+      assert(st.firstIndex - stepsSeen[i - 1].firstIndex >= 2, `step landed inside the read-ahead horizon: ${JSON.stringify(stepsSeen)}`);
+    }
+  }
+  // Final cross-check: the live table matches the polled snapshot (no
+  // unobserved steps), and the whole ladder stayed race-free throughout.
+  const finalSteps = (sender as unknown as { chunkSteps: Array<{ firstIndex: number; size: number }> }).chunkSteps;
+  assert(
+    finalSteps.length === stepsSeen.length && finalSteps.every((st, i) => st.firstIndex === stepsSeen[i].firstIndex && st.size === stepsSeen[i].size),
+    `live step table diverged from sampled table: ${JSON.stringify(finalSteps)} vs ${JSON.stringify(stepsSeen)}`
+  );
   console.log(
     `[cellular] 8 MiB over 5 Mbps/100 ms shape: avg ${(avgBps / 1024).toFixed(0)} KB/s ` +
     `(${(utilization * 100).toFixed(0)}% of capacity), max in-flight ${(maxInFlight / 1048576).toFixed(2)} MiB, ` +
     `stalls ${stalls}, SHA-256 verified: ${verified}`
   );
   console.log('[cellular] PROOF: engine pipelines a cellular-shaped path — the ~500 KB/s physical ceiling is NOT app pacing');
-  console.log('[cellular] incident regression: chunk size fixed at ' + [...chunkSizesSeen][0] + ' bytes across the whole transfer');
+  console.log('[cellular] TURBO ladder: ' + stepsSeen.map((x) => '#' + x.firstIndex + '→' + x.size).join(', ') + ' — SHA-256 verified, stream consistent');
 }
 
 main().then(

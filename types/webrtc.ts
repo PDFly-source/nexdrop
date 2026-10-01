@@ -30,9 +30,13 @@ export type WebRTCConnectionState =
   | 'closed';
 
 /** Dedicated DataChannels used by NexDrop. */
-export type ChannelName = 'control' | 'file' | 'clipboard' | 'text';
+export type ChannelName = 'control' | 'file' | 'file-1' | 'file-2' | 'file-3' | 'clipboard' | 'text';
 
-export const DATA_CHANNELS: ChannelName[] = ['control', 'file', 'clipboard', 'text'];
+export const DATA_CHANNELS: ChannelName[] = ['control', 'file', 'file-1', 'file-2', 'file-3', 'clipboard', 'text'];
+/** Parallel binary file channels, in activation order. 'file' is channel 0
+ * (always required); file-1..file-3 are optional extra SCTP streams for
+ * TURBO multi-channel striping — old peers simply never open them. */
+export const FILE_CHANNELS: ChannelName[] = ['file', 'file-1', 'file-2', 'file-3'];
 
 /** Channels that must be open before the session is reported as connected. */
 export const REQUIRED_CHANNELS: ChannelName[] = ['control', 'file'];
