@@ -16,16 +16,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { NexDropTelemetry } from '@/lib/transfer/telemetry';
 import { transportLabel } from '@/lib/transfer/transportStats';
-
-function isDiagnosticsEnabled(): boolean {
-  if (typeof window === 'undefined') return false;
-  if (new URLSearchParams(window.location.search).get('diag') === '1') return true;
-  try {
-    return window.localStorage.getItem('nexdrop:diagnostics') === '1';
-  } catch {
-    return false;
-  }
-}
+import { isDevModeEnabled } from '@/lib/devicetest/gate';
+import { openDeviceTest } from '@/lib/devicetest/recorder';
 
 const fmtBytes = (b: number | undefined | null): string => {
   if (b === undefined || b === null || Number.isNaN(b)) return '—';
@@ -44,7 +36,7 @@ const fmtKib = (v: number | undefined): string =>
   v === undefined || v <= 0 ? '—' : `${(v / 1024).toFixed(0)} KiB`;
 
 export default function DiagnosticsPanel() {
-  const [enabled] = useState(isDiagnosticsEnabled);
+  const [enabled] = useState(isDevModeEnabled);
   const [data, setData] = useState<NexDropTelemetry | null>(null);
   /** Measured peak throughput this session (running max of real samples). */
   const [peakBps, setPeakBps] = useState(0);
@@ -112,7 +104,13 @@ export default function DiagnosticsPanel() {
   ];
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-nd-bg-1 p-4 text-left">
+    <>
+      <div className="mb-4">
+        <button type="button" onClick={openDeviceTest} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-nd-teal text-nd-bg-0">
+          Device Test — owner physical validation
+        </button>
+      </div>
+      <div className="rounded-xl border border-white/[0.06] bg-nd-bg-1 p-4 text-left">
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs font-semibold text-nd-text-primary">
           Transfer diagnostics <span className="text-nd-text-secondary font-normal">(live, measured)</span>
@@ -123,8 +121,9 @@ export default function DiagnosticsPanel() {
         <DiagSection title="Connection" rows={connectionRows} />
         <DiagSection title="Sender" rows={senderRows} />
         <DiagSection title="Receiver" rows={receiverRows} />
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

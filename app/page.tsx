@@ -13,6 +13,8 @@ import { ClipboardOverlay } from '@/components/clipboard/ClipboardOverlay';
 import { SecurityVerifyModal } from '@/components/dialogs/SecurityVerifyModal';
 import { MediaPreviewModal } from '@/components/preview/MediaPreviewModal';
 import DiagnosticsPanel from '@/components/transfer/DiagnosticsPanel';
+import DeviceTestPanel from '@/components/dev/DeviceTestPanel';
+import { onTestTransferComplete, onTestTransferVerified } from '@/lib/devicetest/recorder';
 import { useNexDropSession } from '@/hooks/useNexDropSession';
 import { updateHistoryVerification } from '@/lib/storage/history';
 import { useSendFlow } from '@/hooks/useSendFlow';
@@ -139,6 +141,10 @@ function NexDropMainContent() {
         status: 'completed',
         hashVerified: completedItem.hashVerified,
       });
+      // Dev-only Device Test mode: record the real engine completion (name,
+      // size, engine-computed SHA-256) when a physical test case is armed.
+      // A no-op during the normal journey.
+      onTestTransferComplete(completedItem);
     },
     (transferId, match) => {
       // Update the local history record when the receiver's VERIFY verdict arrives
@@ -147,6 +153,8 @@ function NexDropMainContent() {
       } catch {
         // history is best-effort local metadata
       }
+      // Dev-only Device Test mode: the receiver's real SHA-256 verdict.
+      onTestTransferVerified(transferId, match);
     },
     setTransferActivity
   );
@@ -322,6 +330,9 @@ function NexDropMainContent() {
           <div className="mt-8">
             <DiagnosticsPanel />
           </div>
+
+          {/* Dev-only Device Test overlay — owner-run physical validation */}
+          <DeviceTestPanel />
         </main>
       </div>
 

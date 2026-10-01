@@ -48,6 +48,9 @@ export interface ReceiverProgress {
   status: 'transferring' | 'paused' | 'completed' | 'cancelled' | 'failed';
   blobUrl?: string;
   hashVerified?: boolean;
+  /** Locally computed SHA-256 hex of the decrypted content (Device Test
+   *  evidence — present only when the receiver actually hashed the bytes). */
+  hash?: string;
   writerType: 'filesystem' | 'opfs' | 'blob';
 }
 
@@ -483,9 +486,10 @@ export class ReceiverEngine {
       // Honest integrity verification: compare the sender's hash with the
       // hash we computed incrementally from the decrypted stream.
       let verified: boolean | undefined = undefined;
+      let localHash: string | undefined = undefined;
       if (endMsg.hash && this.hasher) {
         try {
-          const localHash = this.hasher.finalize();
+          localHash = this.hasher.finalize();
           verified = localHash === endMsg.hash;
           this.hasher = null;
         } catch {
@@ -511,6 +515,7 @@ export class ReceiverEngine {
         status: 'completed',
         blobUrl: finishRes.blobUrl,
         hashVerified: verified,
+        hash: localHash,
         writerType: this.writer.getType(),
       };
 

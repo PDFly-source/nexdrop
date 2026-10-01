@@ -40,6 +40,9 @@ interface TransferCompleteInfo {
   size: number;
   direction: 'sent' | 'received';
   hashVerified?: boolean;
+  /** Engine-computed SHA-256 hex — carried through for the dev-only Device
+   *  Test mode. Optional: absent when the engine has no hash in hand. */
+  hash?: string;
 }
 
 /** Cap on incoming-file entries kept in the UI (blob URLs of evicted items are revoked). */
@@ -176,6 +179,7 @@ export function useTransferEngine(
           size: p.size,
           direction: 'received',
           hashVerified: p.hashVerified,
+          hash: p.hash,
         });
       },
       onError: (transferId: string, err: string) => {
@@ -429,6 +433,7 @@ export function useTransferEngine(
             size: targetItem.size,
             direction: 'sent',
             hashVerified: undefined,
+            hash,
           });
 
           setTimeout(() => {
