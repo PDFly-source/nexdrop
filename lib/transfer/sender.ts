@@ -960,13 +960,13 @@ export class SenderEngine {
       // Measured A/B verdict — logged so benchmark runs report the exact
       // 1-vs-N channel gain (telemetry, never asserted).
       console.debug(
-        `[nexdrop] channel A/B: pool ${this.activeChannels.length}, base ${(this.channelBaselineBps / 1048576).toFixed(2)} MiB/s -> pooled ${(bpsNow / 1048576).toFixed(2)} MiB/s, gain ${(gain * 100).toFixed(1)}%`
+        `[nexdrop] channel A/B: pool ${this.activeChannels.length}, base ${(this.channelBaselineBps / 1048576).toFixed(2)} MiB/s -> pooled ${(bpsNow / 1048576).toFixed(2)} MiB/s, delta ${gain >= 1 ? '+' : ''}${((gain - 1) * 100).toFixed(1)}%`
       );
       if (gain < 1.12 || this.stallCount > this.channelBaselineStalls) {
         // No material improvement (or new stalls): FALL BACK to the
         // previous pool — never keep complexity that does not pay.
         console.debug(
-          `[nexdrop] channel A/B verdict: FALL BACK (pool -> ${this.activeChannels.length - 1}), gain ${(gain * 100).toFixed(1)}% < 12%`
+          `[nexdrop] channel A/B verdict: FALL BACK (pool ${this.activeChannels.length} -> ${this.activeChannels.length - 1}), delta ${((gain - 1) * 100).toFixed(1)}% below +12% threshold`
         );
         this.shrinkPool(1);
         this.channelsFrozen = true;
