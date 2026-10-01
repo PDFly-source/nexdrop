@@ -11,8 +11,8 @@
  *
  * Flow control (all MEASURED, nothing synthesized):
  * - Byte-based in-flight window (not chunk-count based, so high RTT can
- *   never collapse it into stop-and-wait). Starts at 1 MiB and doubles each
- *   time a full window drains cleanly, up to a 16 MiB memory cap.
+ *   never collapse it into stop-and-wait). Starts at 1 MiB and grows x1.5
+ *   each time a full window drains cleanly, up to a 16 MiB memory cap.
  * - Shrinks only on REAL pressure: SCTP buffer stalls, receiver write
  *   backlog (q in ACKs), or ACK starvation. A single RTT spike never
  *   shrinks it (EWMA + stall cooldown, not instantaneous reactions).
@@ -258,12 +258,13 @@ export class SenderEngine {
     if (this.bytesAcked - this.lastGrowthBytes >= this.windowBytes) {
       this.lastGrowthBytes = this.bytesAcked;
       if (this.windowBytes < MAX_WINDOW_BYTES) {
-        // Grow the byte window until the pipeline stays full. Doubling
-        // (not +50%) reaches the memory cap in 4 drains instead of 8 —
-        // measured ramp time was a real share of short-transfer averages
-        // (CI: 100 MiB avg 6.5 MB/s vs 50 MB/s bursts). Shrink rules are
-        // unchanged, so jittery links still back off multiplicatively.
-        this.windowBytes = Math.min(MAX_WINDOW_BYTES, this.windowBytes * 2);
+        // Grow the byte window +50% per clean full-window drain. A faster
+        // ramp (x2, tried 2026-10-01) reaches 16 MiB sustained pumping in
+        // half the drains and COLLAPSED SCTP on the CI two-runner loopback
+        // (receiver UDP socket overflow -> total stall of both 100/250 MiB
+        // transfers). The x1.5 ramp is the measured-safe rate: loopback CI
+        // benchmark 100 MiB avg ~6.5 MB/s, all sizes green.
+        this.windowBytes = Math.min(MAX_WINDOW_BYTES, Math.ceil(this.windowBytes * 1.5));
       } else if (
         this.chunkSize < this.chunkCap &&
         (queueDepth === undefined || queueDepth <= 2) &&
