@@ -38,7 +38,9 @@ export interface DeviceTestRecord {
   /** Last sampled real byte movement (sender bytesSent / receiver bytesReceived). */
   lastBytes: number;
   /** getStats() transport truth — never assumed. */
-  connection: 'direct' | 'relay' | 'unknown' | null;
+  /** getStats() transport truth — never assumed. 'local' = host<->host over a
+   *  private/mDNS address (same LAN), 'internet' = srflx/prflx or public host. */
+  connection: 'local' | 'internet' | 'relay' | 'unknown' | null;
   iceCandidates: string | null;
   rttMs: number | null;
   dataChannelState: string | null;
@@ -52,6 +54,14 @@ export interface DeviceTestRecord {
   incomingCapacityBps: number | null;
   /** Negotiated SCTP maxMessageSize read from pc.sctp — the real chunk ceiling. */
   sctpMaxMessageSize: number | null;
+  /** Last sampled engine values (real telemetry — the performance section):
+   *  active chunk size, window chunks, sender bufferedAmount, stall count,
+   *  and total transferred/total bytes of the sampled transfer. */
+  lastChunkSizeBytes: number | null;
+  lastWindowChunks: number | null;
+  lastBufferedBytes: number | null;
+  lastStalls: number | null;
+  lastTotalBytes: number | null;
   /** Receiver's real VERIFY verdict (sender devices learn it via VERIFY). */
   shaVerified: boolean | null;
   result: 'passed' | 'failed' | null;

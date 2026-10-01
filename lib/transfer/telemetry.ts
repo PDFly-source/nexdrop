@@ -70,9 +70,12 @@ export interface ReceiverTelemetry {
 /** REAL transport stats from RTCPeerConnection.getStats() (see transportStats.ts). */
 export interface TransportTelemetry {
   connected: boolean;
-  transport: 'direct' | 'relay' | 'unknown';
+  transport: 'local' | 'internet' | 'relay' | 'unknown';
   localCandidateType: string | null;
   remoteCandidateType: string | null;
+  /** Selected pair candidate addresses (mDNS .local names are local-network). */
+  localAddress: string | null;
+  remoteAddress: string | null;
   rttMs: number | null;
   bytesSent: number | null;
   bytesReceived: number | null;

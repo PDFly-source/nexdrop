@@ -228,6 +228,18 @@ async function main() {
    * selected. No-op on desktop viewports, where the segmented control is
    * not rendered at all (both panels are always visible).
    */
+  /** Mirror of ensureReceivePanelOpen for the sender side — the file input
+   *  works from any tab, but the mobile segmented control hides the Send
+   *  panel; open it so queue status text is visible to innerText waits. */
+  async function ensureSendPanelOpen(page: any) {
+    const tab = page.getByRole('tab', { name: /^Send \(\d+\)$/ }).first();
+    if (!(await tab.count()) || !(await tab.isVisible())) return;
+    if ((await tab.getAttribute('aria-selected')) !== 'true') {
+      await tab.click();
+      await page.waitForTimeout(300);
+    }
+  }
+
   async function ensureReceivePanelOpen(page: any) {
     const tab = page.getByRole('tab', { name: /Receive \(\d+\)/ }).first();
     // The segmented control exists in the DOM on desktop too, but is
@@ -263,10 +275,19 @@ async function main() {
   let first = true;
   let anyFailed = false;
 
-  for (const size of SIZES) {
-    const name = `bench-${(size / 1048576).toFixed(0)}mib.bin`;
-    console.log(`[benchmark] transferring ${name}`);
-    await uploadFile(pageA, name, patternBuffer(size));
+  // Test matrix: A→B AND B→A for every size — both devices must send and
+  // receive (the two-device e2e only exercises A→B).
+  const directions: Array<{ label: string; from: any; to: any }> = [
+    { label: 'A>B', from: pageA, to: pageB },
+    { label: 'B>A', from: pageB, to: pageA },
+  ];
+
+  for (const dir of directions) {
+    for (const size of SIZES) {
+    const name = `bench-${dir.label === 'A>B' ? '' : 'rev-'}${(size / 1048576).toFixed(0)}mib.bin`;
+    console.log(`[benchmark] transferring ${name} (${dir.label})`);
+    await ensureSendPanelOpen(dir.from);
+    await uploadFile(dir.from, name, patternBuffer(size));
 
     const samples: Sample[] = [];
     let failed = false;
@@ -284,12 +305,12 @@ async function main() {
 
     try {
       let transferDone = false;
-      const doneA = waitForNameStatus(pageA, name, 'Completed', timeoutMs).finally(() => { transferDone = true; });
+      const doneA = waitForNameStatus(dir.from, name, 'Completed', timeoutMs).finally(() => { transferDone = true; });
       const poll = (async () => {
         for (; !transferDone;) {
           await new Promise((r) => setTimeout(r, 500));
           try {
-            const [ta, tb] = await Promise.all([readTelemetry(pageA), readTelemetry(pageB)]);
+            const [ta, tb] = await Promise.all([readTelemetry(dir.from), readTelemetry(dir.to)]);
             if ((ta.s?.bytesSent ?? 0) > lastSentBytes) {
               lastSentBytes = ta.s?.bytesSent ?? 0;
               lastProgressAt = Date.now();
@@ -312,16 +333,16 @@ async function main() {
       // Pause/resume on the FIRST size only, once ~25% done
       if (first) {
         try {
-          await pageA.waitForFunction(() => {
+          await dir.from.waitForFunction(() => {
             const t = document.body.innerText;
             const s = t.indexOf('SENDING TO PEER');
             const q = t.indexOf('Outbound Queue');
             return s !== -1 && q !== -1 && q > s && /(\d+)%/.test(t.substring(s, q)) && parseInt((t.substring(s, q).match(/(\d+)%/) || ['0', '0'])[1], 10) >= 25;
           }, undefined, { timeout: Math.min(180000, timeoutMs), polling: 250 });
-          await pageA.getByRole('button', { name: 'Pause', exact: true }).click();
-          await pageA.waitForSelector('text=Paused', { timeout: 15000 });
-          await pageA.waitForTimeout(2000);
-          await pageA.getByRole('button', { name: 'Resume', exact: true }).click();
+          await dir.from.getByRole('button', { name: 'Pause', exact: true }).click();
+          await dir.from.waitForSelector('text=Paused', { timeout: 15000 });
+          await dir.from.waitForTimeout(2000);
+          await dir.from.getByRole('button', { name: 'Resume', exact: true }).click();
           pausedResumed = 'ok';
         } catch {
           pausedResumed = 'not-reached (transfer finished before pause point)';
@@ -347,10 +368,10 @@ async function main() {
         doneA.catch(() => {}); // swallow the now-abandoned wait's rejection
         throw e;
       }
-      await waitForNameStatus(pageB, name, 'Completed', Math.max(60000, timeoutMs / 4));
+      await waitForNameStatus(dir.to, name, 'Completed', Math.max(60000, timeoutMs / 4));
       const doneT = Date.now() - t0;
       try {
-        await waitForNameStatus(pageB, name, 'Verified', 60000);
+        await waitForNameStatus(dir.to, name, 'Verified', 60000);
         shaVerified = true;
       } catch { shaVerified = false; }
 
@@ -369,7 +390,7 @@ async function main() {
       const stalls = samples.length ? samples[samples.length - 1].stalls : 0;
 
       const r = {
-        size, timeMs: doneT,
+        direction: dir.label, size, timeMs: doneT,
         avgMBps: +(size / 1048576 / (doneT / 1000)).toFixed(2),
         peakMBps: +(peakBps / 1048576).toFixed(2),
         finalMBps: +(finalBps / 1048576).toFixed(2),
@@ -387,6 +408,7 @@ async function main() {
     } catch (e) {
       anyFailed = true;
       console.log('[BENCH-FAILED] ' + name + ': ' + String(e).slice(0, 200));
+    }
     }
   }
 

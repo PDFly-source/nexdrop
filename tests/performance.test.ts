@@ -61,12 +61,12 @@ async function main(): Promise<void> {
   } as unknown as RTCPeerConnection;
   const stats = await sampleTransportStats(pc);
   check(stats !== null, 'transportStats: sample resolves');
-  check(stats!.transport === 'direct', 'transportStats: srflx pair is direct', stats!.transport);
+  check(stats!.transport === 'internet', 'transportStats: srflx pair is internet-direct (NAT traversal)', stats!.transport);
   check(stats!.protocol === 'udp', 'transportStats: protocol read from candidates', String(stats!.protocol));
   check(stats!.outgoingBitrateBps === 8000000, 'transportStats: outgoing capacity parsed');
   check(stats!.incomingBitrateBps === 12000000, 'transportStats: incoming capacity parsed');
   check(stats!.sctpMaxMessageSize === 262144, 'transportStats: negotiated SCTP max message size read from pc.sctp');
-  check(transportLabel(stats) === 'Direct P2P', 'transportStats: honest direct label');
+  check(transportLabel(stats) === 'Internet Direct', 'transportStats: honest internet-direct label');
 }
 {
   const report = new Map<string, unknown>([
@@ -84,6 +84,43 @@ async function main(): Promise<void> {
   check(stats!.incomingBitrateBps === null, 'transportStats: absent bitrate stays null (never faked)');
   check(stats!.sctpMaxMessageSize === null, 'transportStats: unreadable SCTP ceiling stays null');
   check(transportLabel(stats) === 'Relay', 'transportStats: relayed connections report Relay');
+}
+{
+  // LOCAL_DIRECT classification: host<->host over a private address (same LAN).
+  const report = new Map<string, unknown>([
+    ['CP', {
+      type: 'candidate-pair', id: 'CP', state: 'succeeded', selected: true,
+      localCandidateId: 'L', remoteCandidateId: 'R', currentRoundTripTime: 0.002,
+    }],
+    ['L', { type: 'local-candidate', id: 'L', candidateType: 'host', address: '192.168.1.20', protocol: 'udp' }],
+    ['R', { type: 'remote-candidate', id: 'R', candidateType: 'host', address: '192.168.1.21', protocol: 'udp' }],
+  ]);
+  const pc = { getStats: async () => report } as unknown as RTCPeerConnection;
+  const stats = await sampleTransportStats(pc);
+  check(stats!.transport === 'local', 'transportStats: host↔host private pair is LOCAL_DIRECT', stats!.transport);
+  check(transportLabel(stats) === 'Local Direct', 'transportStats: local label');
+}
+{
+  // mDNS-obfuscated host remote (.local) is a same-LAN host — LOCAL_DIRECT.
+  const report = new Map<string, unknown>([
+    ['CP', { type: 'candidate-pair', id: 'CP', state: 'succeeded', selected: true, localCandidateId: 'L', remoteCandidateId: 'R' }],
+    ['L', { type: 'local-candidate', id: 'L', candidateType: 'host', address: 'fe80::1', protocol: 'udp' }],
+    ['R', { type: 'remote-candidate', id: 'R', candidateType: 'host', address: 'a1b2c3d4.local', protocol: 'udp' }],
+  ]);
+  const pc = { getStats: async () => report } as unknown as RTCPeerConnection;
+  const stats = await sampleTransportStats(pc);
+  check(stats!.transport === 'local', 'transportStats: mDNS .local host remote is LOCAL_DIRECT', stats!.transport);
+}
+{
+  // Public host address (no NAT, e.g. a server) is INTERNET_DIRECT.
+  const report = new Map<string, unknown>([
+    ['CP', { type: 'candidate-pair', id: 'CP', state: 'succeeded', selected: true, localCandidateId: 'L', remoteCandidateId: 'R' }],
+    ['L', { type: 'local-candidate', id: 'L', candidateType: 'host', address: '203.0.113.5', protocol: 'udp' }],
+    ['R', { type: 'remote-candidate', id: 'R', candidateType: 'host', address: '198.51.100.7', protocol: 'udp' }],
+  ]);
+  const pc = { getStats: async () => report } as unknown as RTCPeerConnection;
+  const stats = await sampleTransportStats(pc);
+  check(stats!.transport === 'internet', 'transportStats: public host pair is INTERNET_DIRECT', stats!.transport);
 }
 
 // ---------------------------------------------------------------------------

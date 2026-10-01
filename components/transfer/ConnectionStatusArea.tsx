@@ -41,7 +41,7 @@ interface ConnectionStatusAreaProps {
   isSecurityVerified: boolean;
   rttMs: number | null;
   /** REAL selected ICE path from getStats — never a decorative label. */
-  transportKind: 'direct' | 'relay' | 'unknown';
+  transportKind: 'local' | 'internet' | 'relay' | 'unknown';
   onCreatePairing: () => void;
   onCreatePairingManual: () => void;
   pairingMode: 'signal' | 'manual' | null;
@@ -341,9 +341,11 @@ export const ConnectionStatusArea: React.FC<ConnectionStatusAreaProps> = ({
                   <Lock className="w-2.5 h-2.5" aria-hidden="true" />
                   {transportKind === 'relay'
                     ? 'Relay · E2E Encrypted'
-                    : transportKind === 'direct'
-                      ? 'P2P · E2E Encrypted'
-                      : 'E2E Encrypted'}
+                    : transportKind === 'local'
+                      ? 'Local Direct · E2E Encrypted'
+                      : transportKind === 'internet'
+                        ? 'P2P Direct · E2E Encrypted'
+                        : 'E2E Encrypted'}
                 </span>
               </div>
 

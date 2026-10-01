@@ -56,6 +56,11 @@ function defaultRecords(): DeviceTestRecord[] {
     outgoingCapacityBps: null,
     incomingCapacityBps: null,
     sctpMaxMessageSize: null,
+    lastChunkSizeBytes: null,
+    lastWindowChunks: null,
+    lastBufferedBytes: null,
+    lastStalls: null,
+    lastTotalBytes: null,
     shaVerified: null,
     result: null,
     notes: '',
@@ -268,6 +273,11 @@ export function sampleDeviceTestNow(): void {
     incomingCapacityBps:
       transport?.incomingBitrateBps != null ? transport.incomingBitrateBps / 8 : rec.incomingCapacityBps,
     sctpMaxMessageSize: transport?.sctpMaxMessageSize ?? rec.sctpMaxMessageSize,
+    lastChunkSizeBytes: sender?.chunkSize ?? rec.lastChunkSizeBytes,
+    lastWindowChunks: sender?.windowChunks ?? rec.lastWindowChunks,
+    lastBufferedBytes: sender?.bufferedAmount ?? rec.lastBufferedBytes,
+    lastStalls: sender?.stalls ?? rec.lastStalls,
+    lastTotalBytes: sender?.totalBytes ?? rec.lastTotalBytes,
   };
   updateRecord(rec.caseId, patch, false);
 }
@@ -319,17 +329,45 @@ export function buildDeviceTestReport(): string {
   const measured = records.find((r) => r.connection && r.files.length > 0);
   const measuredConn = measured?.connection;
   const connLabel =
-    measuredConn === 'direct' ? 'Direct (getStats() host/srflx candidates)'
+    measuredConn === 'local' ? 'Local Direct (getStats() host↔host over a private/mDNS address — same LAN)'
+    : measuredConn === 'internet' ? 'Internet Direct (getStats() srflx/prflx NAT traversal, or public host address)'
     : measuredConn === 'relay' ? 'Relay (getStats() relay candidates)'
     : 'Unknown (no measured transport evidence)';
   // Measured bottleneck evidence: protocol + network capacity ceiling.
   const fmtCapacity = (bps: number | null | undefined): string =>
     bps && bps > 0 ? fmtMBps(bps) : 'not reported by browser';
+  // PERFORMANCE section — every value is the last real engine/getStats
+  // sample captured while the test ran. Nothing is synthesized.
+  const fmtKiB = (b: number | null | undefined): string =>
+    b && b > 0 ? `${Math.round(b / 1024)} KiB` : 'not sampled';
+  const fmtMB = (b: number | null | undefined): string =>
+    b != null && b > 0 ? `${(b / (1024 * 1024)).toFixed(1)} MB` : 'not sampled';
+  const measuredAvg = measured ? deviceTestAvgBps(measured) : null;
+  const anySha = records.some((r) => r.shaVerified === true);
+  const anyShaFail = records.some((r) => r.shaVerified === false);
+  const shaState = anyShaFail
+    ? 'FAILED (at least one transfer failed verification)'
+    : anySha
+      ? 'VERIFIED (all completed transfers verified)'
+      : 'not recorded (no completed transfer yet)';
+  const transferred = measured ? measured.lastBytes : 0;
+  const transferredTotal = measured?.lastTotalBytes ?? measured?.totalBytes ?? 0;
   const evidenceLines = [
-    `Network protocol: ${measured?.protocol ? measured.protocol.toUpperCase() : 'not reported by browser'}`,
+    'PERFORMANCE (last measured samples):',
+    `Transport: ${measuredConn === 'local' ? 'LOCAL DIRECT' : measuredConn === 'internet' ? 'INTERNET DIRECT' : measuredConn === 'relay' ? 'RELAY' : 'Unknown'}`,
+    `Protocol: WebRTC DataChannel (${measured?.protocol ? measured.protocol.toUpperCase() : 'protocol not reported'})`,
+    `ICE: ${measured?.iceCandidates ?? 'not reported'}`,
+    `RTT: ${measured?.rttMs != null ? `${measured.rttMs} ms` : 'not reported'}`,
+    `Buffered: ${fmtMB(measured?.lastBufferedBytes)}`,
+    `Chunk: ${fmtKiB(measured?.lastChunkSizeBytes)}`,
+    `Window: ${measured?.lastWindowChunks != null ? `${measured.lastWindowChunks} chunks` : 'not sampled'}`,
+    `Actual: ${measuredAvg != null ? fmtMBps(measuredAvg) : 'not measured'}`,
+    `Peak: ${measured && measured.peakBps > 0 ? fmtMBps(measured.peakBps) : 'not measured'}`,
+    `Transferred: ${fmtBytes(transferred)} / ${fmtBytes(transferredTotal)}`,
+    `Stalls: ${measured?.lastStalls != null ? String(measured.lastStalls) : 'not sampled'}`,
     `Network capacity out/in: ${fmtCapacity(measured?.outgoingCapacityBps)} / ${fmtCapacity(measured?.incomingCapacityBps)}`,
     `SCTP max message size: ${measured?.sctpMaxMessageSize ? `${measured.sctpMaxMessageSize} bytes (read from pc.sctp)` : 'not readable'}`,
-    `Measured RTT: ${measured?.rttMs != null ? `${measured.rttMs} ms (getStats candidate-pair)` : 'not reported'}`,
+    `SHA-256: ${shaState}`,
   ];
 
   const caseLines = records.map((r) => {

@@ -13,8 +13,15 @@
 export interface TransportStats {
   /** true when the peer connection reports a succeeded, selected pair. */
   connected: boolean;
-  /** honest transport classification from the selected candidate pair */
-  transport: 'direct' | 'relay' | 'unknown';
+  /** honest transport classification from the selected candidate pair:
+   *  LOCAL_DIRECT (host<->host over a private/mDNS address — same LAN),
+   *  INTERNET_DIRECT (srflx/prflx NAT traversal, or host with a public IP),
+   *  RELAY (TURN), or unknown. Derived ONLY from real candidate data. */
+  transport: 'local' | 'internet' | 'relay' | 'unknown';
+  /** selected pair local candidate IP/address (may be an mDNS .local name) */
+  localAddress: string | null;
+  /** selected pair remote candidate IP/address (may be an mDNS .local name) */
+  remoteAddress: string | null;
   /** selected pair local candidate type: host | srflx | prflx | relay */
   localCandidateType: string | null;
   /** selected pair remote candidate type: host | srflx | prflx | relay */
@@ -66,7 +73,19 @@ interface PairLike {
 
 export function transportLabel(t: TransportStats | null | undefined): string {
   if (!t || t.transport === 'unknown') return 'Unknown';
-  return t.transport === 'relay' ? 'Relay' : 'Direct P2P';
+  if (t.transport === 'relay') return 'Relay';
+  return t.transport === 'local' ? 'Local Direct' : 'Internet Direct';
+}
+
+/** RFC1918/ULA/link-local/mDNS — an address reachable only on the local network. */
+function isPrivateAddress(addr: string | null | undefined): boolean {
+  if (!addr) return false;
+  if (addr.endsWith('.local') || addr.endsWith('.local.')) return true; // mDNS-obfuscated host
+  if (
+    /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|fe80:|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:)/i.test(addr)
+  ) return true;
+  // IPv4-mapped / bracketed IPv6 ULA/link-local
+  return false;
 }
 
 export async function sampleTransportStats(
@@ -118,12 +137,23 @@ export async function sampleTransportStats(
   const localType = local?.candidateType || local?.type || null;
   const remoteType = remote?.candidateType || remote?.type || null;
 
+  const localAddress = (local?.address as string | undefined) ?? (local as { ip?: string } | undefined)?.ip ?? null;
+  const remoteAddress = (remote?.address as string | undefined) ?? (remote as { ip?: string } | undefined)?.ip ?? null;
+
   let transport: TransportStats['transport'] = 'unknown';
   if (localType && remoteType) {
-    transport =
-      localType === 'relay' || remoteType === 'relay'
-        ? 'relay'
-        : 'direct'; // host/srflx/prflx candidates reach the peer directly
+    if (localType === 'relay' || remoteType === 'relay') {
+      transport = 'relay';
+    } else if (remoteType === 'host') {
+      // host<->host: the peer's own interface is directly reachable. When
+      // its address is private/mDNS-obfuscated, both devices share a LAN —
+      // LOCAL_DIRECT. A public host address (no NAT, e.g. a server) is
+      // INTERNET_DIRECT.
+      transport = isPrivateAddress(remoteAddress) ? 'local' : 'internet';
+    } else {
+      // srflx/prflx: NAT traversal succeeded — traffic leaves the local network.
+      transport = 'internet';
+    }
   }
 
   // Negotiated SCTP max message size — read from the live object graph,
@@ -141,6 +171,8 @@ export async function sampleTransportStats(
   return {
     connected: !!(bestPair && (bestPair.state === 'succeeded' || bestPair.selected === true)),
     transport,
+    localAddress,
+    remoteAddress,
     localCandidateType: localType,
     remoteCandidateType: remoteType,
     protocol: local?.protocol || remote?.protocol || null,

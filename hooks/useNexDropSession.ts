@@ -173,7 +173,7 @@ export function useNexDropSession() {
   /** REAL selected ICE path from getStats (1 Hz): 'relay' when a TURN relay
    *  carries the traffic, 'direct' for host/srflx paths. The UI must never
    *  claim P2P for a relayed connection. */
-  const [transportKind, setTransportKind] = useState<'direct' | 'relay' | 'unknown'>('unknown');
+  const [transportKind, setTransportKind] = useState<'local' | 'internet' | 'relay' | 'unknown'>('unknown');
   const [activePeerManager, setActivePeerManager] = useState<PeerConnectionManager | null>(null);
 
   // Messages & Clipboard
