@@ -274,6 +274,26 @@ async function main() {
   const results: Array<Record<string, unknown>> = [];
   let first = true;
   let anyFailed = false;
+  const consoleErrors: Record<string, string[]> = { A: [], B: [] };
+  for (const [pkey, pg] of [['A', pageA], ['B', pageB]] as const) {
+    pg.on('console', (msg: any) => {
+      if (msg.type() === 'error') consoleErrors[pkey].push(msg.text().slice(0, 300));
+    });
+  }
+  const dumpStallState = async (label: string) => {
+    try {
+      const [ta, tb] = await Promise.all([readTelemetry(pageA), readTelemetry(pageB)]);
+      const phase = await pageA.evaluate(() => (window as any).__NEXDROP_PHASE__ ?? null).catch(() => null);
+      const bodyA = await pageA.evaluate(() => document.body.innerText.slice(0, 500));
+      const bodyB = await pageB.evaluate(() => document.body.innerText.slice(0, 500));
+      console.log('[STALL-STATE]', label, JSON.stringify({ phase, telemetryA: ta, telemetryB: tb }));
+      console.log('[STALL-BODY-A]', label, JSON.stringify(bodyA.slice(0, 400)));
+      console.log('[STALL-BODY-B]', label, JSON.stringify(bodyB.slice(0, 400)));
+      console.log('[STALL-CONSOLE-ERRORS]', label, JSON.stringify({ A: consoleErrors.A.slice(-6), B: consoleErrors.B.slice(-6) }));
+    } catch (e: any) {
+      console.log('[STALL-STATE]', label, 'dump failed:', e?.message);
+    }
+  };
 
   // Test matrix: A→B AND B→A for every size — both devices must send and
   // receive (the two-device e2e only exercises A→B).
@@ -366,6 +386,7 @@ async function main() {
       } catch (e: any) {
         transferDone = true; // stop the telemetry poll loop
         doneA.catch(() => {}); // swallow the now-abandoned wait's rejection
+        await dumpStallState(name);
         throw e;
       }
       await waitForNameStatus(dir.to, name, 'Completed', Math.max(60000, timeoutMs / 4));
