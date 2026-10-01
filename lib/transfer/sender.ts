@@ -87,7 +87,7 @@ export class SenderEngine {
   // ---- chunking: chunk size can grow mid-transfer (see chunkSteps) ----
   /** Upper bound chunk index for this transfer (initial estimate; growth only reduces the real count). */
   private totalChunks: number;
-  /** Chunk-size history — mid-transfer growth changes chunkSize for LATER indexes only. */
+  /** Chunk-size steps — exactly ONE entry per transfer (fixed size, chosen at start). */
   private chunkSteps: Array<{ firstIndex: number; size: number }> = [];
   private get chunkSize(): number {
     return this.chunkSteps.length > 0 ? this.chunkSteps[this.chunkSteps.length - 1].size : this.chunkSteps0;
@@ -265,19 +265,17 @@ export class SenderEngine {
         // transfers). The x1.5 ramp is the measured-safe rate: loopback CI
         // benchmark 100 MiB avg ~6.5 MB/s, all sizes green.
         this.windowBytes = Math.min(MAX_WINDOW_BYTES, Math.ceil(this.windowBytes * 1.5));
-      } else if (
-        this.chunkSize < this.chunkCap &&
-        (queueDepth === undefined || queueDepth <= 2) &&
-        (writeMs === undefined || writeMs <= 20)
-      ) {
-        // Pipeline already saturated and healthy: amortize per-chunk
-        // overhead by doubling the chunk size (never above the negotiated
-        // SCTP limit). Applies to chunks SENT from here on.
-        const next = Math.min(this.chunkCap, this.chunkSize * 2);
-        if (this.currentChunkIndex > this.chunkSteps[this.chunkSteps.length - 1].firstIndex) {
-          this.chunkSteps.push({ firstIndex: this.currentChunkIndex, size: next });
-        }
       }
+      // NOTE: chunk size NEVER grows mid-transfer (2026-10-01 incident).
+      // A mid-transfer grow races the pump's one-slice read-ahead: a chunk
+      // pre-read under the old size is then counted under the new step
+      // table, the byte stream desyncs from bytesAtChunkStart(), file bytes
+      // get skipped, the tail never completes and the pump hot-loops empty
+      // slices while ACK-index extrapolation explodes bytesAcked (CI froze
+      // at 100% with 48 GB "acked" on a healthy runner). Chunk size is
+      // chosen once per transfer (negotiated SCTP ceiling + learned size
+      // from previous clean transfers) and stays FIXED; growth happens only
+      // BETWEEN transfers via noteTransferSuccess()/initialChunkSize().
     }
   }
 
@@ -437,6 +435,16 @@ export class SenderEngine {
         chunkBuffer = await (pending ?? sliceOf(index));
       } catch (err: any) {
         this.fail(`File read error: ${err?.message || err}`);
+        this.emitProgress('failed', 0, 0);
+        return;
+      }
+
+      // Chunk-boundary desync guard (2026-10-01 incident): an empty slice
+      // while bytes remain means the step table no longer maps chunk indexes
+      // to real file offsets. Fail honestly — an infinite loop of empty
+      // chunks would freeze the transfer at ~100% forever.
+      if (chunkBuffer.byteLength === 0 && this.bytesSent < this.file.size) {
+        this.fail('Chunk boundary desync: refusing to send empty slices');
         this.emitProgress('failed', 0, 0);
         return;
       }

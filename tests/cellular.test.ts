@@ -148,9 +148,14 @@ async function main(): Promise<void> {
   void origWriter;
 
   // Poll real engine internals (private fields — any-cast for sampling).
+  // 2026-10-01 incident regression guard: chunk size must stay FIXED for the
+  // whole transfer even under a fully healthy ACK stream (this harness is
+  // exactly the condition that used to trigger the broken mid-transfer ramp).
+  const chunkSizesSeen = new Set<number>();
   const poll = setInterval(() => {
-    const s = sender as unknown as { bytesSent: number; bytesAcked: number };
+    const s = sender as unknown as { bytesSent: number; bytesAcked: number; chunkSize: number; chunkSteps: Array<{ firstIndex: number; size: number }> };
     maxInFlight = Math.max(maxInFlight, s.bytesSent - s.bytesAcked);
+    chunkSizesSeen.add(s.chunkSize);
   }, 10);
 
   const t0 = Date.now();
@@ -195,12 +200,16 @@ async function main(): Promise<void> {
   );
 
   const stalls = (sender as unknown as { stallCount: number }).stallCount;
+  assert(chunkSizesSeen.size === 1, `chunk size changed mid-transfer: ${[...chunkSizesSeen]} (must be fixed per transfer)`);
+  const stepsLen = (sender as unknown as { chunkSteps: Array<unknown> }).chunkSteps.length;
+  assert(stepsLen === 1, `chunkSteps must hold exactly one entry per transfer, found ${stepsLen}`);
   console.log(
     `[cellular] 8 MiB over 5 Mbps/100 ms shape: avg ${(avgBps / 1024).toFixed(0)} KB/s ` +
     `(${(utilization * 100).toFixed(0)}% of capacity), max in-flight ${(maxInFlight / 1048576).toFixed(2)} MiB, ` +
     `stalls ${stalls}, SHA-256 verified: ${verified}`
   );
   console.log('[cellular] PROOF: engine pipelines a cellular-shaped path — the ~500 KB/s physical ceiling is NOT app pacing');
+  console.log('[cellular] incident regression: chunk size fixed at ' + [...chunkSizesSeen][0] + ' bytes across the whole transfer');
 }
 
 main().then(
