@@ -215,6 +215,12 @@ function NexDropMainContent() {
         </div>
       )}
 
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-nd-teal-bright focus:text-black focus:text-sm focus:font-semibold focus:shadow-lg"
+        >
+          Skip to main content
+        </a>
       <div>
         {/* Workspace Header */}
         <Navbar
@@ -231,7 +237,12 @@ function NexDropMainContent() {
           }}
         />
 
-        <main key={activeTab} className="mx-auto max-w-6xl px-4 py-6 sm:py-8 sm:px-6 animate-in fade-in duration-200">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          key={activeTab}
+          className="mx-auto max-w-6xl px-4 py-6 sm:py-8 sm:px-6 animate-in fade-in duration-200"
+        >
           <h1 className="sr-only">NexDrop — peer-to-peer file and text transfer</h1>
 
           {/* LAYER 2 — HOME DASHBOARD (command center) */}

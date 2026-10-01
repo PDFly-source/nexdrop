@@ -21,7 +21,7 @@ export default function AboutPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 text-left">
+      <main id="main-content" className="mx-auto max-w-4xl px-4 py-12 sm:px-6 text-left">
         <div className="max-w-2xl">
           <div className="flex items-center gap-2 text-xs text-nd-teal font-medium mb-3">
             <span>NexDrop</span>

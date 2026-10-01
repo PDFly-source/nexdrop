@@ -21,7 +21,7 @@ export default function PrivacyPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 text-left">
+      <main id="main-content" className="mx-auto max-w-4xl px-4 py-12 sm:px-6 text-left">
         <div className="max-w-2xl">
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-nd-text-primary">
             Privacy Constitution
