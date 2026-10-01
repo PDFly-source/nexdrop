@@ -251,6 +251,29 @@ async function main(): Promise<void> {
     chunkAcks.every((a, i) => i === 0 || a.index > chunkAcks[i - 1].index),
     'receiver: ACK indexes never go backwards (durable-write ordering kept)'
   );
+  // ---- v2.3 cumulative-byte ACK contract ----
+  check(
+    chunkAcks.every((a) => typeof a.wb === 'number' && a.wb >= 0),
+    'v2.3: every ACK carries cumulative durably-written bytes (wb)',
+    JSON.stringify(chunkAcks.map((a) => a.wb))
+  );
+  check(
+    chunkAcks.every((a, i) => i === 0 || (a.wb ?? 0) >= (chunkAcks[i - 1].wb ?? 0)),
+    'v2.3: wb is monotonic — the durable frontier never rolls back'
+  );
+  check(
+    chunkAcks.length > 0 && (chunkAcks[chunkAcks.length - 1].wb ?? 0) === body.byteLength,
+    'v2.3: final ACK reports the FULL durable byte frontier'
+  );
+  check(
+    chunkAcks.every((a) => (a.rb ?? 0) >= (a.wb ?? 0)),
+    'v2.3: rb (received) >= wb (durable) in every ACK — durability order kept'
+  );
+  check(
+    chunkAcks.length < chunks,
+    'v2.3: ACKs are coalesced — fewer ACKs than chunks',
+    JSON.stringify({ acks: chunkAcks.length, chunks })
+  );
   check(
     completed.length === 1 && completed[0].verified === true && completed[0].hash === bodyHash,
     'receiver: SHA-256 verification intact through the coalesced pipeline'

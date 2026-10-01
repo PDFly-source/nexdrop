@@ -53,6 +53,19 @@ export interface SenderTelemetry {
   activeChannels: number;
   /** Highest healthy window reached this transfer (recovery target). */
   windowHighWaterBytes: number;
+  /** ---- v2.3 ACK-pipeline telemetry (all measured) ---- */
+  /** Cumulative ms the pump spent waiting for ACK-driven window space. */
+  ackWaitMs: number;
+  /** EWMA durable bytes released per ACK (coalescing size). */
+  ackAvgBytes: number;
+  /** Pump serial-stage costs (ms EWMA): File.slice read, SHA-256, encrypt+encode. */
+  pumpSliceMs: number;
+  pumpHashMs: number;
+  pumpEncodeMs: number;
+  /** Measured window utilization (inFlight/window) at the last update. */
+  windowUtilization: number;
+  /** Final window-utilization summary (avg/p50/p95/min/max), present once complete. */
+  utilizationSummary: { avg: number; p50: number; p95: number; min: number; max: number } | null;
   /** 10 Hz collapse timeline (bounded, adaptively decimated). */
   timeline: TimelineSeries | null;
   startedAt: number;

@@ -124,6 +124,13 @@ interface Sample {
   inBitrate: number;        // availableIncomingBitrate (getStats)
   transportRttMs: number;    // selected-pair STUN RTT (getStats)
   candidatePair: string;     // e.g. 'host:host (local)'
+  // v2.3 ACK-pipeline validation set (all measured):
+  ackWaitMs: number;        // cumulative pump time blocked on window (ACK)
+  ackAvgBytes: number;      // EWMA durable bytes per cumulative ACK
+  pumpSliceMs: number;      // EWMA File.slice read cost per chunk
+  pumpHashMs: number;       // EWMA SHA-256 cost per chunk (main thread)
+  pumpEncodeMs: number;     // EWMA encrypt+frame cost per chunk
+  utilInstant: number;      // inFlight / window at sample time
 }
 
 /**
@@ -163,8 +170,21 @@ async function main() {
     args: ['--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required',
       '--disable-features=WebRtcHideLocalIpsWithMdns'],
   });
+  // v2.3 ACK-coalescing sweep: CI may override the receiver's cumulative-
+  // byte ACK floor (measurement only — production default stays in code,
+  // chosen from THIS sweep's results).
+  const ackTuneBytes = Number(process.env.NEXDROP_ACK_TUNE_BYTES || 0);
+  const initTune = (ctx: any) => {
+    if (ackTuneBytes > 0) {
+      void ctx.addInitScript(
+        `window.__NEXDROP_ACK_TUNE_BYTES = ${ackTuneBytes};`
+      );
+    }
+  };
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext({ ...devices['Pixel 7'], permissions: ['camera'] });
+  initTune(ctxA);
+  initTune(ctxB);
   const pageA = await ctxA.newPage();
   const pageB = await ctxB.newPage();
   pageA.on('pageerror', (e) => console.log('  [A pageerror]', String(e).slice(0, 200)));
@@ -378,6 +398,12 @@ async function main() {
               inBitrate: tb.tr?.incomingBitrateBps ?? -1,
               transportRttMs: ta.tr?.rttMs ?? -1,
               candidatePair: (ta.tr?.transport || '?') + ':' + (ta.tr?.localCandidateType || '?') + '->' + (ta.tr?.remoteCandidateType || '?'),
+              ackWaitMs: ta.s?.ackWaitMs ?? 0,
+              ackAvgBytes: ta.s?.ackAvgBytes ?? 0,
+              pumpSliceMs: ta.s?.pumpSliceMs ?? 0,
+              pumpHashMs: ta.s?.pumpHashMs ?? 0,
+              pumpEncodeMs: ta.s?.pumpEncodeMs ?? 0,
+              utilInstant: ta.s?.windowUtilization ?? 0,
             });
           } catch { /* page busy */ }
         }
@@ -455,6 +481,19 @@ async function main() {
       for (const x of samples) pairCounts[x.candidatePair] = (pairCounts[x.candidatePair] || 0) + 1;
       const candidatePair = Object.entries(pairCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '?';
       const maxTransportRtt = samples.reduce((m, x) => Math.max(m, x.transportRttMs), 0);
+      const transportRtts = samples.map((x) => x.transportRttMs).filter((x) => x > 0);
+      // v2.3: measured window utilization — from the utilization summary in
+      // the FINAL telemetry sample (computed by the sender from its 10 Hz
+      // timeline at completion), falling back to instantaneous samples.
+      const lastS = samples[samples.length - 1];
+      const utils = samples.map((x) => x.utilInstant).filter((x) => x > 0);
+      const summary = await readTelemetry(dir.from).then((t: { s?: { utilizationSummary?: { avg: number; p50: number; p95: number; min: number; max: number } | null } }) => t.s?.utilizationSummary ?? null).catch(() => null);
+      let utilAvg = summary?.avg ?? (utils.length ? utils.reduce((a, b) => a + b, 0) / utils.length : 0);
+      let utilP50 = summary?.p50 ?? (utils.length ? [...utils].sort((a, b) => a - b)[Math.floor(utils.length / 2)] : 0);
+      let utilP95 = summary?.p95 ?? (utils.length ? [...utils].sort((a, b) => a - b)[Math.floor(utils.length * 0.95)] : 0);
+      let utilMin = summary?.min ?? (utils.length ? Math.min(...utils) : 0);
+      let utilMax = summary?.max ?? (utils.length ? Math.max(...utils) : 0);
+      void lastS;
       const peakHeapA = samples.reduce((m, x) => Math.max(m, x.heapA), 0);
       const peakHeapB = samples.reduce((m, x) => Math.max(m, x.heapB), 0);
       const stalls = samples.length ? samples[samples.length - 1].stalls : 0;
@@ -483,6 +522,26 @@ async function main() {
         availIncomingMbps: +(maxInBitrate / 1e6).toFixed(1),
         candidatePair,
         maxTransportRttMs: +maxTransportRtt.toFixed(1),
+        // ---- v2.3 ACK-pipeline verdict set (all measured) ----
+        appAckRttMs: +avgRtt.toFixed(0),
+        transportRttMsAvg: +(transportRtts.length
+          ? transportRtts.reduce((a, b) => a + b, 0) / transportRtts.length
+          : 0).toFixed(1),
+        ackRttRatio: +(avgRtt > 0 && (transportRtts.length
+          ? transportRtts.reduce((a, b) => a + b, 0) / transportRtts.length
+          : 0) > 0
+          ? avgRtt / (transportRtts.reduce((a, b) => a + b, 0) / transportRtts.length)
+          : 0).toFixed(1),
+        ackWaitMs: Math.round(samples.reduce((m, x) => Math.max(m, x.ackWaitMs), 0)),
+        ackAvgKB: Math.round(samples.reduce((m, x) => Math.max(m, x.ackAvgBytes), 0) / 1024),
+        utilAvgPct: +(utilAvg * 100).toFixed(1),
+        utilP50Pct: +(utilP50 * 100).toFixed(1),
+        utilP95Pct: +(utilP95 * 100).toFixed(1),
+        utilMinPct: +(utilMin * 100).toFixed(1),
+        utilMaxPct: +(utilMax * 100).toFixed(1),
+        pumpSliceMs: +samples.reduce((m, x) => Math.max(m, x.pumpSliceMs), 0).toFixed(1),
+        pumpHashMs: +samples.reduce((m, x) => Math.max(m, x.pumpHashMs), 0).toFixed(1),
+        pumpEncodeMs: +samples.reduce((m, x) => Math.max(m, x.pumpEncodeMs), 0).toFixed(1),
       };
       results.push(r);
       console.log('[BENCH] ' + JSON.stringify(r));

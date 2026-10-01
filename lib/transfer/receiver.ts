@@ -13,18 +13,23 @@
  *   are decrypted while the PREVIOUS write is still in flight, but never
  *   written out of order (fixes a latent reorder race the old sequential
  *   per-chunk await could hit under E2EE).
- * - ACKs are sent only after the covered chunks are DURABLY WRITTEN, at an
- *   adaptive cadence: every ACK_BATCH chunks, at most ACK_MAX_DELAY_MS
- *   apart, immediately for the final chunk, immediately when the receiver
- *   queue backs up (backpressure signaling: the ACK carries the live queue
- *   depth so the sender shrinks its window).
+ * - ACKs are sent only after the covered bytes are DURABLY WRITTEN, as
+ *   CUMULATIVE-BYTE acknowledgements (v2.3): rb = bytes received/processed,
+ *   wb = bytes durably written. The sender releases window space against
+ *   wb — byte offsets are authoritative, the chunk index is diagnostics
+ *   only. Cadence: >= ACK_BYTE_TARGET bytes OR ACK_MAX_DELAY_MS since the
+ *   last ACK, whichever first; IMMEDIATELY for the final batch, on any
+ *   boundary event (pause/resume/cancel/error), and when the receiver
+ *   queue backs up (the ACK carries the live queue depth so the sender
+ *   can shrink its window).
  * - Incremental SHA-256 runs on the decrypted stream while writing.
  * - Memory stays bounded: the sender's in-flight window bounds the bytes
  *   in the pipeline; the queue depth feeds back to keep it that way.
  */
 
 import {
-  ACK_BATCH,
+  ACK_BYTE_TARGET,
+  ACK_BYTE_TARGET_MAX,
   ACK_MAX_DELAY_MS,
   FileEndMessage,
   FilePauseMessage,
@@ -107,6 +112,18 @@ export class ReceiverEngine {
   private acksSent = 0;
   /** Last time an ACK left — drives the ACK_MAX_DELAY_MS cadence. */
   private lastAckAt = 0;
+  /** Cumulative plaintext bytes DURABLY WRITTEN — the authoritative ACK
+   *  frontier (v2.3). Monotonic across the whole transfer. */
+  private bytesWritten = 0;
+  /** bytesWritten value carried by the last ACK (coalescing watermark). */
+  private lastAckedWrittenBytes = 0;
+  /** True when a boundary event demands an immediate checkpoint ACK
+   *  (pause/resume/cancel/error) on the next durable batch. */
+  private ackBoundaryPending = false;
+  /** Benchmark-sweep override for the coalescing floor (0 = production
+   *  default). Set via globalThis before a transfer starts; never used to
+   *  fake values — only to MEASURE which floor is optimal on CI. */
+  private ackByteTargetOverride = 0;
   /** Largest observed pipeline depth this transfer (diagnostics). */
   private maxQueueDepthSeen = 0;
 
@@ -202,6 +219,15 @@ export class ReceiverEngine {
     this.isCompleted = false;
     this.lastAckAt = Date.now();
     this.acksSent = 0;
+    this.bytesWritten = 0;
+    this.lastAckedWrittenBytes = 0;
+    this.ackBoundaryPending = false;
+    // Benchmark-sweep hook (measurement only): CI may override the ACK
+    // coalescing floor via globalThis to find the optimal value. Bounded by
+    // ACK_BYTE_TARGET_MAX; 0/absent = production default.
+    const tune = (globalThis as { __NEXDROP_ACK_TUNE_BYTES?: number }).__NEXDROP_ACK_TUNE_BYTES;
+    this.ackByteTargetOverride =
+      typeof tune === 'number' && tune > 0 ? Math.min(tune, ACK_BYTE_TARGET_MAX) : 0;
     this.writeQueue = [];
     this.writing = false;
     this.writesQueued = 0;
@@ -295,12 +321,16 @@ export class ReceiverEngine {
       return;
     }
 
-    // Duplicate chunk (e.g. a re-delivered frame): ACK and ignore.
+    // Duplicate chunk (e.g. a re-delivered frame): re-ACK the CURRENT
+    // durable byte frontier (cumulative bytes, monotonic — a duplicate
+    // never rolls the frontier backwards) and ignore the payload.
     if (decoded.chunkIndex < this.nextExpectedChunkIndex) {
       this.callbacks.sendControlMessage({
         type: 'ACK',
         transferId: this.transferId,
-        index: decoded.chunkIndex,
+        index: this.receivedChunksCount - 1,
+        rb: this.bytesReceived,
+        wb: this.bytesWritten,
         w: Math.round(this.writeMsEwma * 10) / 10,
         q: this.queueDepth(),
       });
@@ -497,10 +527,12 @@ export class ReceiverEngine {
           }
         } catch (err: any) {
           // The whole batch is abandoned — the stream cannot continue past
-          // a hole. Report the honest failure.
+          // a hole. Report the honest failure. Boundary rule: the durable
+          // frontier reached BEFORE this failing batch goes out with it.
           this.writeQueue = [];
           this.writesQueued = 0;
           if (this.isCancelled || this.isCompleted) return;
+          this.sendCheckpointAck();
           console.error('Failed writing received data:', err);
           this.callbacks.onError(
             this.transferId,
@@ -513,30 +545,43 @@ export class ReceiverEngine {
         this.writeMsEwma = this.writeMsEwma > 0 ? this.writeMsEwma * 0.8 + wSample * 0.2 : wSample;
         this.writesQueued = Math.max(0, this.writesQueued - batch.length);
 
-        // Adaptive ACK policy (unchanged semantics, evaluated per durable
-        // batch): batch boundary OR the timer expired OR final chunk OR our
-        // own queue is backing up (tell the sender NOW so it shrinks its
-        // window) — one small control frame covering the whole batch.
+        // Cumulative-byte frontier advance (v2.3): the durable frontier is
+        // BYTES, not chunk index — byte offsets stay authoritative across
+        // chunk-size ladder steps and coalescing, so the stale-size-chunk
+        // accounting class cannot recur.
+        let writtenBytes = 0;
+        for (const b of batch) writtenBytes += b.payload.byteLength;
+        this.bytesWritten += writtenBytes;
+
+        // v2.3 cumulative-byte ACK policy, evaluated per durable batch:
+        // coalesce until >= ACK_BYTE_TARGET new durable bytes (or the
+        // ACK_MAX_DELAY_MS ceiling), then ONE control frame carrying the
+        // cumulative rb/wb byte offsets. IMMEDIATE, un-coalesced ACKs on:
+        // final batch, any boundary event (pause/resume/cancel/error —
+        // the checkpoint rule), or our own queue backing up (tell the
+        // sender NOW so it can react while the bytes are still safe).
         const queueNow = this.queueDepth();
         if (queueNow > this.maxQueueDepthSeen) this.maxQueueDepthSeen = queueNow;
         const timerDue = Date.now() - this.lastAckAt >= ACK_MAX_DELAY_MS;
-        // TURBO adaptive chunks (2026-10-01): the FILE_START totalChunks is
-        // an UPPER-BOUND estimate — mid-transfer chunk growth makes the real
-        // last-chunk index smaller. Completion is decided by BYTES: once
-        // every byte of the file has been processed AND this batch flushed
-        // the write queue, this batch IS the final batch — always ACK it.
-        // (Old index-based check left the true final chunk un-ACKed forever
-        // when growth shrank the real count below the estimate.)
+        const target = this.ackByteTargetOverride > 0 ? this.ackByteTargetOverride : ACK_BYTE_TARGET;
+        const byteTargetDue = this.bytesWritten - this.lastAckedWrittenBytes >= target;
+        // Completion is decided by BYTES: once every byte of the file has
+        // been processed AND this batch flushed the write queue, this batch
+        // IS the final batch — always ACK it immediately.
         const allBytesArrived = this.bytesReceived >= this.size;
         const isFinalBatch = allBytesArrived && this.writesQueued === 0 && this.writeQueue.length === 0;
-        const isBatchBoundary = (lastIndex + 1) % ACK_BATCH === 0;
-        if (isFinalBatch || isBatchBoundary || timerDue || queueNow > 8) {
+        const boundaryDue = this.ackBoundaryPending;
+        if (isFinalBatch || boundaryDue || timerDue || byteTargetDue || queueNow > 8) {
           this.lastAckAt = Date.now();
+          this.lastAckedWrittenBytes = this.bytesWritten;
+          this.ackBoundaryPending = false;
           this.acksSent++;
           this.callbacks.sendControlMessage({
             type: 'ACK',
             transferId: this.transferId,
             index: lastIndex,
+            rb: this.bytesReceived,
+            wb: this.bytesWritten,
             w: Math.round(this.writeMsEwma * 10) / 10,
             q: queueNow,
           });
@@ -569,6 +614,30 @@ export class ReceiverEngine {
     return this.transferId;
   }
 
+  /**
+   * Immediate checkpoint ACK (v2.3 boundary rule): pause/resume/cancel and
+   * writer errors NEVER wait for the coalescing timer — the sender gets the
+   * durable byte frontier the instant it is known. Safe by construction:
+   * bytesWritten only advances after a durable write, so the frontier in
+   * this ACK is committed storage, never a projection.
+   */
+  private sendCheckpointAck(): void {
+    if (!this.transferId) return;
+    this.lastAckAt = Date.now();
+    this.lastAckedWrittenBytes = this.bytesWritten;
+    this.ackBoundaryPending = false;
+    this.acksSent++;
+    this.callbacks.sendControlMessage({
+      type: 'ACK',
+      transferId: this.transferId,
+      index: this.receivedChunksCount - 1,
+      rb: this.bytesReceived,
+      wb: this.bytesWritten,
+      w: Math.round(this.writeMsEwma * 10) / 10,
+      q: this.queueDepth(),
+    });
+  }
+
   public handlePause(msg: FilePauseMessage): void {
     if (msg.transferId !== this.transferId) {
       // PAUSE for a transfer that has not started yet (the META/START is
@@ -579,12 +648,19 @@ export class ReceiverEngine {
       return;
     }
     this.isPaused = true;
+    // Checkpoint rule: report the durable byte frontier NOW so the sender
+    // knows exactly which bytes are safely stored before it freezes.
+    this.sendCheckpointAck();
     this.emitProgress('paused', 0, 0);
   }
 
   public handleResume(msg: FileResumeMessage): void {
     if (msg.transferId === this.pendingPauseId) this.pendingPauseId = null;
     if (msg.transferId !== this.transferId || !this.isPaused) return;
+    // Checkpoint rule on resume: the sender's resume re-sends from its own
+    // frontier; duplicates here are deduped by nextExpectedChunkIndex — the
+    // ACK tells it the durable state it is resuming against.
+    this.sendCheckpointAck();
     this.isPaused = false;
     this.lastTime = Date.now();
     this.lastBytes = this.bytesReceived;
@@ -699,6 +775,9 @@ export class ReceiverEngine {
     if (this.isCompleted) return;
     if (!this.transferId) return; // nothing active — never emit or notify
     this.isCancelled = true;
+    // Boundary rule: report the durable frontier reached before the abort
+    // (post-abort bytes are discarded; the pre-abort frontier is truth).
+    this.sendCheckpointAck();
     this.stopTimeline();
     const id = this.transferId;
     this.transferId = '';

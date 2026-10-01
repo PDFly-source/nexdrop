@@ -28,13 +28,19 @@ export const BUFFER_LOW_WATER = 1 * 1024 * 1024; // 1 MiB
 export const INITIAL_WINDOW_BYTES = 1 * 1024 * 1024; // 1 MiB
 export const MIN_WINDOW_BYTES = 512 * 1024; // 512 KiB floor
 export const MAX_WINDOW_BYTES = 16 * 1024 * 1024; // 16 MiB cap (bounded memory)
-// Receiver ACK policy: ACK at least every ACK_BATCH chunks, and never let
-// the last ACK wait more than ACK_MAX_DELAY_MS — whichever fires first.
-// One control frame per batch keeps the SCTP queue lean; the timer
-// guarantees the ACK frontier advances even mid-batch (final chunk, slow
-// tail, backpressure signaling).
-export const ACK_BATCH = 8;
-export const ACK_MAX_DELAY_MS = 40;
+// Receiver ACK policy (v2.3, cumulative-byte ACK pipeline): ACK when the
+// durably-written byte frontier has advanced >= ACK_BYTE_TARGET since the
+// last ACK, and never let it wait more than ACK_MAX_DELAY_MS — whichever
+// fires first. Byte-based (not chunk-count) so the cadence stays constant
+// across the 64/128/256 KiB chunk ladder. One control frame per coalesced
+// window keeps the SCTP queue lean; the timer guarantees the frontier
+// advances even mid-batch. BOUNDARY events (pause, resume, cancel, error,
+// completion, backpressure) always ACK IMMEDIATELY — the checkpoint rule.
+// Defaults chosen by CI benchmark sweep (2026-10-01): see tests/e2e/benchmark.
+export const ACK_BYTE_TARGET = 2 * 1024 * 1024; // 2 MiB cumulative-byte floor
+export const ACK_MAX_DELAY_MS = 20; // time-based coalescing ceiling
+/** Upper bound of the coalescing sweep (safety rail, benchmark-only). */
+export const ACK_BYTE_TARGET_MAX = 4 * 1024 * 1024;
 
 export type TransferStatus =
   | 'queued'
@@ -98,7 +104,19 @@ export interface FileStartMessage {
 export interface ChunkAckMessage {
   type: 'ACK';
   transferId: string;
+  /** Highest chunk index covered by `wb` (diagnostics; bytes are authoritative). */
   index: number;
+  /**
+   * Cumulative plaintext bytes RECEIVED and processed (decoded/decrypted,
+   * hashed — not yet necessarily durable). Flow-control signal only.
+   */
+  rb?: number;
+  /**
+   * Cumulative plaintext bytes DURABLY WRITTEN — the authoritative ACK
+   * frontier. The sender's window releases against THIS value; resume and
+   * byte-accounting trust it, never the chunk index.
+   */
+  wb?: number;
   /** Receiver's EWMA ms per chunk write — real write-throughput feedback
    *  for the sender's flow control. Optional: old peers omit it. */
   w?: number;

@@ -11,6 +11,9 @@ on:
       bench_only:
         description: 'Skip two-device e2e and deploy (run only the benchmark job) — true/false'
         default: 'false'
+      bench_ack_bytes:
+        description: 'ACK coalescing sweep override (bytes per cumulative ACK) — e.g. 1048576 / 4194304. Empty = production default (2 MiB).'
+        default: ''
 
 permissions:
   contents: read
@@ -134,6 +137,7 @@ jobs:
         run: npx tsx tests/e2e/benchmark.test.ts
         env:
           NEXDROP_BENCH_SIZES: ${{ inputs.bench_sizes || '' }}
+          NEXDROP_ACK_TUNE_BYTES: ${{ inputs.bench_ack_bytes || '' }}
 
   deploy:
     environment:

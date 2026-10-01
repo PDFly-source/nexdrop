@@ -127,7 +127,7 @@ async function main(): Promise<void> {
     onError: (id, e) => console.log(`[cellular] RECEIVER ERROR: ${e} (${id})`),
     sendControlMessage: (msg: any) => {
       setTimeout(() => {
-        if (msg.type === 'ACK') sender.handleAck(msg.index, msg.w, msg.q);
+        if (msg.type === 'ACK') sender.handleAck(msg.index, msg.w, msg.q, msg.rb, msg.wb);
       }, LATENCY_MS);
       return true;
     },

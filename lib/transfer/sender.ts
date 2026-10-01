@@ -202,6 +202,19 @@ export class SenderEngine {
   private drainsSinceChunkStep = 0;
   // ---- BDP + RTT variance (measured, telemetry + scaling gate) ----
   private rttVarEwma = 0;
+  // ---- v2.3 ACK-pipeline telemetry (all measured) ----
+  /** Cumulative ms the pump spent waiting for ACK-driven window space. */
+  private ackWaitMs = 0;
+  /** EWMA of durable bytes released per ACK (coalescing size, measured). */
+  private ackBytesEwma = 0;
+  /** Pump stage costs (ms EWMA): awaited File.slice read, incremental
+   *  SHA-256, encrypt+frame encode. Identifies the pump's serial CPU. */
+  private sliceMsEwma = 0;
+  private hashMsEwma = 0;
+  private encodeMsEwma = 0;
+  /** Window utilization summary, computed from the 10 Hz timeline at
+   *  completion: inFlightBytes / windowBytes per sample. */
+  private utilization: { avg: number; p50: number; p95: number; min: number; max: number } | null = null;
 
   private isPaused = false;
   private isCancelled = false;
@@ -244,9 +257,24 @@ export class SenderEngine {
     this.fileChannel.bufferedAmountLowThreshold = BUFFER_LOW_WATER;
   }
 
-  public handleAck(index: number, writeMs?: number, queueDepth?: number) {
+  /**
+   * v2.3 cumulative-byte ACK ingestion. `writtenBytes` (wb) is the
+   * receiver's authoritative durable byte frontier — window space releases
+   * against it directly, so accounting NEVER depends on this side's chunk
+   * step table (the stale-size-chunk corruption class is structurally
+   * gone). `receivedBytes` (rb) is flow-control diagnostics only.
+   * Legacy index-only ACKs (old tests) fall back to the step table.
+   */
+  public handleAck(
+    index: number,
+    writeMs?: number,
+    queueDepth?: number,
+    receivedBytes?: number,
+    writtenBytes?: number
+  ) {
     if (writeMs !== undefined) this.lastWriteMsEwma = writeMs;
     if (queueDepth !== undefined) this.lastQueueDepth = queueDepth;
+    void receivedBytes; // diagnostics only — flow control trusts wb
     const sentAt = this.sendTimes.get(index);
     if (sentAt !== undefined) {
       const sample = Date.now() - sentAt;
@@ -260,7 +288,6 @@ export class SenderEngine {
       if (this.sendTimes.size > 512) this.sendTimes.clear();
     }
 
-    const previouslyAckedChunk = this.acknowledgedChunkIndex;
     this.acknowledgedChunkIndex = Math.max(this.acknowledgedChunkIndex, index);
     this.ackCount++;
     // ACK frequency (real measured cadence, EWMA-smoothed).
@@ -270,17 +297,25 @@ export class SenderEngine {
       this.acksPerSecEwma = this.acksPerSecEwma > 0 ? this.acksPerSecEwma * 0.7 + instAcks * 0.3 : instAcks;
     }
 
-    // Byte-accurate accounting even across mid-transfer chunk-size steps.
-    // ABSOLUTE assignment (2026-10-01): ACK index is always the receiver's
-    // contiguous durable frontier, so bytesAcked = boundary(frontier+1).
-    // The old DIFF form recomputed the previous frontier boundary under the
-    // CURRENT step table — when a ladder step landed between two ACKs, the
-    // old boundary shifted and the accounting corrupted by exactly one
-    // stale-size chunk (cellular harness: 8323072/8388608 stall).
-    const frontier = this.acknowledgedChunkIndex;
-    const newlyAckedBytes =
-      frontier > previouslyAckedChunk ? Math.max(0, this.bytesAtChunkStart(frontier + 1) - this.bytesAcked) : 0;
-    this.bytesAcked = Math.max(this.bytesAcked, this.bytesAtChunkStart(frontier + 1));
+    // v2.3 BYTE-AUTHORITATIVE accounting: the receiver reports its durable
+    // cumulative byte offset (wb) directly. No step-table extrapolation —
+    // a chunk-size ladder step between two ACKs can no longer shift the
+    // boundary (the 2026-10-01 stale-size-chunk corruption class).
+    const prevBytesAcked = this.bytesAcked;
+    if (typeof writtenBytes === 'number' && Number.isFinite(writtenBytes) && writtenBytes > 0) {
+      this.bytesAcked = Math.max(this.bytesAcked, Math.min(writtenBytes, this.file.size));
+    } else {
+      // Legacy fallback (index-only ACK): derive from the chunk frontier.
+      this.bytesAcked = Math.max(
+        this.bytesAcked,
+        this.bytesAtChunkStart(this.acknowledgedChunkIndex + 1)
+      );
+    }
+    const newlyAckedBytes = Math.max(0, this.bytesAcked - prevBytesAcked);
+    if (newlyAckedBytes > 0) {
+      this.ackBytesEwma =
+        this.ackBytesEwma > 0 ? this.ackBytesEwma * 0.8 + newlyAckedBytes * 0.2 : newlyAckedBytes;
+    }
 
     // Measured throughput from the ACK cadence (real bytes, real time).
     const now = Date.now();
@@ -450,6 +485,10 @@ export class SenderEngine {
     chunksPerSec: number; acksPerSec: number; sctpMaxMessageSize: number;
     windowHighWaterBytes: number; sustainedBps: number; slowWriteStreak: number;
     rttVarianceMs: number; activeChannels: number;
+    ackWaitMs: number; ackAvgBytes: number;
+    pumpSliceMs: number; pumpHashMs: number; pumpEncodeMs: number;
+    windowUtilization: { avg: number; p50: number; p95: number; min: number; max: number } | null;
+    inFlightBytes: number;
   } {
     const elapsedS = (Date.now() - this.startTime) / 1000;
     return {
@@ -470,6 +509,43 @@ export class SenderEngine {
       sctpMaxMessageSize: this.negotiatedMaxMessageSize,
       rttVarianceMs: this.rttVarEwma,
       activeChannels: this.activeChannels.length,
+      // ---- v2.3 ACK-pipeline telemetry (measured) ----
+      ackWaitMs: this.ackWaitMs,
+      ackAvgBytes: this.ackBytesEwma,
+      pumpSliceMs: this.sliceMsEwma,
+      pumpHashMs: this.hashMsEwma,
+      pumpEncodeMs: this.encodeMsEwma,
+      windowUtilization: this.utilization,
+      inFlightBytes: this.bytesSent - this.bytesAcked,
+    };
+  }
+
+  /**
+   * v2.3 window-utilization summary, computed from the measured 10 Hz
+   * timeline: inFlightBytes / windowBytes per sample. The four numbers
+   * answer "is the sender actually filling its window?" — if utilization
+   * is low while ACK waits are also low, the pump (slice/hash/encode) is
+   * the binding variable, not ACK cadence. Never synthesized: derived from
+   * recorded samples only.
+   */
+  private summarizeUtilization(): void {
+    const series = this.timeline.toJSON();
+    const IN_FLIGHT = 3; // row field order: t, sent, acked, inFlight, window, ...
+    const WINDOW = 4;
+    const utils: number[] = [];
+    for (const row of series.rows) {
+      const win = row[WINDOW];
+      if (win > 0) utils.push(Math.min(1, row[IN_FLIGHT] / win));
+    }
+    if (utils.length === 0) return;
+    utils.sort((a, b) => a - b);
+    const sum = utils.reduce((a, b) => a + b, 0);
+    this.utilization = {
+      avg: sum / utils.length,
+      p50: utils[Math.floor(utils.length * 0.5)],
+      p95: utils[Math.min(utils.length - 1, Math.floor(utils.length * 0.95))],
+      min: utils[0],
+      max: utils[utils.length - 1],
     };
   }
 
@@ -562,6 +638,12 @@ export class SenderEngine {
     this.acksPerSecEwma = 0;
     this.chunksPerSecEwma = 0;
     this.lastChunkRateAt = 0;
+    this.ackWaitMs = 0;
+    this.ackBytesEwma = 0;
+    this.sliceMsEwma = 0;
+    this.hashMsEwma = 0;
+    this.encodeMsEwma = 0;
+    this.utilization = null;
 
     // Fresh random IV prefix per transfer — the receiver derives identical
     // IVs from this value. Without it, every file would reuse the same
@@ -637,6 +719,7 @@ export class SenderEngine {
       const pending = readAhead;
       readAhead = null;
       let chunkBuffer: ArrayBuffer;
+      const sliceT0 = Date.now();
       try {
         chunkBuffer = await (pending ?? sliceOf(index));
       } catch (err: any) {
@@ -655,6 +738,9 @@ export class SenderEngine {
         return;
       }
 
+      // v2.3: measured disk-read (slice) cost — the pump's serial stage 1.
+      this.sliceMsEwma = this.sliceMsEwma > 0 ? this.sliceMsEwma * 0.8 + (Date.now() - sliceT0) * 0.2 : (Date.now() - sliceT0);
+
       // The awaited read above can straddle a pause() call. Re-check BEFORE
       // hashing: the incremental hash must only ever consume chunks that are
       // actually sent. Pausing here (index not yet advanced) makes resume()
@@ -669,8 +755,14 @@ export class SenderEngine {
       }
 
       // Incremental hash of the PLAINTEXT content
+      // v2.3: measured SHA-256 cost — the pump's serial stage 2 (JS, main thread).
+      const hashT0 = Date.now();
       this.hasher.update(new Uint8Array(chunkBuffer));
+      const hashDt = Date.now() - hashT0;
+      this.hashMsEwma = this.hashMsEwma > 0 ? this.hashMsEwma * 0.8 + hashDt * 0.2 : hashDt;
 
+      // v2.3: measured encrypt+frame cost — the pump's serial stage 3.
+      const encT0 = Date.now();
       let payload: ArrayBuffer = chunkBuffer;
       if (this.cipher) {
         try {
@@ -684,6 +776,7 @@ export class SenderEngine {
       }
 
       const packet = encodeBinaryChunk(index, this.totalChunks, this.transferId, payload);
+      this.encodeMsEwma = this.encodeMsEwma > 0 ? this.encodeMsEwma * 0.8 + (Date.now() - encT0) * 0.2 : (Date.now() - encT0);
 
       // TURBO striping: per-stream SCTP buffer backpressure, then send.
       const stripe = this.activeChannels[index % this.activeChannels.length];
@@ -786,6 +879,13 @@ export class SenderEngine {
           rttVarianceMs: this.rttVarEwma,
           activeChannels: this.activeChannels.length,
           windowHighWaterBytes: this.windowHighWater,
+          ackWaitMs: this.ackWaitMs,
+          ackAvgBytes: this.ackBytesEwma,
+          pumpSliceMs: this.sliceMsEwma,
+          pumpHashMs: this.hashMsEwma,
+          pumpEncodeMs: this.encodeMsEwma,
+          windowUtilization: this.windowBytes > 0 ? (this.bytesSent - this.bytesAcked) / this.windowBytes : 0,
+          utilizationSummary: this.utilization,
           timeline: this.timeline.length > 0 ? this.timeline.toJSON() : null,
           startedAt: this.startTime,
         });
@@ -808,6 +908,7 @@ export class SenderEngine {
     if (this.isCancelled) return;
     this.isDone = true;
     this.stopTimeline();
+    this.summarizeUtilization();
 
     // Incremental hash — computed while streaming, no extra full read needed
     let hash = '';
@@ -832,6 +933,7 @@ export class SenderEngine {
    * not a silent continue).
    */
   private waitForWindow(): Promise<void> {
+    const waitStart = Date.now();
     return new Promise((resolve) => {
       let settled = false;
       const wake = () => {
@@ -844,6 +946,7 @@ export class SenderEngine {
           settled = true;
           clearTimeout(failsafe);
           this.windowWaiters.delete(wake);
+          this.ackWaitMs += Date.now() - waitStart; // v2.3: measured ACK-wait
           resolve();
           return;
         }
@@ -855,6 +958,7 @@ export class SenderEngine {
           settled = true;
           this.windowWaiters.delete(wake);
           clearTimeout(failsafe);
+          this.ackWaitMs += Date.now() - waitStart; // v2.3: measured ACK-wait
           this.noteStall('starvation');
           resolve();
         }

@@ -255,13 +255,19 @@ export function useTransferEngine(
           void receiver.startTransfer(msg);
           break;
 
-        case 'ACK':
+        case 'ACK': {
+          const a = msg as { rb?: number; wb?: number };
+          // v2.3: cumulative byte ACK — wb (durably written bytes) is the
+          // authoritative flow-control frontier; rb is diagnostics.
           sender?.handleAck(
             msg.index,
             typeof msg.w === 'number' ? msg.w : undefined,
-            typeof (msg as { q?: number }).q === 'number' ? (msg as { q?: number }).q : undefined
+            typeof (msg as { q?: number }).q === 'number' ? (msg as { q?: number }).q : undefined,
+            typeof a.rb === 'number' ? a.rb : undefined,
+            typeof a.wb === 'number' ? a.wb : undefined
           );
           break;
+        }
 
         case 'FILE_END': {
           console.debug('[nexdrop] FILE_END received for', (msg as { transferId?: string }).transferId?.slice(0, 8));
