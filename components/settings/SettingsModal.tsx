@@ -11,8 +11,10 @@ import {
   Check,
   ShieldCheck,
   FileCheck,
+  Activity,
 } from 'lucide-react';
 import { DeviceInfo } from '@/lib/detection/capabilities';
+import { openDeviceTest } from '@/lib/devicetest/recorder';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -183,6 +185,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
         </div>
+
+          {/* Section 5: Advanced — Device Test & Diagnostics */}
+          <div className="pt-3 border-t border-white/[0.06]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-medium text-nd-text-primary flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-nd-teal" aria-hidden="true" />
+                  Device Test &amp; Diagnostics
+                </p>
+                <p className="text-[11px] text-nd-text-secondary">
+                  Guided two-device transfer test with measured telemetry. Records real values only;
+                  diagnostics stay on this device.
+                </p>
+              </div>
+              <button
+                onClick={openDeviceTest}
+                className="shrink-0 rounded-lg border border-nd-teal/40 bg-nd-teal/10 px-3 py-1.5 text-xs font-medium text-nd-teal hover:bg-nd-teal/20 transition-colors"
+              >
+                Open
+              </button>
+            </div>
+          </div>
 
         <div className="mt-5 pt-3 border-t border-white/[0.08] text-right">
           <button

@@ -1,24 +1,27 @@
 'use client';
 
 /**
- * Developer-only "Device Test" screen — OWNER-RUN physical validation.
+ * "Device Test & Diagnostics" screen — owner-run physical validation.
  *
- * Opt-in exactly like the diagnostics panel (localStorage
- * 'nexdrop:diagnostics' = '1' or ?diag=1). Records the 10-case physical
- * matrix with values measured by the real engines — never fabricated:
+ * Opened from Settings → Advanced (production PWA) or the developer
+ * diagnostics panel (?diag=1). Records values measured by the real
+ * engines — never fabricated:
  *  - file name/size/SHA-256 from the real transfer engine completions,
- *  - avg/peak speed from real timestamps + byte counts,
- *  - connection/ICE/RTT from getStats() samples,
+ *  - avg/peak/sustained speed from real timestamps + byte counts,
+ *  - connection/ICE/RTT/bitrate from getStats() samples,
+ *  - collapse timeline + first-changing-variable from the 10 Hz engine
+ *    timelines,
  *  - Pass/Fail is the owner's explicit verdict.
  * The normal ONE QR → Accept → automatic connection → transfer journey is
- * untouched; this screen only OBSERVES it.
+ * untouched; this screen only OBSERVES it. The guided live test (case
+ * 'live') is the v2.5.2 two-device 341.48 MB diagnostics flow.
  */
 
-import React, { useState, useSyncExternalStore } from 'react';
-import { X, Play, Check, Ban, RotateCcw, ClipboardCopy, Download, FileText, Trash2 } from 'lucide-react';
-import type { DeviceTestRecord } from '@/types/devicetest';
-import { isDevModeEnabled } from '@/lib/devicetest/gate';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
+import { X, Play, Check, Ban, RotateCcw, ClipboardCopy, Download, FileText, Trash2, Braces, Activity } from 'lucide-react';
+import type { DeviceTestMeta, DeviceTestRecord } from '@/types/devicetest';
 import { DEVICE_TEST_CASES } from '@/lib/devicetest/matrix';
+import { liveCollapseAnalysis, buildLiveTestReport, buildLiveTestJson } from '@/lib/devicetest/report';
 import {
   armTest,
   buildDeviceTestReport,
@@ -63,6 +66,250 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** ---------------------------------------------------------------------------
+ * LIVE readout (Phase 5): reads the real telemetry window at ~2.5 Hz while
+ * mounted. Every value is a live engine/getStats sample; N/A when the
+ * browser does not expose it. Nothing is synthesized or cached.
+ */
+function LiveReadout() {
+  const [t, setT] = useState<ReturnType<typeof getTelemetry>>(() => getTelemetry());
+  useEffect(() => {
+    const timer = setInterval(() => setT(getTelemetry()), 400);
+    return () => clearInterval(timer);
+  }, []);
+  const sender = t.sender;
+  const receiver = t.receiver;
+  const transport = t.transport;
+  const path =
+    transport?.transport === 'local' ? 'LOCAL DIRECT'
+    : transport?.transport === 'internet' ? 'INTERNET DIRECT'
+    : transport?.transport === 'relay' ? 'RELAY'
+    : 'N/A';
+  const connLabel = transport?.connected
+    ? 'CONNECTED'
+    : transport?.connectionState || t.dataChannelState || 'N/A';
+  const throughput = sender?.throughputBps ?? receiver?.throughputBps ?? null;
+  return (
+    <div className="rounded-lg border border-nd-teal/40 bg-black/30 px-3 py-2 divide-y divide-white/5" aria-live="polite">
+      <p className="text-[10px] font-semibold text-nd-teal tracking-wider pb-1">NEXDROP DEVICE TEST — LIVE</p>
+      <Field label="Connection" value={connLabel} />
+      <Field label="Path" value={path} />
+      <Field label="Protocol" value={transport?.protocol ? transport.protocol.toUpperCase() : 'N/A'} />
+      <Field label="RTT" value={transport?.rttMs != null ? `${Math.round(transport.rttMs)} ms` : 'N/A'} />
+      <Field label="Available outbound" value={transport?.outgoingBitrateBps ? fmtMBps(transport.outgoingBitrateBps / 8) : 'N/A'} />
+      <Field label="Available inbound" value={transport?.incomingBitrateBps ? fmtMBps(transport.incomingBitrateBps / 8) : 'N/A'} />
+      <Field label="Actual throughput" value={fmtMBps(throughput)} />
+      <Field label="Sender buffer" value={sender?.bufferedAmount != null ? fmtBytes(sender.bufferedAmount) : 'N/A'} />
+      <Field label="In-flight" value={sender?.inFlightBytes != null ? fmtBytes(sender.inFlightBytes) : 'N/A'} />
+      <Field label="Window" value={sender?.windowBytes != null ? fmtBytes(sender.windowBytes) : 'N/A'} />
+      <Field label="Receiver write" value={receiver?.writeMsEwma != null ? `${receiver.writeMsEwma.toFixed(1)} ms` : 'N/A'} />
+      <Field label="Queue" value={receiver?.queueDepth != null ? String(receiver.queueDepth) : 'N/A'} />
+      <Field label="Retransmissions" value={transport?.retransmissionsSent != null ? String(transport.retransmissionsSent) : 'N/A'} />
+      <Field label="Stalls" value={sender?.stalls != null ? String(sender.stalls) : 'N/A'} />
+      <Field label="ICE state" value={transport?.iceConnectionState || 'N/A'} />
+      <Field label="Durable written" value={receiver?.writeStage?.bytes ? fmtBytes(receiver.writeStage.bytes) : 'N/A'} />
+    </div>
+  );
+}
+
+function getTelemetry() {
+  if (typeof window === 'undefined') return { sender: null, receiver: null, transport: null, dataChannelState: null };
+  return window.__NEXDROP_TELEMETRY__ || { sender: null, receiver: null, transport: null, dataChannelState: null };
+}
+
+/** ---------------------------------------------------------------------------
+ * Guided live test card (case 'live').
+ */
+function LiveCard({ record, meta }: { record: DeviceTestRecord; meta: DeviceTestMeta }) {
+  const armed = record.armedAt !== null && record.endedAt === null;
+  const avg = deviceTestAvgBps(record);
+  const duration = deviceTestDurationSeconds(record);
+  const [report, setReport] = useState('');
+  const [summary, setSummary] = useState('');
+  const [copied, setCopied] = useState('');
+
+  const copyText = async (text: string, tag: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(tag);
+      setTimeout(() => setCopied(''), 2000);
+    } catch {
+      // clipboard unavailable — the text stays visible/selectable
+    }
+  };
+
+  const download = (content: string, filename: string, type: string) => {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const genReport = () => {
+    setReport(buildLiveTestReport(record, meta));
+    const analysis = liveCollapseAnalysis(record);
+    const firsts = analysis.firstChanges.slice(0, 3).map((c) => `${c.kind}@${c.tSec.toFixed(0)}s:${c.variable}`);
+    setSummary(
+      [
+        `Path: ${record.connection || 'unknown'} · RTT ${record.rttMs != null ? `${Math.round(record.rttMs)}ms` : 'N/A'}`,
+        `Avg ${fmtMBps(avg)} · Peak ${fmtMBps(record.peakBps)} · Sustained ${fmtMBps(record.sustainedBps)}`,
+        `Stalls ${record.lastStalls ?? 'N/A'} · SHA-256 ${record.shaVerified === true ? 'PASS' : record.shaVerified === false ? 'FAIL' : 'N/A'}`,
+        firsts.length > 0 ? `First change: ${firsts.join(', ')}` : 'No collapse events detected',
+        `Likely bottleneck: ${analysis.likelyLayer}`,
+      ].join('\n'),
+    );
+  };
+
+  const stepCls = 'text-[11px] text-nd-text-secondary leading-relaxed';
+
+  return (
+    <div className={`rounded-xl border p-3 ${armed ? 'border-nd-teal' : record.result === 'passed' ? 'border-emerald-600/40' : record.result === 'failed' ? 'border-red-500/40' : 'border-white/10'}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-nd-text-primary">Guided Two-Device Test — 341.48 MB</p>
+          <p className="text-[11px] text-nd-text-secondary mt-0.5">
+            Real-device diagnostics with the production engine. Every recorded value is measured; nothing is simulated.
+          </p>
+        </div>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full shrink-0 font-semibold ${armed ? 'bg-nd-teal text-nd-bg-0' : record.result === 'passed' ? 'bg-emerald-600/20 text-emerald-400' : record.result === 'failed' ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-nd-text-secondary'}`}>
+          {armed ? 'ARMED — sampling at 5 Hz' : record.result === 'passed' ? 'PASSED' : record.result === 'failed' ? 'FAILED' : 'not run'}
+        </span>
+      </div>
+
+      {/* Step 1: role */}
+      <div className="mt-3">
+        <p className="text-[10px] font-semibold text-nd-text-secondary">STEP 1 — This phone is the…</p>
+        <div className="mt-1 flex gap-2">
+          {(['sender', 'receiver'] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setDeviceTestMeta({ role: meta.role === r ? '' : r })}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border ${meta.role === r ? 'bg-nd-teal text-nd-bg-0 border-nd-teal' : 'border-white/10 text-nd-text-primary'}`}
+            >
+              {r === 'sender' ? 'Sender' : 'Receiver'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Steps 2-3 live in the Devices & network section at the top of this screen. */}
+      <ol className={`mt-3 space-y-1 ${stepCls}`} aria-label="Guided test steps">
+        <li>STEP 2 — Device names: fill &quot;Devices &amp; network&quot; above (or tap &quot;Use this device&quot;).</li>
+        <li>STEP 3 — Network: note the real path (Wi-Fi / hotspot / cellular) in the Network field.</li>
+        <li>STEP 4 — Pair: tap Start Test below, close this screen, then pair both phones with the normal NexDrop QR flow.</li>
+        <li>STEP 5 — Transfer: send the real 341.48 MB file (or any real file — the report records the actual size). Keep this screen open to watch the live readout.</li>
+      </ol>
+
+      <div className="mt-3 flex flex-wrap gap-2 items-center">
+        {!armed && !record.result && (
+          <button type="button" onClick={() => armTest('live')} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-nd-teal text-nd-bg-0">
+            <Play className="w-3 h-3" aria-hidden="true" /> Start Test
+          </button>
+        )}
+        {armed && (
+          <>
+            <button
+              type="button"
+              onClick={() => markTest('live', 'passed')}
+              disabled={record.shaVerified === false}
+              className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg ${record.shaVerified === false ? 'bg-white/5 text-nd-text-secondary cursor-not-allowed' : 'bg-emerald-600 text-white'}`}
+              title={record.shaVerified === false ? 'SHA-256 verification failed — cannot be marked Passed' : 'Record the owner verdict'}
+            >
+              <Check className="w-3 h-3" aria-hidden="true" /> Mark Passed
+            </button>
+            <button type="button" onClick={() => markTest('live', 'failed')} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-500/40 text-red-400">
+              <Ban className="w-3 h-3" aria-hidden="true" /> Mark Failed
+            </button>
+          </>
+        )}
+        {(record.armedAt !== null || record.result) && (
+          <button type="button" onClick={() => resetTest('live')} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-white/10 text-nd-text-secondary">
+            <RotateCcw className="w-3 h-3" aria-hidden="true" /> Reset
+          </button>
+        )}
+      </div>
+
+      {armed && (
+        <div className="mt-3">
+          <LiveReadout />
+        </div>
+      )}
+
+      {(record.files.length > 0 || record.lastBytes > 0) && (
+        <div className="mt-2 rounded-lg bg-black/20 px-3 py-2 divide-y divide-white/5">
+          <Field label="File(s)" value={record.files.map((f) => f.name).join(', ') || '—'} />
+          <Field label="Total size" value={fmtBytes(record.totalBytes)} />
+          <Field label="Duration" value={fmtSec(duration)} />
+          <Field label="Average" value={fmtMBps(avg)} />
+          <Field label="Peak" value={fmtMBps(record.peakBps)} />
+          <Field label="Sustained" value={fmtMBps(record.sustainedBps)} />
+          <Field label="SHA-256" value={record.files.length === 1 ? shortSha(record.files[0].sha256) : record.files.length > 1 ? `${record.files.length} files, see report` : '—'} />
+          <Field label="Verified" value={record.shaVerified === true ? '✓ verified' : record.shaVerified === false ? '✗ FAILED' : '—'} />
+        </div>
+      )}
+
+      {record.shaVerified === false && (
+        <p className="mt-2 text-[11px] text-red-400" role="alert">
+          SHA-256 verification failed on this test — it cannot be marked Passed.
+        </p>
+      )}
+
+      <textarea
+        value={record.notes}
+        onChange={(e) => setTestNotes('live', e.target.value)}
+        placeholder="Notes (observed behavior, environment, anything off)…"
+        className="mt-2 w-full text-[11px] rounded-lg bg-black/20 border border-white/10 px-2 py-1.5 text-nd-text-primary placeholder:text-nd-text-secondary/60 focus:outline-none focus-visible:ring-1 focus-visible:ring-nd-teal"
+        rows={2}
+      />
+
+      {(record.armedAt !== null || record.result) && (
+        <div className="mt-2 flex flex-wrap gap-2 items-center">
+          <button type="button" onClick={genReport} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-nd-teal text-nd-bg-0">
+            <FileText className="w-3 h-3" aria-hidden="true" /> Generate Report
+          </button>
+          {report && (
+            <>
+              <button type="button" onClick={() => copyText(report, 'report')} className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-white/10 text-nd-text-primary">
+                <ClipboardCopy className="w-3 h-3" aria-hidden="true" /> {copied === 'report' ? 'Copied' : 'Copy Report'}
+              </button>
+              <button
+                type="button"
+                onClick={() => download(report, `nexdrop-device-test-${new Date().toISOString().slice(0, 10)}.txt`, 'text/plain')}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-white/10 text-nd-text-primary"
+              >
+                <Download className="w-3 h-3" aria-hidden="true" /> Download .txt
+              </button>
+              <button
+                type="button"
+                onClick={() => download(buildLiveTestJson(record, meta), `nexdrop-device-test-${new Date().toISOString().slice(0, 10)}.json`, 'application/json')}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-white/10 text-nd-text-primary"
+              >
+                <Braces className="w-3 h-3" aria-hidden="true" /> Download JSON
+              </button>
+            </>
+          )}
+          {summary && (
+            <button type="button" onClick={() => copyText(summary, 'summary')} className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-white/10 text-nd-text-primary">
+              <Activity className="w-3 h-3" aria-hidden="true" /> {copied === 'summary' ? 'Copied' : 'Copy Diagnostics Summary'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {report && (
+        <pre className="mt-3 text-[10px] font-mono whitespace-pre-wrap rounded-lg bg-black/30 border border-white/10 p-3 text-nd-text-primary max-h-72 overflow-y-auto">
+          {report}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+/** Matrix case card (cases 01-10) — unchanged manual-validation card. */
 function CaseCard({ record }: { record: DeviceTestRecord }) {
   const armed = record.armedAt !== null && record.endedAt === null;
   const avg = deviceTestAvgBps(record);
@@ -155,13 +402,14 @@ function CaseCard({ record }: { record: DeviceTestRecord }) {
 }
 
 export default function DeviceTestPanel() {
-  const [enabled] = useState(isDevModeEnabled);
   const snap = useSyncExternalStore(subscribeDeviceTest, getDeviceTestSnapshot, getServerDeviceTestSnapshot);
   const [report, setReport] = useState('');
   const [copied, setCopied] = useState(false);
 
-  if (!enabled || !snap.open) return null;
+  if (!snap.open) return null;
   const { records, meta } = snap;
+  const liveRecord = records.find((r) => r.caseId === 'live');
+  const matrixRecords = records.filter((r) => r.caseId !== 'live');
 
   const copyReport = async () => {
     try {
@@ -184,15 +432,15 @@ export default function DeviceTestPanel() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-nd-bg-0/95 backdrop-blur-sm overflow-y-auto" role="dialog" aria-label="Device Test — developer only">
+    <div className="fixed inset-0 z-[100] bg-nd-bg-0/95 backdrop-blur-sm overflow-y-auto" role="dialog" aria-label="Device Test & Diagnostics">
       <div className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-nd-text-primary">NEXDROP — Device Test</h2>
+            <h2 className="text-lg font-bold text-nd-text-primary">NEXDROP — Device Test &amp; Diagnostics</h2>
             <p className="text-[11px] text-nd-text-secondary mt-0.5">
-              Developer-only physical validation. Values are measured by the real engines — never
-              fabricated. Run the matrix on two real phones; CI and browser-automation results stay
-              separate.
+              Real-device diagnostics. Values are measured by the real engines — never fabricated. The
+              transfer engine is untouched; this screen only observes it. Diagnostics stay on this
+              device.
             </p>
           </div>
           <button type="button" onClick={closeDeviceTest} aria-label="Close Device Test" className="p-2 rounded-lg border border-white/10 text-nd-text-secondary hover:text-nd-text-primary shrink-0">
@@ -250,8 +498,15 @@ export default function DeviceTestPanel() {
           </div>
         </section>
 
-        <div className="mt-4 space-y-3">
-          {records.map((r) => (
+        {liveRecord && (
+          <div className="mt-4">
+            <LiveCard record={liveRecord} meta={meta} />
+          </div>
+        )}
+
+        <p className="mt-5 text-xs font-semibold text-nd-text-secondary">Manual validation matrix</p>
+        <div className="mt-1 space-y-3">
+          {matrixRecords.map((r) => (
             <CaseCard key={r.caseId} record={r} />
           ))}
         </div>
@@ -259,7 +514,7 @@ export default function DeviceTestPanel() {
         <section className="mt-6 rounded-xl border border-white/10 p-3">
           <div className="flex flex-wrap gap-2 items-center">
             <button type="button" onClick={() => setReport(buildDeviceTestReport())} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-nd-teal text-nd-bg-0">
-              <FileText className="w-3 h-3" aria-hidden="true" /> Generate Report
+              <FileText className="w-3 h-3" aria-hidden="true" /> Generate Full Report
             </button>
             {report && (
               <>
@@ -287,8 +542,8 @@ export default function DeviceTestPanel() {
         </section>
 
         <p className="mt-4 text-[10px] text-nd-text-secondary">
-          Physical matrix not complete until you run it on two real phones. Until then NexDrop carries
-          CI + browser-automation verification only.
+          All values are measured on this device (engine telemetry, getStats()). Nothing is uploaded —
+          reports and JSON exports stay local until you share them.
         </p>
       </div>
     </div>

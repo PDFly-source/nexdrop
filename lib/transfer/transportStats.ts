@@ -62,6 +62,16 @@ export interface TransportStats {
   sctpState: string | null;
   /** selected candidate-pair state */
   pairState: string | null;
+  /** v2.5.2 device-test: RTCPeerConnection.connectionState (read directly) */
+  connectionState: string | null;
+  /** v2.5.2: pc.iceConnectionState */
+  iceConnectionState: string | null;
+  /** v2.5.2: pc.iceGatheringState */
+  iceGatheringState: string | null;
+  /** v2.5.2: SCTP transport packetsSent / packetsReceived (data-channel
+   *  packet counters) when the browser exposes them — null otherwise. */
+  sctpPacketsSent: number | null;
+  sctpPacketsReceived: number | null;
   timestamp: number;
 }
 
@@ -124,6 +134,8 @@ export async function sampleTransportStats(
   const bestRef: { pair: PairLike | null } = { pair: null };
   let dtlsState: string | null = null;
   let sctpState: string | null = null;
+  let sctpPacketsSent: number | null = null;
+  let sctpPacketsReceived: number | null = null;
 
   report.forEach((entry: PairLike & CandidateLike & { id?: string }) => {
     const t = entry.type;
@@ -147,6 +159,10 @@ export async function sampleTransportStats(
       sctpState = typeof (entry as { state?: string }).state === 'string'
         ? (entry as { state: string }).state
         : sctpState;
+      const ps = (entry as { packetsSent?: unknown }).packetsSent;
+      const pr = (entry as { packetsReceived?: unknown }).packetsReceived;
+      if (typeof ps === 'number') sctpPacketsSent = ps;
+      if (typeof pr === 'number') sctpPacketsReceived = pr;
     }
   });
 
@@ -223,6 +239,20 @@ export async function sampleTransportStats(
     dtlsState,
     sctpState,
     pairState: bestPair?.state ?? null,
+    connectionState:
+      typeof (pc as unknown as { connectionState?: string }).connectionState === 'string'
+        ? (pc as unknown as { connectionState: string }).connectionState
+        : null,
+    iceConnectionState:
+      typeof (pc as unknown as { iceConnectionState?: string }).iceConnectionState === 'string'
+        ? (pc as unknown as { iceConnectionState: string }).iceConnectionState
+        : null,
+    iceGatheringState:
+      typeof (pc as unknown as { iceGatheringState?: string }).iceGatheringState === 'string'
+        ? (pc as unknown as { iceGatheringState: string }).iceGatheringState
+        : null,
+    sctpPacketsSent,
+    sctpPacketsReceived,
     timestamp: Date.now(),
   };
 }

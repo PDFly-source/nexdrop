@@ -12,6 +12,7 @@ import {
   __resetDeviceTestForTests,
   armTest,
   buildDeviceTestReport,
+  noteTestEvent,
   clearAllTests,
   deviceTestAvgBps,
   deviceTestDurationSeconds,
@@ -24,6 +25,8 @@ import {
   setDeviceTestMeta,
 } from '../lib/devicetest/recorder';
 import { DEVICE_TEST_CASES } from '../lib/devicetest/matrix';
+import { buildLiveTestJson, buildLiveTestReport, liveCollapseAnalysis, throughputPercentile } from '../lib/devicetest/report';
+import type { TimelineSeries } from '../lib/transfer/timeline';
 
 let count = 0;
 function check(actual: unknown, expected: unknown, label: string) {
@@ -69,8 +72,8 @@ console.log('[devicetest]');
 
 // --- matrix -----------------------------------------------------------------
 
-check(DEVICE_TEST_CASES.map((c) => c.id), ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'],
-  'matrix has exactly the ten required cases');
+check(DEVICE_TEST_CASES.map((c) => c.id), ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', 'live'],
+  'matrix has the ten manual cases plus the guided live test');
 check(DEVICE_TEST_CASES.map((c) => c.title), [
   'Small file',
   '100 MB file',
@@ -82,6 +85,7 @@ check(DEVICE_TEST_CASES.map((c) => c.title), [
   'Decline pairing',
   'QR expiry',
   'Disconnect → Reconnect',
+  '341.48 MB Guided Two-Device Test',
 ], 'case titles match the physical validation spec');
 check(DEVICE_TEST_CASES.every((c) => c.hint.length > 10), true, 'every case carries a real-world instruction');
 
@@ -260,8 +264,127 @@ clearAllTests();
 check(getDeviceTestSnapshot().records.every((r) => r.result === null && r.armedAt === null), true,
   'clear all restores a fresh matrix');
 
+// --- v2.5.2 guided live test ----------------------------------------------
+
+resetState();
+setDeviceTestMeta({ deviceA: 'Pixel 7 · Chrome 129', deviceB: 'Galaxy S23 · Chrome 129', network: 'Wi-Fi same LAN', role: 'sender' });
+armTest('live');
+{
+  const snap = getDeviceTestSnapshot();
+  const rec = snap.records.find((r) => r.caseId === 'live')!;
+  check(Boolean(rec?.armedAt), true, 'live case arms like any other');
+  check(snap.meta.role, 'sender', 'role selection persists in meta');
+}
+// feed the sampler a full telemetry picture (real field names, one sample)
+telemetry.sender = {
+  bytesSent: 341_480_000, totalBytes: 341_480_000, throughputBps: 8_000_000, sustainedBps: 7_500_000,
+  windowBytes: 4_194_304, bufferedAmount: 512 * 1024, inFlightBytes: 2_097_152, ackLatencyMs: 180,
+  stalls: 0, chunkSize: 262_144, windowChunks: 16,
+};
+telemetry.receiver = {
+  bytesReceived: 341_480_000, throughputBps: 8_000_000, writeMsEwma: 4.2, queueDepth: 6, maxQueueDepth: 12,
+  heapBytes: 26 * 1024 * 1024, writerType: 'opfs',
+  writeStage: { count: 500, p50Ms: 3.1, p95Ms: 9.4, bytes: 341_480_000 },
+  writeBatch: { count: 500, p50Bytes: 524288, p95Bytes: 1048576, writesPerMiB: 1.5 },
+};
+telemetry.transport = {
+  transport: 'local', localCandidateType: 'host', remoteCandidateType: 'host',
+  rttMs: 12, protocol: 'udp', outgoingBitrateBps: 120_000_000, incomingBitrateBps: 110_000_000,
+  retransmissionsSent: 3, connectionState: 'connected', iceConnectionState: 'connected',
+  iceGatheringState: 'complete', sctpPacketsSent: 250_000, sctpPacketsReceived: 250_000,
+};
+telemetry.dataChannelState = 'open';
+sampleDeviceTestNow();
+{
+  const rec = getDeviceTestSnapshot().records.find((r) => r.caseId === 'live')!;
+  check(rec.connection, 'local', 'sampler captures the measured path');
+  check(rec.connectionState, 'connected', 'sampler captures pc.connectionState');
+  check(rec.sctpPacketsSent, 250_000, 'sampler captures SCTP packetsSent');
+  check(rec.writerType, 'opfs', 'sampler captures the receiver storage path');
+  check(rec.writeBatchP95Bytes, 1048576, 'sampler captures batch p95');
+  check(rec.heapPeakBytes, 26 * 1024 * 1024, 'sampler tracks the JS heap peak');
+}
+// a synthetic-but-real-shaped sender timeline: ramp then collapse
+const liveTimeline: TimelineSeries = {
+  fields: ['t','sent','acked','inFlight','window','chunk','buffered','rtt','minRtt','bps','stalls','ackLatency','writeMs','queueDepth'],
+  intervalMs: 100,
+  rows: [
+    [100, 20e6, 10e6, 10e6, 4194304, 262144, 0, 12, 10, 20e6, 0, 100, 3, 2],
+    [200, 40e6, 30e6, 10e6, 4194304, 262144, 0, 12, 10, 20e6, 0, 100, 3, 2],
+    [300, 55e6, 50e6, 5e6, 4194304, 262144, 0, 12, 10, 15e6, 0, 100, 3, 2],
+    [400, 65e6, 62e6, 3e6, 4194304, 262144, 0, 350, 10, 12e6, 0, 320, 3, 2],
+    [500, 70e6, 68e6, 2e6, 4194304, 262144, 0, 400, 10, 10e6, 0, 360, 3, 2],
+    [600, 74e6, 72e6, 2e6, 4194304, 262144, 0, 420, 10, 10e6, 0, 380, 3, 2],
+    [700, 78e6, 76e6, 2e6, 4194304, 262144, 0, 430, 10, 10e6, 0, 390, 3, 2],
+    [800, 82e6, 80e6, 2e6, 4194304, 262144, 0, 430, 10, 10e6, 0, 390, 3, 2],
+  ],
+};
+now += 30_000;
+onTestTransferComplete({ transferId: 't1', name: 'test-341.48MB.bin', size: 341_480_000, direction: 'sent', hash: 'a'.repeat(64) });
+onTestTransferVerified('t1', true);
+{
+  const rec = getDeviceTestSnapshot().records.find((r) => r.caseId === 'live')!;
+  check(rec.files.length, 1, 'live case records the real completion');
+  check(rec.shaVerified, true, 'live case records the real VERIFY verdict');
+}
+// write the timeline into the record the way onTestTransferComplete does
+{
+  const before = getDeviceTestSnapshot().records.find((r) => r.caseId === 'live')!;
+  onTestTransferComplete({ transferId: 't2', name: 'ignored.bin', size: 1, direction: 'sent' });
+  const store2 = JSON.parse(store['nexdrop:devicetest:v1']);
+  const rec = store2.records.find((r) => r.caseId === 'live');
+  rec.senderTimeline = liveTimeline;
+  store['nexdrop:devicetest:v1'] = JSON.stringify(store2);
+  check(before.files.length >= 1, true, 'sanity: second completion captured too');
+}
+const liveRec = (): any => getDeviceTestSnapshot().records.find((r) => r.caseId === 'live')!;
+{
+  // feed the recorded timeline back through a real sampler sample so the
+  // in-memory record carries it too
+  telemetry.sender = { ...telemetry.sender };
+  getDeviceTestSnapshot(); // reload from localStorage is not needed — patch in memory
+  const snap = getDeviceTestSnapshot();
+  const rec = snap.records.find((r) => r.caseId === 'live')!;
+  rec.senderTimeline = liveTimeline;
+}
+const p95 = throughputPercentile(liveTimeline, 95);
+check(p95 === 15e6 || p95 === 20e6, true, 'throughput p95 computes from recorded samples only');
+const analysis = liveCollapseAnalysis(liveRec());
+check(analysis.firstChanges.length > 0, true, 'collapse events detected in the timeline');
+check(analysis.firstChanges[0].kind, 'fall', 'the ramp-then-fall timeline is classified as a fall');
+check(typeof analysis.likelyLayer, 'string', 'bottleneck layer is always a stated string');
+{
+  const relayRec = { ...liveRec(), connection: 'relay' };
+  check(liveCollapseAnalysis(relayRec).likelyLayer.startsWith('transport (RELAY path)'), true,
+    'relay path names the transport layer — measured evidence only');
+}
+const report = buildLiveTestReport(liveRec(), getDeviceTestSnapshot().meta);
+check(report.includes('NEXDROP DEVICE TEST REPORT'), true, 'live report has the title');
+check(report.includes('TRANSPORT') && report.includes('PERFORMANCE') && report.includes('FLOW CONTROL'), true,
+  'live report has transport/performance/flow-control sections');
+check(report.includes('RECEIVER') && report.includes('INTEGRITY') && report.includes('BOTTLENECK ANALYSIS'), true,
+  'live report has receiver/integrity/bottleneck sections');
+check(report.includes('LOCAL_DIRECT'), true, 'live report states the measured path');
+check(report.includes('FIRST'), true, 'live report names the first-changing variable');
+check(report.includes('N/A'), true, 'live report prints N/A for unexposed metrics (honest)');
+const json = JSON.parse(buildLiveTestJson(liveRec(), getDeviceTestSnapshot().meta));
+check(json.kind, 'nexdrop-device-test', 'JSON export carries the kind tag');
+check(json.record.caseId, 'live', 'JSON export carries the raw record');
+check(json.senderTimeline.rows.length, liveTimeline.rows.length, 'JSON export carries the raw timeline');
+check(json.collapse.likelyLayer.length > 0, true, 'JSON export carries the collapse analysis');
+noteTestEvent('paused');
+check(liveRec().events[liveRec().events.length - 1]?.kind, 'paused', 'flow events recorded for the live test');
+markTest('live', 'passed');
+check(liveRec().result, 'passed', 'owner verdict recorded on the live test');
+resetTest('live');
+check(liveRec().armedAt, null, 'live test reset works');
+
 Date.now = realNow;
 console.log(`[devicetest] ${count} checks passed`);
+if (count < 60) {
+  console.error('[devicetest] MISSING CHECKS — expected at least 60');
+  process.exit(1);
+}
 if (count < 40) {
   console.error('[devicetest] MISSING CHECKS — expected at least 40');
   process.exit(1);

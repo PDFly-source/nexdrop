@@ -1,6 +1,10 @@
 /**
- * The owner-run physical validation matrix. Exactly these ten cases —
- * no feature expansion, no architecture change.
+ * The owner-run physical validation matrix. Cases 01-10 are the ten-case
+ * manual matrix. The 11th entry ('live') is the v2.5.2 GUIDED two-device
+ * diagnostics test (Settings -> Advanced -> Device Test & Diagnostics):
+ * pick sender/receiver role, name the devices, pair via the normal QR
+ * flow, and send the real 341.48 MB test file — the recorder samples the
+ * real engines the whole time.
  */
 export interface DeviceTestCase {
   id: string;
@@ -20,4 +24,9 @@ export const DEVICE_TEST_CASES: DeviceTestCase[] = [
   { id: '08', title: 'Decline pairing', hint: 'Arm on the receiving phone, scan the QR, then DECLINE the incoming request. The sender must keep its queue and show a truthful failure.' },
   { id: '09', title: 'QR expiry', hint: 'Arm, create a pairing QR on the sender and let it expire without scanning. The UI must show expiry with retry, never a fake success.' },
   { id: '10', title: 'Disconnect → Reconnect', hint: 'Arm, connect, then briefly disable Wi-Fi on one phone and re-enable it. Mark the result yourself (engine reconnect behavior).' },
+  {
+    id: 'live',
+    title: '341.48 MB Guided Two-Device Test',
+    hint: 'Guided diagnostics: pick this phone\u2019s role, name both devices, pair with the normal NexDrop QR flow, then send the real 341.48 MB file. Every recorded value is measured.',
+  },
 ];

@@ -107,6 +107,24 @@ export interface DeviceTestRecord {
   events: Array<{ at: number; kind: string }>;
   /** Last sampled sender window bytes (finalWindow convenience). */
   lastWindowBytes: number | null;
+  /** v2.5.2 live diagnostics — RTCPeerConnection / ICE states (read). */
+  connectionState: string | null;
+  iceConnectionState: string | null;
+  iceGatheringState: string | null;
+  /** v2.5.2 — SCTP data-channel packet counters when exposed. */
+  sctpPacketsSent: number | null;
+  sctpPacketsReceived: number | null;
+  /** v2.5.2 receiver storage profile at the last sample (all measured). */
+  writerType: string | null;
+  writeCalls: number | null;
+  storageBytesWritten: number | null;
+  writeBatchP50Bytes: number | null;
+  writeBatchP95Bytes: number | null;
+  writesPerMiB: number | null;
+  writeP50Ms: number | null;
+  writeP95Ms: number | null;
+  /** Peak usedJSHeapSize sampled on THIS device (0 = browser hides it). */
+  heapPeakBytes: number | null;
   result: 'passed' | 'failed' | null;
   notes: string;
 }
@@ -116,6 +134,8 @@ export interface DeviceTestMeta {
   deviceB: string;
   network: string;
   extra: string;
+  /** v2.5.2 guided test: the role THIS phone plays in the live test. */
+  role: '' | 'sender' | 'receiver';
 }
 
 export interface DeviceTestSnapshot {

@@ -29,7 +29,7 @@ import { DEVICE_TEST_CASES } from './matrix';
 const STORAGE_KEY = 'nexdrop:devicetest:v1';
 const SAMPLE_MS = 200;
 
-const DEFAULT_META: DeviceTestMeta = { deviceA: '', deviceB: '', network: '', extra: '' };
+const DEFAULT_META: DeviceTestMeta = { deviceA: '', deviceB: '', network: '', extra: '', role: '' };
 
 const listeners = new Set<() => void>();
 let snapshot: DeviceTestSnapshot | null = null;
@@ -90,6 +90,20 @@ function defaultRecords(): DeviceTestRecord[] {
     shaVerified: null,
     result: null,
     notes: '',
+    connectionState: null,
+    iceConnectionState: null,
+    iceGatheringState: null,
+    sctpPacketsSent: null,
+    sctpPacketsReceived: null,
+    writerType: null,
+    writeCalls: null,
+    storageBytesWritten: null,
+    writeBatchP50Bytes: null,
+    writeBatchP95Bytes: null,
+    writesPerMiB: null,
+    writeP50Ms: null,
+    writeP95Ms: null,
+    heapPeakBytes: null,
   }));
 }
 
@@ -360,6 +374,22 @@ export function sampleDeviceTestNow(): void {
     ackLatencyMs: sender?.ackLatencyMs ?? rec.ackLatencyMs,
     localAddress: transport?.localAddress ?? rec.localAddress,
     remoteAddress: transport?.remoteAddress ?? rec.remoteAddress,
+    connectionState: transport?.connectionState ?? rec.connectionState,
+    iceConnectionState: transport?.iceConnectionState ?? rec.iceConnectionState,
+    iceGatheringState: transport?.iceGatheringState ?? rec.iceGatheringState,
+    sctpPacketsSent: transport?.sctpPacketsSent ?? rec.sctpPacketsSent,
+    sctpPacketsReceived: transport?.sctpPacketsReceived ?? rec.sctpPacketsReceived,
+    writerType: receiver?.writerType ?? rec.writerType,
+    writeCalls: receiver?.writeBatch?.count ?? rec.writeCalls,
+    storageBytesWritten: receiver?.writeStage?.bytes ?? rec.storageBytesWritten,
+    writeBatchP50Bytes: receiver?.writeBatch?.p50Bytes ?? rec.writeBatchP50Bytes,
+    writeBatchP95Bytes: receiver?.writeBatch?.p95Bytes ?? rec.writeBatchP95Bytes,
+    writesPerMiB: receiver?.writeBatch?.writesPerMiB ?? rec.writesPerMiB,
+    writeP50Ms: receiver?.writeStage?.p50Ms ?? rec.writeP50Ms,
+    writeP95Ms: receiver?.writeStage?.p95Ms ?? rec.writeP95Ms,
+    heapPeakBytes: receiver?.heapBytes
+      ? Math.max(rec.heapPeakBytes ?? 0, receiver.heapBytes)
+      : rec.heapPeakBytes,
   };
   updateRecord(rec.caseId, patch, false);
 }

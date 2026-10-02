@@ -180,6 +180,13 @@ export interface TransportTelemetry {
   incomingBitrateBps: number | null;
   /** Selected pair network protocol ('udp' | 'tcp' | null) — read from candidates. */
   protocol: string | null;
+  /** v2.5.2 device-test: pc.connectionState / ICE states (read directly). */
+  connectionState: string | null;
+  iceConnectionState: string | null;
+  iceGatheringState: string | null;
+  /** v2.5.2: SCTP packetsSent/packetsReceived when the browser exposes them. */
+  sctpPacketsSent: number | null;
+  sctpPacketsReceived: number | null;
   /** Negotiated SCTP maxMessageSize when readable from pc.sctp. */
   sctpMaxMessageSize: number | null;
   dtlsState: string | null;
