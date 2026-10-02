@@ -89,7 +89,9 @@ export function useTransferEngine(
     }
   }, []);
   const transferProfileRef = useRef(transferProfile);
-  transferProfileRef.current = transferProfile;
+  useEffect(() => {
+    transferProfileRef.current = transferProfile;
+  }, [transferProfile]);
   const [incomingFiles, setIncomingFiles] = useState<FileItem[]>([]);
   const [activeTransfer, setActiveTransfer] = useState<ActiveTransferState | null>(null);
 
