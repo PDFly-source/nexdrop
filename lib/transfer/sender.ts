@@ -48,6 +48,7 @@ import {
   workerAvailable,
   hashQueueCapBytes,
   HashMode,
+  pipelineOverrides,
 } from './hashPipeline';
 import { initialChunkSize, noteTransferSuccess, noteTransferFailure } from './tuner';
 import { updateSenderTelemetry } from './telemetry';
@@ -812,16 +813,16 @@ export class SenderEngine {
       if (ok) {
         this.hashMode = 'merkle';
         this.hashPipeline = new MerkleHashPipeline();
-      } else if (envMode === 'auto' && workerAvailable()) {
+      } else if (envMode === 'auto' && (workerAvailable() || pipelineOverrides.worker)) {
         this.hashMode = 'worker';
-        this.hashPipeline = new WorkerHashPipeline();
+        this.hashPipeline = pipelineOverrides.worker ? pipelineOverrides.worker() : new WorkerHashPipeline();
       } else {
         // Peer declined or forced-merkle without support: legacy inline.
         this.hashMode = 'inline';
       }
-    } else if (envMode === 'worker' && workerAvailable()) {
+    } else if (envMode === 'worker' && (workerAvailable() || pipelineOverrides.worker)) {
       this.hashMode = 'worker';
-      this.hashPipeline = new WorkerHashPipeline();
+      this.hashPipeline = pipelineOverrides.worker ? pipelineOverrides.worker() : new WorkerHashPipeline();
     } else {
       this.hashMode = 'inline';
     }
@@ -903,9 +904,17 @@ export class SenderEngine {
         return;
       }
 
+      // v2.4: the buffer's byte length, captured ONCE. Pipeline engines may
+      // take ownership of the buffer via transferable postMessage (worker
+      // mode DETACHES it inside push) — every later read must use this
+      // captured value, never chunkBuffer.byteLength (would read 0 after
+      // detach and silently zero the bytesSent accounting: the 2026-10-01
+      // worker-mode stall bug).
+      const chunkBytes = chunkBuffer.byteLength;
+
       // v2.4: measured disk-read (slice) stage — EWMA + full distribution.
       const sliceDt = Date.now() - sliceT0;
-      this.sliceStats.record(sliceDt, chunkBuffer.byteLength);
+      this.sliceStats.record(sliceDt, chunkBytes);
       this.sliceMsEwma = this.sliceMsEwma > 0 ? this.sliceMsEwma * 0.8 + sliceDt * 0.2 : sliceDt;
 
       // The awaited read above can straddle a pause() call. Re-check BEFORE
@@ -931,7 +940,7 @@ export class SenderEngine {
         const hashT0 = Date.now();
         this.hasher.update(new Uint8Array(chunkBuffer));
         const hashDt = Date.now() - hashT0;
-        this.hashStats.record(hashDt, chunkBuffer.byteLength);
+        this.hashStats.record(hashDt, chunkBytes);
         this.hashMsEwma = this.hashMsEwma > 0 ? this.hashMsEwma * 0.8 + hashDt * 0.2 : hashDt;
       }
 
@@ -951,7 +960,7 @@ export class SenderEngine {
 
       const packet = encodeBinaryChunk(index, this.totalChunks, this.transferId, payload);
       const encodeDt = Date.now() - encT0;
-      this.encodeStats.record(encodeDt, chunkBuffer.byteLength);
+      this.encodeStats.record(encodeDt, chunkBytes);
       this.encodeMsEwma = this.encodeMsEwma > 0 ? this.encodeMsEwma * 0.8 + encodeDt * 0.2 : encodeDt;
 
       // TURBO striping: per-stream SCTP buffer backpressure, then send.
@@ -991,14 +1000,16 @@ export class SenderEngine {
       // ciphertext) — the pipeline owns it from here.
       if (this.hashPipeline) {
         const pushT0 = Date.now();
-        this.hashPipeline.push(chunkBuffer, chunkBuffer.byteLength);
+        // chunkBytes captured pre-detach: worker mode transfers the buffer
+        // (detaching it) inside push — its byteLength reads 0 afterwards.
+        this.hashPipeline.push(chunkBuffer, chunkBytes);
         const pushDt = Date.now() - pushT0;
-        this.hashStats.record(pushDt, chunkBuffer.byteLength);
+        this.hashStats.record(pushDt, chunkBytes);
         this.hashMsEwma = this.hashMsEwma > 0 ? this.hashMsEwma * 0.8 + pushDt * 0.2 : pushDt;
       }
 
       this.currentChunkIndex = index + 1;
-      this.bytesSent += chunkBuffer.byteLength;
+      this.bytesSent += chunkBytes;
 
       const bufAmt = this.fileChannel.bufferedAmount;
       if (bufAmt > this.maxBufferedAmount) this.maxBufferedAmount = bufAmt;

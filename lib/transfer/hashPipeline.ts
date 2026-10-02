@@ -40,6 +40,11 @@ export function hashQueueCapBytes(): number {
   return mb > 0 ? mb * 1024 * 1024 : 8 * 1024 * 1024;
 }
 
+/** Test seam: when set, replaces worker-engine construction (used only by
+ *  regression tests to reproduce transferable-detach semantics without a
+ *  real Worker; never set in production builds). */
+export const pipelineOverrides: { worker?: () => HashPipeline } = {};
+
 export interface HashPipeline {
   readonly mode: HashMode;
   /** Push the next plaintext chunk buffer (post-send; owned by the pipeline). */
