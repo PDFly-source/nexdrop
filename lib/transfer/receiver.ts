@@ -173,6 +173,13 @@ export class ReceiverEngine {
     this.callbacks = callbacks;
   }
 
+  /** Test seam (v2.5 regression tests): replace the storage writer the
+   *  factory would create. Production code never passes this. */
+  setWriterOverride(factory: (() => StorageWriter) | null): void {
+    this.writerOverride = factory;
+  }
+  private writerOverride: (() => StorageWriter) | null = null;
+
   /** Real receiver queue depth: everything accepted but not yet durably
    *  written (writer-queue chunks are counted by the writesQueued counter). */
   private queueDepth(): number {
@@ -266,7 +273,9 @@ export class ReceiverEngine {
     this.recentSpeeds = [];
 
     try {
-      this.writer = await createOptimalStorageWriter(this.name, this.mime, this.size, false);
+      this.writer = this.writerOverride
+        ? this.writerOverride()
+        : await createOptimalStorageWriter(this.name, this.mime, this.size, false);
     } catch (err: any) {
       this.pendingChunks = [];
       this.pendingFinish = null;
@@ -600,10 +609,13 @@ export class ReceiverEngine {
         // Cumulative-byte frontier advance (v2.3): the durable frontier is
         // BYTES, not chunk index — byte offsets stay authoritative across
         // chunk-size ladder steps and coalescing, so the stale-size-chunk
-        // accounting class cannot recur.
-        let writtenBytes = 0;
-        for (const b of batch) writtenBytes += b.payload.byteLength;
-        this.bytesWritten += writtenBytes;
+        // accounting class cannot recur. v2.5: the sum comes from the
+        // GATHER-TIME batchBytes — storage writers may legally transfer
+        // (detach) the payload buffers, and a detached buffer reports
+        // byteLength 0. batchBytes was computed before any storage call
+        // and equals the plaintext bytes of this batch, so the frontier
+        // stays exact for every writer implementation.
+        this.bytesWritten += batchBytes;
 
         // v2.3 cumulative-byte ACK policy, evaluated per durable batch:
         // coalesce until >= ACK_BYTE_TARGET new durable bytes (or the
@@ -741,10 +753,27 @@ export class ReceiverEngine {
     this.stopTimeline();
 
     // Byte-count honesty check: FILE_END only counts as complete when the
-    // number of plaintext bytes actually written equals the size announced
-    // in FILE_START. A truncated stream must never be reported as complete.
-    const byteCountOk = this.bytesReceived === this.size;
-    if (!byteCountOk) {
+    // number of plaintext bytes RECEIVED and the number DURABLY WRITTEN
+    // both equal the size announced in FILE_START. A truncated stream or
+    // a write-path loss must never be reported as complete — gating only
+    // on bytesReceived let a sync-writer bug discard ~37% of the file
+    // while the transfer still said Completed + Verified (caught by the
+    // v2.5 receiver profile, fixed 2026-10-02).
+    const byteCountOk = this.bytesReceived === this.size && this.bytesWritten === this.size;
+    // Storage-boundary honesty: when the writer reports its TRUE durable
+    // byte total, a mismatch refuses completion — the storage layer under-
+    // writing (or being wiped mid-flight) must never pass as success.
+    const writerTotal =
+      typeof this.writer?.writtenTotalBytes === 'function'
+        ? this.writer.writtenTotalBytes()
+        : null;
+    const storageCountOk = writerTotal === null || writerTotal === this.size;
+    if (!storageCountOk) {
+      console.error(
+        `Storage under-write: writer reports ${writerTotal} of ${this.size} bytes durably written`
+      );
+    }
+    if (!byteCountOk || !storageCountOk) {
       this.callbacks.sendControlMessage({
         type: 'VERIFY',
         transferId: this.transferId,

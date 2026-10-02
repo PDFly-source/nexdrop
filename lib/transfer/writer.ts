@@ -20,9 +20,17 @@ export interface StorageWriter {
    * Implementations MUST write all payloads in array order.
    */
   writeChunks(chunks: ArrayBuffer[], firstIndex: number): Promise<void>;
-  finish(): Promise<{ blobUrl?: string; success: boolean }>;
+  finish(): Promise<{ blobUrl?: string; success: boolean; writtenTotalBytes?: number }>;
   abort(): Promise<void>;
   getType(): 'filesystem' | 'opfs' | 'opfs-sync' | 'blob';
+  /**
+   * TRUE number of durable bytes the writer placed on disk, for the
+   * receiver's completion gate. Implementations that cannot know
+   * return null. The receiver compares this against the announced size
+   * before reporting success — a storage layer that under-writes must
+   * never pass as a completed transfer (v2.5 honesty contract).
+   */
+  writtenTotalBytes?(): number | null;
 }
 
 /**
@@ -31,6 +39,10 @@ export interface StorageWriter {
 export class FileSystemAccessWriter implements StorageWriter {
   private fileHandle: any = null;
   private writable: any = null;
+  private written = 0;
+  writtenTotalBytes(): number | null {
+    return this.written;
+  }
 
   getType(): 'filesystem' {
     return 'filesystem';
@@ -63,6 +75,7 @@ export class FileSystemAccessWriter implements StorageWriter {
   async writeChunk(chunk: ArrayBuffer): Promise<void> {
     if (this.writable) {
       await this.writable.write(chunk);
+      this.written += chunk.byteLength;
     }
   }
 
@@ -72,9 +85,11 @@ export class FileSystemAccessWriter implements StorageWriter {
     if (!this.writable || chunks.length === 0) return;
     if (chunks.length === 1) {
       await this.writable.write(chunks[0]);
+      this.written += chunks[0].byteLength;
       return;
     }
     await this.writable.write(new Blob(chunks));
+    for (const c of chunks) this.written += c.byteLength;
   }
 
   async finish(): Promise<{ blobUrl?: string; success: boolean }> {
@@ -103,6 +118,10 @@ export class OpfsStorageWriter implements StorageWriter {
   private fileHandle: any = null;
   private writable: any = null;
   private filename: string = '';
+  private written = 0;
+  writtenTotalBytes(): number | null {
+    return this.written;
+  }
 
   getType(): 'opfs' {
     return 'opfs';
@@ -131,6 +150,7 @@ export class OpfsStorageWriter implements StorageWriter {
   async writeChunk(chunk: ArrayBuffer): Promise<void> {
     if (this.writable) {
       await this.writable.write(chunk);
+      this.written += chunk.byteLength;
     }
   }
 
@@ -140,9 +160,11 @@ export class OpfsStorageWriter implements StorageWriter {
     if (!this.writable || chunks.length === 0) return;
     if (chunks.length === 1) {
       await this.writable.write(chunks[0]);
+      this.written += chunks[0].byteLength;
       return;
     }
     await this.writable.write(new Blob(chunks));
+    for (const c of chunks) this.written += c.byteLength;
   }
 
   async finish(): Promise<{ blobUrl?: string; success: boolean }> {
@@ -187,6 +209,12 @@ export class OpfsSyncWorkerWriter implements StorageWriter {
   private nextId = 1;
   private opfsName = '';
   private closed = false;
+  /** TRUE durable bytes reported back by the worker per batch — the
+   *  completion gate's ground truth (v2.5 honesty contract). */
+  private written = 0;
+  writtenTotalBytes(): number | null {
+    return this.written;
+  }
 
   getType(): 'opfs-sync' {
     return 'opfs-sync';
@@ -251,16 +279,24 @@ export class OpfsSyncWorkerWriter implements StorageWriter {
   }
 
   /** One round-trip per BATCH (bounded): the worker appends each buffer in
-   *  order at its tracked position and returns the byte count written. */
+   *  order at its tracked position and returns the byte count written.
+   *
+   *  The expected sum is captured BEFORE postMessage: the buffers ride in
+   *  the TRANSFER list, so structured-clone detaches them on this thread —
+   *  reading byteLength afterwards yields 0 (this exact false 'short write'
+   *  threw per batch in CI, wiped the receiver's write queue, and silently
+   *  truncated the file while the transfer still reported success). */
   async writeChunks(chunks: ArrayBuffer[], _firstIndex: number): Promise<void> {
     if (this.closed || !this.worker) return;
     if (chunks.length === 0) return;
     const buffers = chunks.filter((c) => c.byteLength > 0);
     if (buffers.length === 0) return;
+    const expected = buffers.reduce((a, c) => a + c.byteLength, 0);
     const written = await this.request({ cmd: 'write', buffers }, buffers);
-    if (typeof written === 'number' && written !== buffers.reduce((a, c) => a + c.byteLength, 0)) {
-      throw new Error(`OPFS sync short write: ${written} bytes`);
+    if (typeof written !== 'number' || written !== expected) {
+      throw new Error(`OPFS sync short write: ${written} of ${expected} bytes`);
     }
+    this.written += written;
   }
 
   async finish(): Promise<{ blobUrl?: string; success: boolean }> {
@@ -355,6 +391,10 @@ export class MemoryBlobWriter implements StorageWriter {
 
   getType(): 'blob' {
     return 'blob';
+  }
+
+  writtenTotalBytes(): number | null {
+    return this.totalBytes;
   }
 
   async init(filename: string, mimeType: string, expectedSize: number): Promise<boolean> {
