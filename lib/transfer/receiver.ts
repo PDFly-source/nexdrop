@@ -146,8 +146,10 @@ export class ReceiverEngine {
   private ackByteTargetOverride = 0;
   /** v2.5.1 coalescer: storage-write batch target (bytes, seam-overridable). */
   private writeBatchTargetBytes = WRITE_BATCH_TARGET_BYTES;
-  /** v2.5.1 coalescer: partial-batch hold time in ms (0 = greedy flush). */
-  private writeHoldMs = 0;
+  /** v2.5.1 coalescer: partial-batch hold time in ms (0 = greedy flush).
+   *  Production default = the v2.5.1 sweep winner (20 ms, 1 MiB target):
+   *  2 repeat CI runs, 19.5-22.1 MiB/s sustained vs greedy 13.4. */
+  private writeHoldMs = 20;
   /** Partial batch held while waiting for more chunks (bounded: at most
    *  writeBatchTargetBytes + one chunk of overshoot). */
   private heldBatch: Array<{ payload: ArrayBuffer; index: number; enq: number }> = [];
@@ -275,7 +277,7 @@ export class ReceiverEngine {
     if (typeof seams.__NEXDROP_WRITE_BATCH_BYTES === 'number' && seams.__NEXDROP_WRITE_BATCH_BYTES >= 65536) {
       this.writeBatchTargetBytes = Math.min(seams.__NEXDROP_WRITE_BATCH_BYTES, 8 * 1024 * 1024);
     }
-    if (typeof seams.__NEXDROP_WRITE_HOLD_MS === 'number' && seams.__NEXDROP_WRITE_HOLD_MS > 0) {
+    if (typeof seams.__NEXDROP_WRITE_HOLD_MS === 'number' && seams.__NEXDROP_WRITE_HOLD_MS >= 0) {
       this.writeHoldMs = Math.min(seams.__NEXDROP_WRITE_HOLD_MS, WRITE_HOLD_MAX_MS);
     }    this.ackByteTargetOverride =
       typeof tune === 'number' && tune > 0 ? Math.min(tune, ACK_BYTE_TARGET_MAX) : 0;

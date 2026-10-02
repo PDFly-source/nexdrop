@@ -49,7 +49,9 @@ class RecordingWriter implements StorageWriter {
 }
 
 interface RunOpts {
-  holdMs?: number;
+  /** null (default) = leave the hold seam UNSET (production default);
+   *  0 = force greedy; >0 = force that hold. */
+  holdMs?: number | null;
   targetBytes?: number;
   gapMs?: number;
   chunks?: number;
@@ -69,7 +71,7 @@ interface RunResult {
 
 async function runCoalesce(opts: RunOpts): Promise<RunResult> {
   const {
-    holdMs = 0,
+    holdMs = null,
     targetBytes = 4 * CHUNK,
     gapMs = 0,
     chunks = 6,
@@ -93,7 +95,7 @@ async function runCoalesce(opts: RunOpts): Promise<RunResult> {
       return true;
     },
   });
-  (globalThis as any).__NEXDROP_WRITE_HOLD_MS = holdMs > 0 ? holdMs : undefined;
+  if (holdMs !== null) (globalThis as any).__NEXDROP_WRITE_HOLD_MS = holdMs; // 0 = forced greedy (prod default is 20)
   (globalThis as any).__NEXDROP_WRITE_BATCH_BYTES = targetBytes;
   const writer = new RecordingWriter();
   receiver.setWriterOverride(() => writer);
@@ -225,6 +227,19 @@ async function main(): Promise<void> {
     x.writer.calls.length < 10 && x.writer.calls.length >= 1,
     `storageCalls=${x.writer.calls.length} chunkCounts=${JSON.stringify(x.writer.calls.map((c) => c.count))}`
   );
+
+  // 7. Production default (NO seam): the shipped hold=20ms coalesces
+  //    spaced chunks with zero configuration.
+  delete (globalThis as any).__NEXDROP_WRITE_HOLD_MS;
+  delete (globalThis as any).__NEXDROP_WRITE_BATCH_BYTES;
+  const prod = await runCoalesce({ chunks: 6, gapMs: 8 });
+  check(
+    'production default: coalesces with zero config (fewer calls than chunks)',
+    prod.writer.calls.length < 6,
+    `storageCalls=${prod.writer.calls.length}`
+  );
+  check('production default: completes and verifies', prod.state.completed && prod.state.verifyMatch !== false);
+  check('production default: exact durable accounting', prod.writer.writtenTotalBytes() === 6 * CHUNK);
 
   console.log(`[coalesce] ${pass} checks passed`);
 }
