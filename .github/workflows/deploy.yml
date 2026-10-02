@@ -30,6 +30,12 @@ on:
       bench_channels:
         description: 'Force the striping pool size 1-4 (multi-channel gate sweep). Empty = measured auto gate (max 4).'
         default: ''
+      bench_write_bytes:
+        description: 'v2.5.1 write-coalescing sweep: storage-write batch target in bytes (e.g. 524288 / 1048576 / 2097152). Empty = production default (1 MiB).'
+        default: ''
+      bench_write_hold:
+        description: 'v2.5.1 write-coalescing sweep: partial-batch hold ms before flush (e.g. 5 / 10 / 20). Empty = 0 (greedy, production default).'
+        default: ''
 
 permissions:
   contents: read
@@ -159,6 +165,8 @@ jobs:
           NEXDROP_BENCH_WRITER: ${{ inputs.bench_writer || '' }}
           NEXDROP_BENCH_READAHEAD: ${{ inputs.bench_readahead || '' }}
           NEXDROP_BENCH_CHANNELS: ${{ inputs.bench_channels || '' }}
+          NEXDROP_BENCH_WRITE_BYTES: ${{ inputs.bench_write_bytes || '' }}
+          NEXDROP_BENCH_WRITE_HOLD: ${{ inputs.bench_write_hold || '' }}
 
   deploy:
     environment:

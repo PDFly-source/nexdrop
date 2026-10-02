@@ -49,6 +49,15 @@ import { TransferTimeline } from './timeline';
  *  amortize the per-call storage latency; a single queued chunk still
  *  writes immediately so slow links keep their prompt ACK cadence. */
 const WRITE_BATCH_TARGET_BYTES = 1024 * 1024; // 1 MiB
+/** v2.5.1 write-coalescing seams (benchmark A/B; production defaults are
+ *  the pre-v2.5.1 greedy behavior until a measured winner lands):
+ *  __NEXDROP_WRITE_BATCH_BYTES — storage-write batch target in bytes.
+ *  __NEXDROP_WRITE_HOLD_MS — when the queue empties below target, hold the
+ *  partial batch this many ms for more chunks before flushing (0 = greedy:
+ *  flush whatever is queued the moment the writer loop runs; today's
+ *  production default). The hold NEVER applies when the batch already met
+ *  the target or when finish/cancel forces a flush. */
+const WRITE_HOLD_MAX_MS = 100; // hard safety clamp for the seam value
 
 export interface ReceiverProgress {
   transferId: string;
@@ -135,6 +144,22 @@ export class ReceiverEngine {
    *  default). Set via globalThis before a transfer starts; never used to
    *  fake values — only to MEASURE which floor is optimal on CI. */
   private ackByteTargetOverride = 0;
+  /** v2.5.1 coalescer: storage-write batch target (bytes, seam-overridable). */
+  private writeBatchTargetBytes = WRITE_BATCH_TARGET_BYTES;
+  /** v2.5.1 coalescer: partial-batch hold time in ms (0 = greedy flush). */
+  private writeHoldMs = 0;
+  /** Partial batch held while waiting for more chunks (bounded: at most
+   *  writeBatchTargetBytes + one chunk of overshoot). */
+  private heldBatch: Array<{ payload: ArrayBuffer; index: number; enq: number }> = [];
+  private heldBytes = 0;
+  private heldSince = 0;
+  private holdTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Set by finish/awaitSettled: flush any held batch NOW, ignoring hold. */
+  private forceFlush = false;
+  /** Batch-size ring for the write-coalescing profile (p50/p95 of storage
+   *  call sizes + writes per MiB — the v2.5.1 primary metric). */
+  private batchSizeRing: number[] = [];
+  private batchSizeRingNext = 0;
   /** Largest observed pipeline depth this transfer (diagnostics). */
   private maxQueueDepthSeen = 0;
 
@@ -244,12 +269,23 @@ export class ReceiverEngine {
     // coalescing floor via globalThis to find the optimal value. Bounded by
     // ACK_BYTE_TARGET_MAX; 0/absent = production default.
     const tune = (globalThis as { __NEXDROP_ACK_TUNE_BYTES?: number }).__NEXDROP_ACK_TUNE_BYTES;
-    this.ackByteTargetOverride =
+
+    // v2.5.1 write-coalescing sweep seams (production default = greedy).
+    const seams = globalThis as { __NEXDROP_WRITE_BATCH_BYTES?: number; __NEXDROP_WRITE_HOLD_MS?: number };
+    if (typeof seams.__NEXDROP_WRITE_BATCH_BYTES === 'number' && seams.__NEXDROP_WRITE_BATCH_BYTES >= 65536) {
+      this.writeBatchTargetBytes = Math.min(seams.__NEXDROP_WRITE_BATCH_BYTES, 8 * 1024 * 1024);
+    }
+    if (typeof seams.__NEXDROP_WRITE_HOLD_MS === 'number' && seams.__NEXDROP_WRITE_HOLD_MS > 0) {
+      this.writeHoldMs = Math.min(seams.__NEXDROP_WRITE_HOLD_MS, WRITE_HOLD_MAX_MS);
+    }    this.ackByteTargetOverride =
       typeof tune === 'number' && tune > 0 ? Math.min(tune, ACK_BYTE_TARGET_MAX) : 0;
     this.writeQueue = [];
     this.writing = false;
     this.writesQueued = 0;
     this.maxWriteBatch = 0;
+    this.clearHeld();
+    this.batchSizeRing = [];
+    this.batchSizeRingNext = 0;
     this.processQueue = [];
     this.hasher = null;
     this.hasherM = null;
@@ -480,6 +516,8 @@ export class ReceiverEngine {
           write: this.writeStageStats.summary(),
           ack: this.ackStats.summary(),
         },
+        // v2.5.1 write-coalescing profile: storage-call size distribution.
+        writeBatch: this.writeBatchSummary(this.bytesWritten),
         wallMs: this.startTime > 0 ? Date.now() - this.startTime : 0,
         acksSent: this.acksSent,
         throughputBps: avgSpeed,
@@ -545,27 +583,109 @@ export class ReceiverEngine {
    * queue holds a single chunk it is written immediately, so slow links
    * keep the same prompt ACK cadence as before.
    */
+  /** Drop any held partial batch and its hold timer (cancel/reset paths). */
+  private clearHeld(): void {
+    this.heldBatch = [];
+    this.heldBytes = 0;
+    this.heldSince = 0;
+    this.forceFlush = false;
+    if (this.holdTimer) {
+      clearTimeout(this.holdTimer);
+      this.holdTimer = null;
+    }
+  }
+
+  /** v2.5.1 profile: storage-call size distribution + writes per MiB. */
+  private writeBatchSummary(totalWritten: number): {
+    count: number;
+    avgBytes: number;
+    p50Bytes: number;
+    p95Bytes: number;
+    minBytes: number;
+    maxBytes: number;
+    writesPerMiB: number;
+  } {
+    const sizes = this.batchSizeRing.slice();
+    if (sizes.length === 0) {
+      return { count: 0, avgBytes: 0, p50Bytes: 0, p95Bytes: 0, minBytes: 0, maxBytes: 0, writesPerMiB: 0 };
+    }
+    sizes.sort((a, b) => a - b);
+    const pick = (q: number) => sizes[Math.min(sizes.length - 1, Math.floor(q * sizes.length))];
+    const total = sizes.reduce((a, c) => a + c, 0);
+    return {
+      count: sizes.length,
+      avgBytes: total / sizes.length,
+      p50Bytes: pick(0.5),
+      p95Bytes: pick(0.95),
+      minBytes: sizes[0],
+      maxBytes: sizes[sizes.length - 1],
+      writesPerMiB: totalWritten > 0 ? (sizes.length * 1048576) / totalWritten : 0,
+    };
+  }
+
   private async writerLoop(): Promise<void> {
     if (this.writing) return;
     this.writing = true;
     try {
-      while (this.writeQueue.length > 0) {
+      while (true) {
         if (this.isCancelled || this.isCompleted || !this.writer) {
           this.writeQueue = [];
+          this.clearHeld();
           return;
         }
 
-        // Gather consecutive chunks into one bounded batch.
-        const batch = [this.writeQueue.shift()!];
-        let batchBytes = batch[0].payload.byteLength;
-        while (
-          this.writeQueue.length > 0 &&
-          batchBytes < WRITE_BATCH_TARGET_BYTES &&
-          this.writeQueue[0].index === batch[batch.length - 1].index + 1
-        ) {
+        // Greedy pull: queue -> held, up to the batch target. Ordering is
+        // strict: chunks are only ever appended at the held batch's tail.
+        while (this.writeQueue.length > 0 && this.heldBytes < this.writeBatchTargetBytes) {
           const next = this.writeQueue.shift()!;
-          batchBytes += next.payload.byteLength;
-          batch.push(next);
+          if (this.heldBatch.length === 0) this.heldSince = next.enq;
+          this.heldBytes += next.payload.byteLength;
+          this.heldBatch.push(next);
+        }
+
+        if (this.heldBatch.length === 0) {
+          // Queue empty and nothing held — idle until the next chunk.
+          this.writing = false;
+          return;
+        }
+
+        // v2.5.1 time-bounded coalescing: with the queue drained below the
+        // target, HOLD the partial batch a few ms so more chunks can join
+        // one storage call. Never holds when: the target is met, hold is
+        // disabled (greedy = pre-v2.5.1 behavior), finish forces a flush,
+        // or the hold window already elapsed. Bounded: at most one hold
+        // window per target-sized batch, and the queue itself is bounded
+        // by the sender window.
+        const queueEmpty = this.writeQueue.length === 0;
+        const heldFor = Date.now() - this.heldSince;
+        const shouldHold =
+          !this.forceFlush &&
+          this.writeHoldMs > 0 &&
+          queueEmpty &&
+          this.heldBytes < this.writeBatchTargetBytes &&
+          heldFor < this.writeHoldMs;
+        if (shouldHold) {
+          const wakeIn = Math.max(1, this.heldSince + this.writeHoldMs - Date.now());
+          if (!this.holdTimer) {
+            this.holdTimer = setTimeout(() => {
+              this.holdTimer = null;
+              if (!this.writing) void this.writerLoop();
+            }, wakeIn);
+          }
+          this.writing = false;
+          return;
+        }
+
+        // ---- flush the held batch as ONE storage call ----
+        const batch = this.heldBatch;
+        const batchBytes = this.heldBytes;
+        this.heldBatch = [];
+        this.heldBytes = 0;
+        this.heldSince = 0;
+        this.forceFlush = false;
+        if (this.holdTimer) {
+          clearTimeout(this.holdTimer);
+          this.holdTimer = null;
         }
         if (batch.length > this.maxWriteBatch) this.maxWriteBatch = batch.length;
         const lastIndex = batch[batch.length - 1].index;
@@ -573,6 +693,10 @@ export class ReceiverEngine {
         // v2.5: real queue-wait — how long the batch's FIRST chunk sat in
         // the write queue before this storage call started.
         this.queueWaitStats.record(Math.max(0, Date.now() - batch[0].enq), batchBytes);
+
+        // v2.5.1 profile: storage-call size distribution.
+        this.batchSizeRing[this.batchSizeRingNext % 4096] = batchBytes;
+        this.batchSizeRingNext++;
 
         const wStart = Date.now();
         try {
@@ -589,6 +713,7 @@ export class ReceiverEngine {
           // a hole. Report the honest failure. Boundary rule: the durable
           // frontier reached BEFORE this failing batch goes out with it.
           this.writeQueue = [];
+          this.clearHeld();
           this.writesQueued = 0;
           if (this.isCancelled || this.isCompleted) return;
           this.sendCheckpointAck();
@@ -605,7 +730,6 @@ export class ReceiverEngine {
         const wSample = wDt / batch.length;
         this.writeMsEwma = this.writeMsEwma > 0 ? this.writeMsEwma * 0.8 + wSample * 0.2 : wSample;
         this.writesQueued = Math.max(0, this.writesQueued - batch.length);
-
         // Cumulative-byte frontier advance (v2.3): the durable frontier is
         // BYTES, not chunk index — byte offsets stay authoritative across
         // chunk-size ladder steps and coalescing, so the stale-size-chunk
@@ -667,9 +791,25 @@ export class ReceiverEngine {
         !this.draining &&
         this.processQueue.length === 0 &&
         this.writeQueue.length === 0 &&
+        this.heldBatch.length === 0 &&
         !this.writing
       ) {
         return;
+      }
+      // FILE_END settles NOW — but only once nothing upstream can still
+      // join the batch (drain done, no process/write queue): a held
+      // partial batch must not sit out its coalescing hold once no more
+      // chunks can arrive. Bounded completion latency (v2.5.1). While
+      // chunks are still draining, the normal hold logic keeps working.
+      if (
+        this.heldBatch.length > 0 &&
+        !this.writing &&
+        !this.draining &&
+        this.processQueue.length === 0 &&
+        this.writeQueue.length === 0
+      ) {
+        this.forceFlush = true;
+        void this.writerLoop();
       }
       await new Promise((r) => setTimeout(r, 20));
     }
@@ -787,6 +927,7 @@ export class ReceiverEngine {
       if (this.writer) {
         try {
           this.writeQueue = [];
+          this.clearHeld();
           this.writesQueued = 0;
           await this.writer.abort();
         } catch {
@@ -869,6 +1010,7 @@ export class ReceiverEngine {
       // Drop queued writes — the abort below invalidates them; the writer
       // loop itself checks isCancelled and abandons its batch.
       this.writeQueue = [];
+      this.clearHeld();
       this.writesQueued = 0;
       await this.writer.abort();
       this.writer = null;

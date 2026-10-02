@@ -191,6 +191,8 @@ async function main() {
   const readAhead = Number(process.env.NEXDROP_BENCH_READAHEAD || 0); // 1..4
   const forceChannels = Number(process.env.NEXDROP_BENCH_CHANNELS || 0); // 1..4
   const forceWriter = process.env.NEXDROP_BENCH_WRITER || ''; // opfs-sync|opfs-async
+  const writeBytes = Number(process.env.NEXDROP_BENCH_WRITE_BYTES || 0); // storage-write batch target
+  const writeHoldMs = Number(process.env.NEXDROP_BENCH_WRITE_HOLD || 0); // partial-batch hold ms
   const initTune = (ctx: any) => {
     let script = '';
     if (ackTuneBytes > 0) script += `window.__NEXDROP_ACK_TUNE_BYTES = ${ackTuneBytes};\n`;
@@ -199,6 +201,8 @@ async function main() {
     if (readAhead > 0) script += `window.__NEXDROP_READAHEAD = ${readAhead};\n`;
     if (forceChannels > 0) script += `window.__NEXDROP_FORCE_CHANNELS = ${forceChannels};\n`;
     if (forceWriter) script += `window.__NEXDROP_FORCE_WRITER = '${forceWriter}';\n`;
+    if (writeBytes > 0) script += `window.__NEXDROP_WRITE_BATCH_BYTES = ${writeBytes};\n`;
+    if (writeHoldMs > 0) script += `window.__NEXDROP_WRITE_HOLD_MS = ${writeHoldMs};\n`;
     if (script) void ctx.addInitScript(script);
   };
   const ctxA = await browser.newContext();
@@ -618,6 +622,7 @@ async function main() {
           hashPctOfWall: fs?.s?.hashPctOfWall ?? 0,
           recvWrite: fr?.r?.writeStage ? stageEntry(fr.r.writeStage) : null,
           recvWriteMsEwma: +(fr?.r?.writeMsEwma ?? 0).toFixed(2),
+          recvWriteBatch: fr?.r?.writeBatch ?? null,
           recvMaxQueueDepth: fr?.r?.maxQueueDepth ?? 0,
           writerType: fr?.r?.writerType ?? 'unknown',
           recvWallMs: fr?.r?.wallMs ?? 0,

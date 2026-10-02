@@ -128,6 +128,17 @@ export interface ReceiverTelemetry {
     write: StageSummary;
     ack: StageSummary;
   };
+  /** v2.5.1 write-coalescing profile: storage-call size distribution. */
+  writeBatch: {
+    count: number;
+    avgBytes: number;
+    p50Bytes: number;
+    p95Bytes: number;
+    minBytes: number;
+    maxBytes: number;
+    /** Storage calls per MiB durably written — the v2.5.1 primary metric. */
+    writesPerMiB: number;
+  };
   /** Elapsed wall ms since receiver start at the last telemetry update. */
   wallMs: number;
   acksSent: number;
