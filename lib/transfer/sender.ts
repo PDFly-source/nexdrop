@@ -848,19 +848,6 @@ export class SenderEngine {
       if (this.isCancelled || this.isDone) return;
       if (this.isPaused) return; // pump() is re-invoked by resume()
 
-      // ---- v2.5 EARLY read-ahead priming ----
-      // Start the disk read(s) BEFORE the window/buffer waits so they
-      // resolve DURING flow-control backpressure (idle main thread),
-      // instead of serializing after it (the v2.4 placement overlapped a
-      // read only with the next iteration's encode+send, ~0.6ms). Slots
-      // stay bounded (depth 1..4) and re-validate against the step table;
-      // reads primed for chunks the loop never reaches are discarded.
-      for (let d = 0; d < this.readAheadDepth; d++) {
-        const raIdx = this.currentChunkIndex + d;
-        if (this.bytesAtChunkStart(raIdx) >= this.file.size) break;
-        primeSlot(raIdx);
-      }
-
       // ---- v2.4 bounded hash-pipeline queue (never unbounded) ----
       if (this.hashPipeline && this.hashPipeline.lagBytes() > this.hashQueueCap) {
         await this.hashPipeline.drainTo(this.hashQueueCap - Math.max(this.chunkSize, 64 * 1024));
@@ -935,6 +922,19 @@ export class SenderEngine {
       // actually sent. Pausing here (index not yet advanced) makes resume()
       // re-read this same slice — hash and stream stay consistent.
       if (this.isCancelled || this.isPaused) return;
+
+      // v2.4: prime up to readAheadDepth future reads. A step landing at/below
+      // the horizon is prevented by the ladder rule (firstIndex >= current +
+      // depth + 1) and slots re-validate against the step-table length.
+      // v2.5 measured verdict: priming at the loop top instead (reads overlap
+      // the flow-control waits) hides the slice stage entirely but pushes the
+      // pump ahead of the SCTP drain — sustained fell 18.9/19.6 -> 14.5-15.5
+      // MiB/s (bufferWait 36-40% of wall). Reverted to this placement.
+      for (let d = 1; d <= this.readAheadDepth; d++) {
+        const nextIdx = index + d;
+        if (this.bytesAtChunkStart(nextIdx) >= this.file.size) break;
+        primeSlot(nextIdx);
+      }
 
       // Incremental hash of the PLAINTEXT content.
       // 'inline' mode: v2.3 behavior EXACTLY (pre-send, main thread).
