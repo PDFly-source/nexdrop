@@ -409,7 +409,10 @@ assert(initialChunkSize(131072) === 64 * 1024, 'tuner: start never exceeds 64 Ki
 
 // A clean, healthy run learns a larger chunk for the NEXT transfer
 noteTransferSuccess(64 * 1024, 20 * 1024 * 1024, 0);
-assert(initialChunkSize(262144) === 128 * 1024, 'tuner: clean run grows the next chunk size (capped by SCTP)');
+assert(initialChunkSize(262144) === 256 * 1024 - 256, 'tuner: measured fat link (>= 20 MiB/s, 0 stalls) earns the 256 KiB ceiling immediately');
+// A modest clean run still grows one ladder step at a time
+noteTransferSuccess(64 * 1024, 5 * 1024 * 1024, 0);
+assert(initialChunkSize(262144) === 128 * 1024, 'tuner: modest clean run grows the next chunk size (capped by SCTP)');
 noteTransferSuccess(64 * 1024, 20 * 1024 * 1024, 3);
 assert(initialChunkSize(262144) === 64 * 1024, 'tuner: stalls reset to conservative');
 noteTransferSuccess(64 * 1024, 20 * 1024 * 1024, 0);

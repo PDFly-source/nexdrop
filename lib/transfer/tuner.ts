@@ -37,6 +37,16 @@ export function noteTransferSuccess(chunkSize: number, throughputBps: number, st
     profile.chunkSize = 0;
     return;
   }
+  // Measured fat link: ≥ 20 MiB/s sustained with ZERO stalls is a LAN-class
+  // path (cellular-shaped links physically cannot produce it — see the
+  // cellular suite's ~500 KB/s ceiling). It earns the ceiling immediately
+  // instead of paying the 64→128→256 learning ladder on the next transfer:
+  // the 2026-10-01 CI sweep measured a 256 KiB pin at +26%/+18% over the
+  // adaptive ramp (28.6/32.9 vs 22.7/27.8 MiB/s on the 341.48 MB file).
+  if (throughputBps >= 20 * 1024 * 1024) {
+    profile.chunkSize = ADAPT_MAX_CHUNK;
+    return;
+  }
   profile.chunkSize = Math.min(ADAPT_MAX_CHUNK, chunkSize * 2);
 }
 
