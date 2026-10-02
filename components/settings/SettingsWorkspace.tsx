@@ -15,9 +15,11 @@ import {
   Palette,
   ExternalLink,
   Info,
+  Activity,
 } from 'lucide-react';
 import Link from 'next/link';
 import { DeviceInfo, BrowserCapabilities } from '@/lib/detection/capabilities';
+import { openDeviceTest } from '@/lib/devicetest/recorder';
 
 interface SettingsWorkspaceProps {
   deviceInfo: DeviceInfo;
@@ -171,6 +173,7 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
             { href: '#settings-storage', label: 'Storage' },
             { href: '#settings-notifications', label: 'Notifications' },
             { href: '#settings-security', label: 'Security' },
+            { href: '#settings-advanced', label: 'Advanced' },
             { href: '#settings-about', label: 'About' },
           ].map((item) => (
             <a
@@ -376,7 +379,29 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
         </div>
       </SectionCard>
 
-      {/* 7 — ABOUT */}
+      {/* 7 — ADVANCED: Device Test & Diagnostics */}
+      <SectionCard id="settings-advanced" icon={Activity} title="Advanced">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p className="font-medium text-nd-text-primary">Device Test &amp; Diagnostics</p>
+            <p className="text-[11px] text-nd-text-secondary mt-0.5 max-w-md">
+              Guided two-device transfer test with measured telemetry — path, RTT, bitrate, buffer,
+              in-flight, window, receiver writes, collapse timeline. Records real values only (N/A
+              when the browser does not expose a metric); nothing is uploaded, diagnostics stay on
+              this device. The transfer engine itself is untouched.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openDeviceTest}
+            className="shrink-0 rounded-lg border border-nd-teal/40 bg-nd-teal/10 px-4 py-2 text-xs font-semibold text-nd-teal hover:bg-nd-teal/20 transition-colors"
+          >
+            Open Device Test
+          </button>
+        </div>
+      </SectionCard>
+
+      {/* 8 — ABOUT */}
       <SectionCard id="settings-about" icon={Info} title="About">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
           <div>
