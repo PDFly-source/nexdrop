@@ -10,6 +10,7 @@
  */
 
 import type { TimelineSeries } from './timeline';
+import type { StageSummary } from './stageStats';
 
 export interface SenderTelemetry {
   role: 'sender';
@@ -79,6 +80,19 @@ export interface SenderTelemetry {
     bufferWaitP95Ms: number;
     ackWaitP95Ms: number;
   };
+  /** v2.5 full pipeline profile: complete measured distributions per stage
+   *  (count/total/avg/p50/p95/p99/max/bytes) for share-of-wall math. */
+  stagesFull: {
+    slice: StageSummary;
+    hash: StageSummary;
+    encode: StageSummary;
+    send: StageSummary;
+    bufferWait: StageSummary;
+    ackWait: StageSummary;
+    finalize: StageSummary;
+  };
+  /** Elapsed wall ms since transfer start at the last telemetry update. */
+  wallMs: number;
   /** Measured window utilization (inFlight/window) at the last update. */
   windowUtilization: number;
   /** Final window-utilization summary (avg/p50/p95/min/max), present once complete. */
@@ -104,6 +118,8 @@ export interface ReceiverTelemetry {
   /** Chunks decrypted but not yet durably written. */
   queueDepth: number;
   maxQueueDepth: number;
+  /** v2.5 full receiver write-stage profile (batch storage-call durations). */
+  writeStage: StageSummary;
   acksSent: number;
   throughputBps: number;
   writerType: string;

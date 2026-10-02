@@ -582,6 +582,56 @@ async function main() {
       };
       results.push(r);
       console.log('[BENCH] ' + JSON.stringify(r));
+
+      // ---- v2.5 Phase-1 full pipeline profile (all measured, never
+      // synthesized): per-stage count/total/avg/p50/p95/p99/max/bytes with
+      // share-of-bench-wall, receiver write-stage profile, transport fields
+      // verbatim (unavailable browser fields stay -1/0 => UNREADABLE). ----
+      try {
+        const [fs, fr] = await Promise.all([readTelemetry(dir.from), readTelemetry(dir.to)]);
+        const st: any = fs?.s?.stagesFull || null;
+        const wall: number = fs?.s?.wallMs || doneT;
+        const pctW = (totalMs: number) => +(Math.min(100, (totalMs / Math.max(1, wall)) * 100)).toFixed(1);
+        const stageEntry = (x: any) => !x ? null : {
+          count: x.count,
+          totalMs: Math.round(x.totalMs),
+          avgMs: +(x.count ? x.totalMs / x.count : 0).toFixed(2),
+          p50Ms: x.p50Ms, p95Ms: x.p95Ms, p99Ms: x.p99Ms, maxMs: x.maxMs,
+          bytes: x.bytes,
+          pctOfWall: pctW(x.totalMs),
+        };
+        const profile = {
+          direction: dir.label, size, wallMs: wall, benchWallMs: doneT,
+          stages: st ? {
+            slice: stageEntry(st.slice),
+            hash: stageEntry(st.hash),
+            encode: stageEntry(st.encode),
+            send: stageEntry(st.send),
+            bufferWait: stageEntry(st.bufferWait),
+            ackWait: stageEntry(st.ackWait),
+            finalize: stageEntry(st.finalize),
+          } : null,
+          hashMode: fs?.s?.hashMode ?? 'unknown',
+          hashCpuMs: fs?.s?.hashCpuMs ?? 0,
+          hashPctOfWall: fs?.s?.hashPctOfWall ?? 0,
+          recvWrite: fr?.r?.writeStage ? stageEntry(fr.r.writeStage) : null,
+          recvWriteMsEwma: +(fr?.r?.writeMsEwma ?? 0).toFixed(2),
+          recvMaxQueueDepth: fr?.r?.maxQueueDepth ?? 0,
+          transport: {
+            transportRttMs: fs?.tr?.rttMs ?? null,
+            candidatePair: `${fs?.tr?.localCandidateType ?? '?'}->${fs?.tr?.remoteCandidateType ?? '?'}`,
+            protocol: fs?.tr?.protocol ?? null,
+            networkType: fs?.tr?.networkType ?? null,
+            retransmissionsSent: fs?.tr?.retransmissionsSent ?? null,
+            availOutgoingBitrateBps: fs?.tr?.outgoingBitrateBps ?? null,
+            availIncomingBitrateBps: fs?.tr?.incomingBitrateBps ?? null,
+            sctpMaxMessageSize: fs?.s?.sctpMaxMessageSize ?? fs?.tr?.sctpMaxMessageSize ?? null,
+          },
+        };
+        console.log('[PROFILE] ' + JSON.stringify(profile));
+      } catch (e: any) {
+        console.log('[PROFILE-UNAVAILABLE] ' + String(e).slice(0, 120));
+      }
     } catch (e) {
       anyFailed = true;
       console.log('[BENCH-FAILED] ' + name + ': ' + String(e).slice(0, 200));

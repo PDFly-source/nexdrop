@@ -1102,6 +1102,16 @@ export class SenderEngine {
             bufferWaitP95Ms: this.bufferWaitStats.summary().p95Ms,
             ackWaitP95Ms: this.ackWaitStats.summary().p95Ms,
           },
+          stagesFull: {
+            slice: this.sliceStats.summary(),
+            hash: this.hashStats.summary(),
+            encode: this.encodeStats.summary(),
+            send: this.sendStats.summary(),
+            bufferWait: this.bufferWaitStats.summary(),
+            ackWait: this.ackWaitStats.summary(),
+            finalize: this.finalizeStats.summary(),
+          },
+          wallMs: this.startTime > 0 ? Date.now() - this.startTime : 0,
           ackWaitMs: this.ackWaitMs,
           ackAvgBytes: this.ackBytesEwma,
           pumpSliceMs: this.sliceMsEwma,
@@ -1143,6 +1153,34 @@ export class SenderEngine {
     } catch {
       hash = '';
     }
+
+    // Final telemetry snapshot AFTER finalize so the profile carries the
+    // true end-state (incl. the finalize stage and final ACK accounting).
+    updateSenderTelemetry({
+      transferId: this.transferId,
+      name: this.file.name,
+      totalBytes: this.file.size,
+      bytesSent: this.bytesSent,
+      bytesAcked: this.bytesAcked,
+      chunksSent: this.currentChunkIndex,
+      sustainedBps: this.bytesAcked > 0 && this.startTime > 0
+        ? this.bytesAcked / Math.max(0.001, (Date.now() - this.startTime) / 1000)
+        : 0,
+      hashMode: this.hashMode,
+      hashCpuMs: this.hashPipeline ? this.hashPipeline.hashCpuMs() : this.hashStats.totalMsLive,
+      stagesFull: {
+        slice: this.sliceStats.summary(),
+        hash: this.hashStats.summary(),
+        encode: this.encodeStats.summary(),
+        send: this.sendStats.summary(),
+        bufferWait: this.bufferWaitStats.summary(),
+        ackWait: this.ackWaitStats.summary(),
+        finalize: this.finalizeStats.summary(),
+      },
+      wallMs: this.startTime > 0 ? Date.now() - this.startTime : 0,
+      utilizationSummary: this.utilization,
+      timeline: this.timeline.length > 0 ? this.timeline.toJSON() : null,
+    });
 
     this.sendControlMessage({ type: 'FILE_END', transferId: this.transferId, hash });
     this.emitProgress('completed', 0, 0);

@@ -41,6 +41,7 @@ import { decodeBinaryChunk, simpleStringHash } from './protocol';
 import { base64UrlToBytes, ChunkCipher, decryptChunk, IncrementalSha256 } from '@/lib/crypto';
 import { MerkleHasher } from './merkle';
 import { updateReceiverTelemetry } from './telemetry';
+import { StageStats } from './stageStats';
 import { TransferTimeline } from './timeline';
 
 /** Coalesced storage-write batch target (bytes). Bounded memory: at most
@@ -104,6 +105,8 @@ export class ReceiverEngine {
   private static readonly REORDER_MAX_BYTES = 32 * 1024 * 1024;
   /** EWMA ms per chunk write (receiver write throughput, honestly measured). */
   private writeMsEwma = 0;
+  /** v2.5: full write-stage profile (per BATCH storage call, real durations). */
+  private writeStageStats = new StageStats();
   private expectedTransferIdHash = 0;
   private nextExpectedChunkIndex = 0;
   private bytesReceived = 0;
@@ -450,6 +453,7 @@ export class ReceiverEngine {
         writeMsEwma: this.writeMsEwma,
         queueDepth: this.queueDepth(),
         maxQueueDepth: this.maxQueueDepthSeen,
+        writeStage: this.writeStageStats.summary(),
         acksSent: this.acksSent,
         throughputBps: avgSpeed,
         writerType: this.writer.getType(),
@@ -565,7 +569,9 @@ export class ReceiverEngine {
           return;
         }
         // Per-chunk write cost, amortized across the batch.
-        const wSample = (Date.now() - wStart) / batch.length;
+        const wDt = Date.now() - wStart;
+        this.writeStageStats.record(wDt, batchBytes);
+        const wSample = wDt / batch.length;
         this.writeMsEwma = this.writeMsEwma > 0 ? this.writeMsEwma * 0.8 + wSample * 0.2 : wSample;
         this.writesQueued = Math.max(0, this.writesQueued - batch.length);
 
