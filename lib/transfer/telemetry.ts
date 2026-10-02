@@ -120,6 +120,16 @@ export interface ReceiverTelemetry {
   maxQueueDepth: number;
   /** v2.5 full receiver write-stage profile (batch storage-call durations). */
   writeStage: StageSummary;
+  /** v2.5 complete receiver pipeline profile (all measured). */
+  stagesFull: {
+    decode: StageSummary;
+    decrypt: StageSummary;
+    queueWait: StageSummary;
+    write: StageSummary;
+    ack: StageSummary;
+  };
+  /** Elapsed wall ms since receiver start at the last telemetry update. */
+  wallMs: number;
   acksSent: number;
   throughputBps: number;
   writerType: string;

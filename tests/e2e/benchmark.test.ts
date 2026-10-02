@@ -617,6 +617,15 @@ async function main() {
           recvWrite: fr?.r?.writeStage ? stageEntry(fr.r.writeStage) : null,
           recvWriteMsEwma: +(fr?.r?.writeMsEwma ?? 0).toFixed(2),
           recvMaxQueueDepth: fr?.r?.maxQueueDepth ?? 0,
+          writerType: fr?.r?.writerType ?? 'unknown',
+          recvWallMs: fr?.r?.wallMs ?? 0,
+          recvStages: fr?.r?.stagesFull ? {
+            decode: stageEntry(fr.r.stagesFull.decode),
+            decrypt: stageEntry(fr.r.stagesFull.decrypt),
+            queueWait: stageEntry(fr.r.stagesFull.queueWait),
+            write: stageEntry(fr.r.stagesFull.write),
+            ack: stageEntry(fr.r.stagesFull.ack),
+          } : null,
           transport: {
             transportRttMs: fs?.tr?.rttMs ?? null,
             candidatePair: `${fs?.tr?.localCandidateType ?? '?'}->${fs?.tr?.remoteCandidateType ?? '?'}`,

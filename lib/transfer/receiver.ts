@@ -107,6 +107,11 @@ export class ReceiverEngine {
   private writeMsEwma = 0;
   /** v2.5: full write-stage profile (per BATCH storage call, real durations). */
   private writeStageStats = new StageStats();
+  /** v2.5 receiver Phase-1 stages — all measured, none synthesized. */
+  private decodeStats = new StageStats();
+  private decryptStats = new StageStats();
+  private queueWaitStats = new StageStats();
+  private ackStats = new StageStats();
   private expectedTransferIdHash = 0;
   private nextExpectedChunkIndex = 0;
   private bytesReceived = 0;
@@ -151,7 +156,7 @@ export class ReceiverEngine {
   private processQueue: ArrayBuffer[] = [];
   private draining = false;
   /** Decoded, in-order chunks waiting for a durable storage write. */
-  private writeQueue: Array<{ payload: ArrayBuffer; index: number }> = [];
+  private writeQueue: Array<{ payload: ArrayBuffer; index: number; enq: number }> = [];
   /** 10 Hz collapse-curve recorder (receiver view of the pipeline). */
   readonly timeline = new TransferTimeline(
     ['t','received','queueDepth','writeMs','bps','acks','chunks'],
@@ -328,7 +333,10 @@ export class ReceiverEngine {
   private async processChunk(packetBuffer: ArrayBuffer): Promise<void> {
     if (this.isCancelled || this.isCompleted || !this.writer) return;
 
+    const decT0 = Date.now();
     const decoded = decodeBinaryChunk(packetBuffer);
+    const decDt = Date.now() - decT0;
+    this.decodeStats.record(decDt, packetBuffer.byteLength);
     if (!decoded) {
       this.callbacks.onError(this.transferId, 'Received a malformed data chunk');
       return;
@@ -394,7 +402,9 @@ export class ReceiverEngine {
       const cipher = this.callbacks.getCipher?.();
       if (this.e2eeEnabled && cipher) {
         if (!this.ivPrefix) throw new Error('E2EE transfer missing IV prefix');
+        const decrT0 = Date.now();
         payload = await decryptChunk(cipher, this.ivPrefix, decoded.chunkIndex, decoded.payload);
+        this.decryptStats.record(Date.now() - decrT0, decoded.payload.byteLength);
       } else {
         payload = decoded.payload;
       }
@@ -419,7 +429,7 @@ export class ReceiverEngine {
     // the durable write completes (see writerLoop).
     const chunkIndex = decoded.chunkIndex;
     this.writesQueued++;
-    this.writeQueue.push({ payload, index: chunkIndex });
+    this.writeQueue.push({ payload, index: chunkIndex, enq: Date.now() });
     void this.writerLoop();
 
     // Real speed & ETA from actual counters, throttled to 100ms
@@ -454,6 +464,14 @@ export class ReceiverEngine {
         queueDepth: this.queueDepth(),
         maxQueueDepth: this.maxQueueDepthSeen,
         writeStage: this.writeStageStats.summary(),
+        stagesFull: {
+          decode: this.decodeStats.summary(),
+          decrypt: this.decryptStats.summary(),
+          queueWait: this.queueWaitStats.summary(),
+          write: this.writeStageStats.summary(),
+          ack: this.ackStats.summary(),
+        },
+        wallMs: this.startTime > 0 ? Date.now() - this.startTime : 0,
         acksSent: this.acksSent,
         throughputBps: avgSpeed,
         writerType: this.writer.getType(),
@@ -543,6 +561,10 @@ export class ReceiverEngine {
         if (batch.length > this.maxWriteBatch) this.maxWriteBatch = batch.length;
         const lastIndex = batch[batch.length - 1].index;
 
+        // v2.5: real queue-wait — how long the batch's FIRST chunk sat in
+        // the write queue before this storage call started.
+        this.queueWaitStats.record(Math.max(0, Date.now() - batch[0].enq), batchBytes);
+
         const wStart = Date.now();
         try {
           if (batch.length === 1) {
@@ -602,6 +624,7 @@ export class ReceiverEngine {
         const isFinalBatch = allBytesArrived && this.writesQueued === 0 && this.writeQueue.length === 0;
         const boundaryDue = this.ackBoundaryPending;
         if (isFinalBatch || boundaryDue || timerDue || byteTargetDue || queueNow > 8) {
+          const ackT0 = Date.now();
           this.lastAckAt = Date.now();
           this.lastAckedWrittenBytes = this.bytesWritten;
           this.ackBoundaryPending = false;
@@ -615,6 +638,7 @@ export class ReceiverEngine {
             w: Math.round(this.writeMsEwma * 10) / 10,
             q: queueNow,
           });
+          this.ackStats.record(Date.now() - ackT0);
         }
       }
     } finally {
