@@ -385,10 +385,10 @@ export const SettingsWorkspace: React.FC<SettingsWorkspaceProps> = ({
           <div>
             <p className="font-medium text-nd-text-primary">Device Test &amp; Diagnostics</p>
             <p className="text-[11px] text-nd-text-secondary mt-0.5 max-w-md">
-              Guided two-device transfer test with measured telemetry — path, RTT, bitrate, buffer,
-              in-flight, window, receiver writes, collapse timeline. Records real values only (N/A
-              when the browser does not expose a metric); nothing is uploaded, diagnostics stay on
-              this device. The transfer engine itself is untouched.
+              Run a real two-device transfer test and inspect WebRTC path, bitrate, RTT,
+              flow-control, receiver write performance, stalls and bottlenecks. Records real values
+              only (N/A when the browser does not expose a metric); nothing is uploaded, diagnostics
+              stay on this device. The transfer engine itself is untouched.
             </p>
           </div>
           <button
