@@ -458,14 +458,20 @@ export async function createOptimalStorageWriter(
     if (ok) return fsWriter;
   }
 
-  // v2.5: OPFS sync-access worker first (removes the measured ~5-6 ms
-  // per-call async commit latency), then the async OPFS writer, then
-  // the bounded memory fallback. Capability detection at every step.
-  if (forced !== 'opfs-async') {
+  // v2.5 verdict (measured, CI 341.48 MB A/B, 2026-10-02): the async OPFS
+  // writer stays the production default. The sync-access worker writer is
+  // architecturally appealing (zero per-call createWritable commit) but its
+  // postMessage round-trip per batch measured 6.3-6.7 ms/call on CI — the
+  // same per-call latency class as async OPFS (5.4-6.7 ms) with extra
+  // worker-wake coupling — and sustained throughput REGRESSED to 14.1/13.6
+  // MiB/s vs the 18.9/19.6 async baseline. Per the measured-gain rule the
+  // worker path is NOT the auto default; it remains available as a forced
+  // benchmark arm for future iteration (e.g. worker-side queue pull).
+  if (forced === 'opfs-sync') {
     const syncWriter = new OpfsSyncWorkerWriter();
     const syncOk = await syncWriter.init(filename, mimeType, expectedSize);
     if (syncOk) return syncWriter;
-    if (forced === 'opfs-sync') throw new Error('forced opfs-sync writer unavailable');
+    throw new Error('forced opfs-sync writer unavailable');
   }
 
   const opfsWriter = new OpfsStorageWriter();
