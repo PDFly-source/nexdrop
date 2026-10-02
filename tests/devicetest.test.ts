@@ -331,8 +331,8 @@ onTestTransferVerified('t1', true);
 {
   const before = getDeviceTestSnapshot().records.find((r) => r.caseId === 'live')!;
   onTestTransferComplete({ transferId: 't2', name: 'ignored.bin', size: 1, direction: 'sent' });
-  const store2 = JSON.parse(store['nexdrop:devicetest:v1']);
-  const rec = store2.records.find((r) => r.caseId === 'live');
+  const store2 = JSON.parse(store['nexdrop:devicetest:v1'] || '{}') as { records: Array<Record<string, unknown>> };
+  const rec = store2.records.find((r: Record<string, unknown>) => r.caseId === 'live') as { senderTimeline?: TimelineSeries };
   rec.senderTimeline = liveTimeline;
   store['nexdrop:devicetest:v1'] = JSON.stringify(store2);
   check(before.files.length >= 1, true, 'sanity: second completion captured too');
