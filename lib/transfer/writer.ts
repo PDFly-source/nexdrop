@@ -31,6 +31,16 @@ export interface StorageWriter {
    * never pass as a completed transfer (v2.5 honesty contract).
    */
   writtenTotalBytes?(): number | null;
+  /**
+   * v2.5.3: read the durable file back as raw bytes — used ONLY on the rare
+   * hash-scheme-mismatch path, when the streaming hash cannot be compared
+   * against the sender's hash and the durable file must be re-hashed under
+   * the sender's declared scheme (LIVE-1790935144052: byte-perfect transfer
+   * reported SHA FAIL because sender and receiver had diverged schemes).
+   * Return null when the writer cannot read back (e.g. sync-worker writer);
+   * the receiver then reports the mismatch honestly instead of guessing.
+   */
+  readDurableBytes?(): Promise<ArrayBuffer | null>;
 }
 
 /**
@@ -109,6 +119,17 @@ export class FileSystemAccessWriter implements StorageWriter {
       this.writable = null;
     }
   }
+
+  async readDurableBytes(): Promise<ArrayBuffer | null> {
+    // Only valid after finish() closed the stream (no writable left).
+    if (this.writable || !this.fileHandle?.getFile) return null;
+    try {
+      const file = await this.fileHandle.getFile();
+      return await file.arrayBuffer();
+    } catch {
+      return null;
+    }
+  }
 }
 
 /**
@@ -184,6 +205,16 @@ export class OpfsStorageWriter implements StorageWriter {
         await this.writable.abort();
       } catch (e) {}
       this.writable = null;
+    }
+  }
+
+  async readDurableBytes(): Promise<ArrayBuffer | null> {
+    if (this.writable || !this.fileHandle?.getFile) return null;
+    try {
+      const file = await this.fileHandle.getFile();
+      return await file.arrayBuffer();
+    } catch {
+      return null;
     }
   }
 }
@@ -426,7 +457,9 @@ export class MemoryBlobWriter implements StorageWriter {
 
   async finish(): Promise<{ blobUrl?: string; success: boolean }> {
     const blob = new Blob(this.chunks, { type: this.mimeType });
-    this.chunks = []; // Release references
+    // v2.5.3: KEEP the parts — the Blob references the same buffers, so
+    // nothing extra is retained, and readDurableBytes() needs them for the
+    // rare hash-scheme-mismatch re-verification. abort() releases.
     const blobUrl = URL.createObjectURL(blob);
     return { blobUrl, success: true };
   }
@@ -434,6 +467,17 @@ export class MemoryBlobWriter implements StorageWriter {
   async abort(): Promise<void> {
     this.chunks = [];
     this.totalBytes = 0;
+  }
+
+  async readDurableBytes(): Promise<ArrayBuffer | null> {
+    if (this.chunks.length === 0) return null;
+    const out = new Uint8Array(this.totalBytes);
+    let off = 0;
+    for (const c of this.chunks) {
+      out.set(new Uint8Array(c), off);
+      off += c.byteLength;
+    }
+    return out.buffer as ArrayBuffer;
   }
 }
 

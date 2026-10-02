@@ -63,6 +63,22 @@ export interface SenderTelemetry {
   pumpSliceMs: number;
   pumpHashMs: number;
   pumpEncodeMs: number;
+  /** ---- v2.5.3 hidden-wait + flow-event telemetry (LIVE-1790935144052) ---- */
+  /** Pump loop-iteration wall time (ms EWMA). */
+  pumpIterMs?: number;
+  /** Unaccounted pump idle time per iteration (ms EWMA) — nonzero means a
+   *  serializing stage the stage stats do not cover. */
+  pumpIdleMs?: number;
+  /** Cumulative unaccounted pump idle (ms). */
+  pumpIdleMsTotal?: number;
+  /** Cumulative ms spent in the hash-lag drainTo gate — the previously
+   *  invisible await that pinned the pump under a JS-hash downgrade. */
+  hashLagWaitMs?: number;
+  hashLagEvents?: number;
+  windowGrowEvents?: number;
+  windowShrinkEvents?: number;
+  bufferLowEvents?: number;
+  ackWaitEvents?: number;
   /** ---- v2.4 hash-pipeline telemetry (all measured) ---- */
   /** Negotiated hash engine for this transfer: inline | merkle | worker. */
   hashMode: 'inline' | 'merkle' | 'worker';
@@ -138,6 +154,16 @@ export interface ReceiverTelemetry {
     maxBytes: number;
     /** Storage calls per MiB durably written — the v2.5.1 primary metric. */
     writesPerMiB: number;
+  };
+  /** v2.5.3 deterministic integrity audit (bounded counters only). */
+  integrityAudit?: {
+    chunksProcessed: number;
+    duplicatesDropped: number;
+    reorderStashed: number;
+    maxReorderDepth: number;
+    scheme: 'sha256' | 's256m' | null;
+    senderScheme: 'sha256' | 's256m' | null;
+    schemeReverified: boolean;
   };
   /** Elapsed wall ms since receiver start at the last telemetry update. */
   wallMs: number;

@@ -86,6 +86,11 @@ export interface SenderOptions {
 /** Real backpressure stall: buffer drain wait / ACK starvation. */
 const STALL_COOLDOWN_MS = 1500;
 
+/** Test seam: overrides the HASH_OK negotiation window (used only by
+ *  regression tests to reproduce the late-reply race quickly; never set in
+ *  production builds). */
+export const senderTestOverrides: { hashOkWaitMs?: number } = {};
+
 export class SenderEngine {
   private file: File;
   private transferId: string;
@@ -180,7 +185,14 @@ export class SenderEngine {
   private lastPressureAt = 0;
   /** High-resolution collapse timeline (10 Hz, adaptively decimated). */
   readonly timeline = new TransferTimeline(
-    ['t','sent','acked','inFlight','window','chunk','buffered','rtt','minRtt','bps','stalls','ackLatency','writeMs','queueDepth'],
+    ['t','sent','acked','inFlight','window','chunk','buffered','rtt','minRtt','bps','stalls','ackLatency','writeMs','queueDepth',
+     // v2.5.3 pump-stage columns (appended; fixed indices 0..13 unchanged).
+     // WHY: LIVE-1790935144052 sustained 0.62 MB/s with a 16.78 MB window
+     // and only 128-512 KiB in flight — the pump was serialized by a
+     // stage invisible to the old 14-column timeline (hash-mode downgrade
+     // to JS hashing). These columns make the next real-device run name
+     // the limiting stage from recorded samples alone.
+     'sliceMs','hashMs','encMs','ackWaitMs','bufWaitMs','hashLagMs','idleMs','acks'],
   );
   private timelineTimer: ReturnType<typeof setInterval> | null = null;
   /** ACK frontier when the window last grew — grows once per clean window drain. */
@@ -229,6 +241,25 @@ export class SenderEngine {
   private sliceMsEwma = 0;
   private hashMsEwma = 0;
   private encodeMsEwma = 0;
+  // ---- v2.5.3 hidden-wait accounting (LIVE-1790935144052) ----
+  /** Cumulative ms the pump spent in the hash-lag drainTo gate — an await
+   *  that was previously COMPLETELY unrecorded: with a JS-hash downgrade it
+   *  silently serialized every chunk and no stage stat showed it. */
+  private hashLagWaitMs = 0;
+  private hashLagWaitEwma = 0;
+  private hashLagEvents = 0;
+  /** Per-iteration pump wall time (ms EWMA) and unaccounted idle time. */
+  private iterMsEwma = 0;
+  private idleMsEwma = 0;
+  private idleMsTotal = 0;
+  /** Flow events (cumulative, exported in telemetry). */
+  private windowGrowEvents = 0;
+  private windowShrinkEvents = 0;
+  private bufferLowEvents = 0;
+  private ackWaitEvents = 0;
+  /** Chunks sent within the current pump iteration (1 by design; kept
+   *  honest for any future batched pump) + total for the run. */
+  private iterChunks = 0;
   /** Window utilization summary, computed from the 10 Hz timeline at
    *  completion: inFlightBytes / windowBytes per sample. */
   private utilization: { avg: number; p50: number; p95: number; min: number; max: number } | null = null;
@@ -447,6 +478,7 @@ export class SenderEngine {
       if (this.deepQueueStreak >= 2 && this.windowBytes > MIN_WINDOW_BYTES) {
         this.chunkFrozen = true; // sustained receiver pressure = risk condition
         this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.85));
+        this.windowShrinkEvents++;
         this.lastGrowthBytes = this.bytesAcked;
         this.lastPressureAt = Date.now();
         this.deepQueueStreak = 0;
@@ -460,6 +492,7 @@ export class SenderEngine {
       if (this.slowWriteStreak >= 3 && this.windowBytes > MIN_WINDOW_BYTES) {
         this.chunkFrozen = true; // sustained storage pressure = risk condition
         this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.9));
+      this.windowShrinkEvents++;
         this.lastGrowthBytes = this.bytesAcked;
         this.lastPressureAt = Date.now();
         this.slowWriteStreak = 0;
@@ -481,6 +514,7 @@ export class SenderEngine {
       this.windowBytes < MAX_WINDOW_BYTES
     ) {
       this.windowBytes = Math.min(MAX_WINDOW_BYTES, Math.ceil(this.windowBytes * 1.25));
+      this.windowGrowEvents++;
       this.lastGrowthBytes = this.bytesAcked;
       return;
     }
@@ -500,6 +534,7 @@ export class SenderEngine {
         // transfers). The x1.5 ramp is the measured-safe rate: loopback CI
         // benchmark 100 MiB avg ~6.5 MB/s, all sizes green.
         this.windowBytes = Math.min(MAX_WINDOW_BYTES, Math.ceil(this.windowBytes * 1.5));
+        this.windowGrowEvents++;
         this.windowHighWater = Math.max(this.windowHighWater, this.windowBytes);
       }
       this.drainsSinceChunkStep++;
@@ -567,6 +602,7 @@ export class SenderEngine {
       // Multiplicative decrease on real transport congestion — with a floor
       // that keeps high-RTT links well above stop-and-wait.
       this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.7));
+      this.windowShrinkEvents++;
     }
     this.lastGrowthBytes = this.bytesAcked;
   }
@@ -580,6 +616,10 @@ export class SenderEngine {
     rttVarianceMs: number; activeChannels: number;
     ackWaitMs: number; ackAvgBytes: number;
     pumpSliceMs: number; pumpHashMs: number; pumpEncodeMs: number;
+    pumpIterMs: number; pumpIdleMs: number; pumpIdleMsTotal: number;
+    hashLagWaitMs: number; hashLagEvents: number;
+    windowGrowEvents: number; windowShrinkEvents: number;
+    bufferLowEvents: number; ackWaitEvents: number;
     windowUtilization: { avg: number; p50: number; p95: number; min: number; max: number } | null;
     inFlightBytes: number;
     hashMode: HashMode; hashCpuMs: number; hashPctOfWall: number;
@@ -622,6 +662,16 @@ export class SenderEngine {
       pumpSliceMs: this.sliceMsEwma,
       pumpHashMs: this.hashMsEwma,
       pumpEncodeMs: this.encodeMsEwma,
+      // ---- v2.5.3 hidden-wait + flow-event accounting ----
+      pumpIterMs: this.iterMsEwma,
+      pumpIdleMs: this.idleMsEwma,
+      pumpIdleMsTotal: this.idleMsTotal,
+      hashLagWaitMs: this.hashLagWaitMs,
+      hashLagEvents: this.hashLagEvents,
+      windowGrowEvents: this.windowGrowEvents,
+      windowShrinkEvents: this.windowShrinkEvents,
+      bufferLowEvents: this.bufferLowEvents,
+      ackWaitEvents: this.ackWaitEvents,
       windowUtilization: this.utilization,
       inFlightBytes: this.bytesSent - this.bytesAcked,
       // ---- v2.4 pipeline profile (all measured) ----
@@ -685,6 +735,15 @@ export class SenderEngine {
         this.rttEwmaMs,
         this.lastAckWriteMs,
         this.lastAckQueueDepth,
+        // v2.5.3 pump-stage columns (EWMA ms, 0.1 precision)
+        Math.round(this.sliceMsEwma * 10) / 10,
+        Math.round(this.hashMsEwma * 10) / 10,
+        Math.round(this.encodeMsEwma * 10) / 10,
+        Math.round(this.ackWaitStats.summary().ewmaMs * 10) / 10,
+        Math.round(this.bufferWaitStats.summary().ewmaMs * 10) / 10,
+        Math.round(this.hashLagWaitEwma * 10) / 10,
+        Math.round(this.idleMsEwma * 10) / 10,
+        this.ackCount,
       ]);
     };
     // First sample immediately (t=0), then on the timeline's own cadence.
@@ -808,8 +867,17 @@ export class SenderEngine {
 
     if (this.hashOffered) {
       // One control-RTT negotiation; the reply precedes the first chunk.
-      // Modern peers answer within ~ms; only pre-v2.4 receivers pay the timeout.
-      const ok = await this.waitHashOk(250);
+      // Modern peers answer within ~ms. v2.5.3: the window was 250 ms —
+      // a LOADED phone on a real internet path can exceed that (measured
+      // ACK latency max 360 ms on LIVE-1790935144052). A late reply silently
+      // downgraded the sender to JS hashing, which (a) pinned the pump to
+      // the JS-hash rate (0.62 MB/s with a 16.78 MB window never binding)
+      // and (b) diverged the hash scheme from the receiver's merkle scheme,
+      // guaranteeing a false SHA FAIL on a byte-perfect file. 2500 ms is a
+      // one-time start delay for legacy peers only; modern receivers still
+      // answer in ~ms, so the steady-state cost is zero.
+      const waitMs = senderTestOverrides.hashOkWaitMs ?? 2500;
+      const ok = await this.waitHashOk(waitMs);
       if (ok) {
         this.hashMode = 'merkle';
         this.hashPipeline = new MerkleHashPipeline();
@@ -844,13 +912,41 @@ export class SenderEngine {
       raSlots.push({ index, steps: this.chunkSteps.length, p: this.sliceOfAsync(index) });
     };
 
+    let iterStart = Date.now();
+    let iterAccountedMs = 0;
     while (this.bytesSent < this.file.size) {
       if (this.isCancelled || this.isDone) return;
       if (this.isPaused) return; // pump() is re-invoked by resume()
 
+      // ---- v2.5.3 pump iteration accounting (LIVE-1790935144052) ----
+      // Wall time of the previous loop iteration, minus every stage we
+      // measured inside it = "idle" (unaccounted time). When the pump is
+      // serialized by a stage no one records, idle/iterMs exposes it.
+      const iterDt = Date.now() - iterStart;
+      iterStart = Date.now();
+      if (iterDt > 0) {
+        this.iterMsEwma = this.iterMsEwma > 0 ? this.iterMsEwma * 0.8 + iterDt * 0.2 : iterDt;
+        // Idle = iteration wall time minus every measured stage/wait of
+        // the PREVIOUS iteration. Honest only if all stages add here.
+        const idle = Math.max(0, iterDt - iterAccountedMs);
+        this.idleMsEwma = this.idleMsEwma > 0 ? this.idleMsEwma * 0.8 + idle * 0.2 : idle;
+        this.idleMsTotal += idle;
+      }
+      iterAccountedMs = 0;
+      this.iterChunks = 0;
+
       // ---- v2.4 bounded hash-pipeline queue (never unbounded) ----
       if (this.hashPipeline && this.hashPipeline.lagBytes() > this.hashQueueCap) {
+        const lagT0 = Date.now();
         await this.hashPipeline.drainTo(this.hashQueueCap - Math.max(this.chunkSize, 64 * 1024));
+        const lagDt = Date.now() - lagT0;
+        // v2.5.3: this await was previously invisible to all telemetry.
+        // A JS-hash downgrade (late HASH_OK) pins the whole pump to the
+        // hash rate HERE — the dominant cost must be visible.
+        this.hashLagWaitMs += lagDt;
+        this.hashLagWaitEwma = this.hashLagWaitEwma > 0 ? this.hashLagWaitEwma * 0.8 + lagDt * 0.2 : lagDt;
+        this.hashLagEvents++;
+        iterAccountedMs += lagDt;
         if (this.isCancelled || this.isPaused) return;
       }
 
@@ -858,7 +954,11 @@ export class SenderEngine {
       if (this.bytesSent - this.bytesAcked >= this.windowBytes) {
         const ackWaitT0 = Date.now();
         await this.waitForWindow();
-        this.ackWaitStats.record(Date.now() - ackWaitT0);
+        const ackWaitDt = Date.now() - ackWaitT0;
+        this.ackWaitStats.record(ackWaitDt);
+        this.ackWaitMs += ackWaitDt;
+        this.ackWaitEvents++;
+        iterAccountedMs += ackWaitDt;
         if (this.isCancelled || this.isPaused) return;
       }
 
@@ -871,7 +971,10 @@ export class SenderEngine {
       if (this.fileChannel.bufferedAmount > BUFFER_HIGH_WATER) {
         const bufWaitT0 = Date.now();
         await this.waitForBufferLow();
-        this.bufferWaitStats.record(Date.now() - bufWaitT0);
+        const bufWaitDt = Date.now() - bufWaitT0;
+        this.bufferWaitStats.record(bufWaitDt);
+        this.bufferLowEvents++;
+        iterAccountedMs += bufWaitDt;
         if (this.isCancelled || this.isPaused) return;
       }
 
@@ -916,6 +1019,7 @@ export class SenderEngine {
       const sliceDt = Date.now() - sliceT0;
       this.sliceStats.record(sliceDt, chunkBytes);
       this.sliceMsEwma = this.sliceMsEwma > 0 ? this.sliceMsEwma * 0.8 + sliceDt * 0.2 : sliceDt;
+      iterAccountedMs += sliceDt;
 
       // The awaited read above can straddle a pause() call. Re-check BEFORE
       // hashing: the incremental hash must only ever consume chunks that are
@@ -946,6 +1050,7 @@ export class SenderEngine {
         const hashDt = Date.now() - hashT0;
         this.hashStats.record(hashDt, chunkBytes);
         this.hashMsEwma = this.hashMsEwma > 0 ? this.hashMsEwma * 0.8 + hashDt * 0.2 : hashDt;
+        iterAccountedMs += hashDt;
       }
 
       // v2.3: measured encrypt+frame cost — the pump's serial stage 3.
@@ -966,6 +1071,7 @@ export class SenderEngine {
       const encodeDt = Date.now() - encT0;
       this.encodeStats.record(encodeDt, chunkBytes);
       this.encodeMsEwma = this.encodeMsEwma > 0 ? this.encodeMsEwma * 0.8 + encodeDt * 0.2 : encodeDt;
+      iterAccountedMs += encodeDt;
 
       // TURBO striping: per-stream SCTP buffer backpressure, then send.
       const stripe = this.activeChannels[index % this.activeChannels.length];
@@ -982,7 +1088,10 @@ export class SenderEngine {
       if (sendCh.bufferedAmount > BUFFER_HIGH_WATER) {
         const bufWaitT0 = Date.now();
         await this.waitForBufferLow(sendCh);
-        this.bufferWaitStats.record(Date.now() - bufWaitT0);
+        const bufWaitDt = Date.now() - bufWaitT0;
+        this.bufferWaitStats.record(bufWaitDt);
+        this.bufferLowEvents++;
+        iterAccountedMs += bufWaitDt;
         if (this.isCancelled || this.isPaused) return;
       }
 
@@ -995,7 +1104,10 @@ export class SenderEngine {
         this.emitProgress('failed', 0, 0);
         return;
       }
-      this.sendStats.record(Date.now() - sendT0, packet.byteLength);
+      const sendDt = Date.now() - sendT0;
+      this.sendStats.record(sendDt, packet.byteLength);
+      iterAccountedMs += sendDt;
+      this.iterChunks++;
 
       // v2.4 post-send hash push (pipeline modes only). Invariant: pushed
       // iff sent — send and push share one loop iteration with NO await
@@ -1121,6 +1233,16 @@ export class SenderEngine {
           pumpSliceMs: this.sliceMsEwma,
           pumpHashMs: this.hashMsEwma,
           pumpEncodeMs: this.encodeMsEwma,
+          // ---- v2.5.3 hidden-wait + flow-event accounting ----
+          pumpIterMs: this.iterMsEwma,
+          pumpIdleMs: this.idleMsEwma,
+          pumpIdleMsTotal: this.idleMsTotal,
+          hashLagWaitMs: this.hashLagWaitMs,
+          hashLagEvents: this.hashLagEvents,
+          windowGrowEvents: this.windowGrowEvents,
+          windowShrinkEvents: this.windowShrinkEvents,
+          bufferLowEvents: this.bufferLowEvents,
+          ackWaitEvents: this.ackWaitEvents,
           windowUtilization: this.windowBytes > 0 ? (this.bytesSent - this.bytesAcked) / this.windowBytes : 0,
           utilizationSummary: this.utilization,
           timeline: this.timeline.length > 0 ? this.timeline.toJSON() : null,
@@ -1172,6 +1294,16 @@ export class SenderEngine {
         : 0,
       hashMode: this.hashMode,
       hashCpuMs: this.hashPipeline ? this.hashPipeline.hashCpuMs() : this.hashStats.totalMsLive,
+      // ---- v2.5.3 hidden-wait + flow-event accounting ----
+      pumpIterMs: this.iterMsEwma,
+      pumpIdleMs: this.idleMsEwma,
+      pumpIdleMsTotal: this.idleMsTotal,
+      hashLagWaitMs: this.hashLagWaitMs,
+      hashLagEvents: this.hashLagEvents,
+      windowGrowEvents: this.windowGrowEvents,
+      windowShrinkEvents: this.windowShrinkEvents,
+      bufferLowEvents: this.bufferLowEvents,
+      ackWaitEvents: this.ackWaitEvents,
       stagesFull: {
         slice: this.sliceStats.summary(),
         hash: this.hashStats.summary(),
@@ -1186,7 +1318,15 @@ export class SenderEngine {
       timeline: this.timeline.length > 0 ? this.timeline.toJSON() : null,
     });
 
-    this.sendControlMessage({ type: 'FILE_END', transferId: this.transferId, hash });
+    // v2.5.3: declare the scheme used for `hash` — the receiver verifies
+    // under the SAME scheme (and can re-verify the durable file on a
+    // scheme mismatch instead of reporting a blind FAIL).
+    this.sendControlMessage({
+      type: 'FILE_END',
+      transferId: this.transferId,
+      hash,
+      hashAlgo: this.hashMode === 'merkle' ? 's256m' : 'sha256',
+    });
     this.emitProgress('completed', 0, 0);
     // Measured-link learning for the NEXT transfer in this session: grow
     // the chunk size only from clean, healthy runs — never synthesized.

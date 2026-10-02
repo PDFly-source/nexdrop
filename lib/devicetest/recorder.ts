@@ -104,6 +104,23 @@ function defaultRecords(): DeviceTestRecord[] {
     writeP50Ms: null,
     writeP95Ms: null,
     heapPeakBytes: null,
+    hashMode: null,
+    hashCpuMs: null,
+    hashPctOfWall: null,
+    pumpSliceMs: null,
+    pumpHashMs: null,
+    pumpEncodeMs: null,
+    pumpIterMs: null,
+    pumpIdleMs: null,
+    pumpIdleMsTotal: null,
+    ackWaitMs: null,
+    hashLagWaitMs: null,
+    hashLagEvents: null,
+    windowGrowEvents: null,
+    windowShrinkEvents: null,
+    bufferLowEvents: null,
+    ackWaitEvents: null,
+    integrityAudit: null,
   }));
 }
 
@@ -390,6 +407,24 @@ export function sampleDeviceTestNow(): void {
     heapPeakBytes: receiver?.heapBytes
       ? Math.max(rec.heapPeakBytes ?? 0, receiver.heapBytes)
       : rec.heapPeakBytes,
+    // ---- v2.5.3 sender pump profile ----
+    hashMode: sender?.hashMode ?? rec.hashMode,
+    hashCpuMs: sender?.hashCpuMs ?? rec.hashCpuMs,
+    hashPctOfWall: sender?.hashPctOfWall ?? rec.hashPctOfWall,
+    pumpSliceMs: sender?.pumpSliceMs ?? rec.pumpSliceMs,
+    pumpHashMs: sender?.pumpHashMs ?? rec.pumpHashMs,
+    pumpEncodeMs: sender?.pumpEncodeMs ?? rec.pumpEncodeMs,
+    pumpIterMs: sender?.pumpIterMs ?? rec.pumpIterMs,
+    pumpIdleMs: sender?.pumpIdleMs ?? rec.pumpIdleMs,
+    pumpIdleMsTotal: sender?.pumpIdleMsTotal ?? rec.pumpIdleMsTotal,
+    ackWaitMs: sender?.ackWaitMs ?? rec.ackWaitMs,
+    hashLagWaitMs: sender?.hashLagWaitMs ?? rec.hashLagWaitMs,
+    hashLagEvents: sender?.hashLagEvents ?? rec.hashLagEvents,
+    windowGrowEvents: sender?.windowGrowEvents ?? rec.windowGrowEvents,
+    windowShrinkEvents: sender?.windowShrinkEvents ?? rec.windowShrinkEvents,
+    bufferLowEvents: sender?.bufferLowEvents ?? rec.bufferLowEvents,
+    ackWaitEvents: sender?.ackWaitEvents ?? rec.ackWaitEvents,
+    integrityAudit: receiver?.integrityAudit ?? rec.integrityAudit,
   };
   updateRecord(rec.caseId, patch, false);
 }

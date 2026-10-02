@@ -145,6 +145,17 @@ export interface FileEndMessage {
   transferId: string;
   /** Incremental SHA-256 of the plaintext file content, hex. */
   hash: string;
+  /**
+   * Scheme the SENDER used for `hash` (v2.5.3): 's256m' = Merkle chain of
+   * 4 MiB native block digests; 'sha256' = plain streaming SHA-256. The
+   * receiver mirrors this scheme when verifying — a timing-fallible
+   * handshake must never turn into a false integrity FAIL (LIVE-1790935144052:
+   * byte-perfect 358.07 MB transfer reported SHA FAIL because the sender
+   * fell back to JS hashing after a late HASH_OK while the receiver kept
+   * the merkle scheme — different schemes can never match).
+   * Absent (legacy senders) = 'sha256'.
+   */
+  hashAlgo?: 'sha256' | 's256m';
 }
 
 export interface FileCancelMessage {

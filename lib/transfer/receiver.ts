@@ -86,6 +86,30 @@ export interface ReceiverCallbacks {
   getCipher?: () => ChunkCipher | null;
 }
 
+/**
+ * v2.5.3 — hash a complete byte buffer under a declared scheme.
+ * 'sha256'  : plain SHA-256 (native digest) — the legacy/worker/inline scheme.
+ * 's256m'   : the negotiated merkle scheme (chain of 4 MiB block digests),
+ *             identical to what a MerkleHasher produces over the same bytes.
+ * Used only on the rare scheme-divergence re-verification path: REAL hash of
+ * the durable stored bytes, never a synthesized value.
+ */
+export async function hashBytesWithAlgo(
+  bytes: ArrayBuffer,
+  algo: 'sha256' | 's256m'
+): Promise<string> {
+  if (algo === 's256m') {
+    const h = new MerkleHasher();
+    await h.update(bytes);
+    return h.finalize();
+  }
+  const d = await crypto.subtle.digest('SHA-256', bytes);
+  const b = new Uint8Array(d);
+  let out = '';
+  for (let i = 0; i < b.length; i++) out += b[i].toString(16).padStart(2, '0');
+  return out;
+}
+
 export class ReceiverEngine {
   private transferId = '';
   private name = '';
@@ -121,6 +145,18 @@ export class ReceiverEngine {
   private decryptStats = new StageStats();
   private queueWaitStats = new StageStats();
   private ackStats = new StageStats();
+  /** v2.5.3 deterministic integrity audit (counters only, bounded). */
+  private integrityAudit = {
+    chunksProcessed: 0,
+    duplicatesDropped: 0,
+    reorderStashed: 0,
+    maxReorderDepth: 0,
+    scheme: null as null | 'sha256' | 's256m',
+    senderScheme: null as null | 'sha256' | 's256m',
+    /** True when a scheme divergence was resolved by re-hashing the
+     *  durable file under the sender's declared scheme. */
+    schemeReverified: false,
+  };
   private expectedTransferIdHash = 0;
   private nextExpectedChunkIndex = 0;
   private bytesReceived = 0;
@@ -400,6 +436,7 @@ export class ReceiverEngine {
     // durable byte frontier (cumulative bytes, monotonic — a duplicate
     // never rolls the frontier backwards) and ignore the payload.
     if (decoded.chunkIndex < this.nextExpectedChunkIndex) {
+      this.integrityAudit.duplicatesDropped++;
       this.callbacks.sendControlMessage({
         type: 'ACK',
         transferId: this.transferId,
@@ -430,10 +467,13 @@ export class ReceiverEngine {
       }
       this.reorderMap.set(decoded.chunkIndex, packetBuffer);
       this.reorderBytes += packetBuffer.byteLength;
+      this.integrityAudit.reorderStashed++;
       this.maxReorderDepth = Math.max(this.maxReorderDepth, this.reorderMap.size);
+      this.integrityAudit.maxReorderDepth = this.maxReorderDepth;
       return;
     }
     this.nextExpectedChunkIndex = decoded.chunkIndex + 1;
+    this.integrityAudit.chunksProcessed++;
 
     // NOTE: chunks are still processed while paused. PAUSE/RESUME travel on
     // the control channel, which has NO cross-channel ordering with the file
@@ -520,6 +560,8 @@ export class ReceiverEngine {
         },
         // v2.5.1 write-coalescing profile: storage-call size distribution.
         writeBatch: this.writeBatchSummary(this.bytesWritten),
+        // v2.5.3 deterministic integrity audit (bounded counters).
+        integrityAudit: { ...this.integrityAudit },
         wallMs: this.startTime > 0 ? Date.now() - this.startTime : 0,
         acksSent: this.acksSent,
         throughputBps: avgSpeed,
@@ -950,6 +992,10 @@ export class ReceiverEngine {
       let verified: boolean | undefined = undefined;
       let localHash: string | undefined = undefined;
       if (endMsg.hash && (this.hasher || this.hasherM)) {
+        const senderScheme: 'sha256' | 's256m' = endMsg.hashAlgo ?? 'sha256';
+        const receiverScheme: 'sha256' | 's256m' = this.hasherM ? 's256m' : 'sha256';
+        this.integrityAudit.senderScheme = senderScheme;
+        this.integrityAudit.scheme = receiverScheme;
         try {
           localHash = this.hasherM ? await this.hasherM.finalize() : (this.hasher as IncrementalSha256).finalize();
           verified = localHash === endMsg.hash;
@@ -957,6 +1003,35 @@ export class ReceiverEngine {
           this.hasherM = null;
         } catch {
           verified = false;
+        }
+        // v2.5.3 scheme-divergence guard (LIVE-1790935144052): the hash
+        // scheme is negotiated with a timing-fallible handshake — if the
+        // receiver's HASH_OK lands after the sender's wait window, the
+        // sender silently downgrades its scheme while this side keeps its
+        // own. The streaming comparison is then meaningless and a
+        // byte-perfect file would report SHA FAIL. Re-verify the DURABLE
+        // file under the sender's declared scheme — a REAL hash of the
+        // actual stored bytes, the strongest available check.
+        if (verified === false && senderScheme !== receiverScheme) {
+          try {
+            const bytes = await this.writer?.readDurableBytes?.();
+            if (bytes && bytes.byteLength === this.size) {
+              localHash = await hashBytesWithAlgo(bytes, senderScheme);
+              verified = localHash === endMsg.hash;
+              this.integrityAudit.schemeReverified = true;
+              console.warn(
+                `[nexdrop] hash scheme diverged (sender=${senderScheme}, receiver=${receiverScheme}); re-verified the durable file under the sender's scheme: ${verified ? 'PASS' : 'FAIL'}`
+              );
+            } else {
+              console.warn(
+                `[nexdrop] hash scheme diverged (sender=${senderScheme}, receiver=${receiverScheme}) and the durable file cannot be read back — integrity is INDETERMINATE, not verified`
+              );
+            }
+          } catch {
+            console.warn(
+              `[nexdrop] hash scheme diverged (sender=${senderScheme}, receiver=${receiverScheme}); durable re-verification threw`
+            );
+          }
         }
         // Tell the sender the verification outcome
         this.callbacks.sendControlMessage({

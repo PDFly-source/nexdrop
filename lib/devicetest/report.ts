@@ -102,6 +102,20 @@ export function liveCollapseAnalysis(rec: DeviceTestRecord): LiveCollapseAnalysi
   if (rec.maxBufferedBytes != null && rec.maxBufferedBytes > 4 * 1024 * 1024) {
     candidates.push({ layer: 'sender SCTP buffer drain', why: `DataChannel bufferedAmount peaked at ${fmtBytes(rec.maxBufferedBytes)} — the network drained slower than the pump pushed` });
   }
+  // v2.5.3: the LIVE-1790935144052 signature — a JS-hash downgrade (late
+  // HASH_OK) throttles the pump to the JS-hash rate while the window stays
+  // wide and in-flight stays tiny. Telemetry now exposes it directly.
+  if (rec.hashMode === 'worker' || rec.hashMode === 'inline') {
+    const lag = rec.hashLagWaitMs ?? 0;
+    const hashPct = rec.hashPctOfWall ?? 0;
+    if (hashPct >= 30 || lag > 1000) {
+      candidates.push({ layer: 'sender JS hashing (hash-mode downgrade)', why: `hashMode=${rec.hashMode} with hash at ${hashPct.toFixed(1)}% of wall and ${fmtMs(lag)} spent in the hash-lag gate — the pump was paced by JavaScript SHA-256, not the network (root cause of the 0.62 MB/s / SHA FAIL run)` });
+    } else {
+      evidence.push(`hashMode=${rec.hashMode} — sender fell back from native merkle hashing (late or missing HASH_OK reply)`);
+    }
+  } else if (rec.hashMode === 'merkle') {
+    evidence.push(`hashMode=merkle — native hash pipeline negotiated on both ends`);
+  }
   evidence.push(`RTT avg/max: ${fmtMs(rec.avgRttMs)} / ${fmtMs(rec.maxRttMs)}`);
   evidence.push(`min sampled throughput: ${fmtMBps(rec.minBps)}; peak: ${fmtMBps(rec.peakBps)}`);
 
@@ -177,6 +191,17 @@ export function buildLiveTestReport(rec: DeviceTestRecord, meta: DeviceTestMeta)
         : 'none recorded'
     }`,
     '',
+    'PUMP (v2.5.3 sender profile)',
+    `Hash mode: ${na(rec.hashMode)}${rec.hashCpuMs != null ? ` (hash CPU ${rec.hashCpuMs.toFixed(0)} ms, ${(rec.hashPctOfWall ?? 0).toFixed(1)}% of wall)` : ''}`,
+    `Stage EWMA — slice/hash/encode: ${
+      rec.pumpSliceMs != null || rec.pumpHashMs != null || rec.pumpEncodeMs != null
+        ? `${rec.pumpSliceMs != null ? rec.pumpSliceMs.toFixed(1) : 'N/A'} / ${rec.pumpHashMs != null ? rec.pumpHashMs.toFixed(1) : 'N/A'} / ${rec.pumpEncodeMs != null ? rec.pumpEncodeMs.toFixed(1) : 'N/A'} ms`
+        : 'N/A (v2.5.3+ sender required)'
+    }`,
+    `Iteration wall / idle EWMA: ${rec.pumpIterMs != null ? `${rec.pumpIterMs.toFixed(1)} / ${rec.pumpIdleMs != null ? rec.pumpIdleMs.toFixed(1) : 'N/A'} ms` : 'N/A'}${rec.pumpIdleMsTotal != null ? ` (idle total ${rec.pumpIdleMsTotal.toFixed(0)} ms)` : ''}`,
+    `Waits — ACK-window: ${rec.ackWaitMs != null ? `${rec.ackWaitMs.toFixed(0)} ms over ${rec.ackWaitEvents ?? '?'} waits` : 'N/A'}; hash-lag gate: ${rec.hashLagWaitMs != null ? `${rec.hashLagWaitMs.toFixed(0)} ms over ${rec.hashLagEvents ?? '?'} waits` : 'N/A'}`,
+    `Flow events — window grow/shrink: ${rec.windowGrowEvents ?? 'N/A'} / ${rec.windowShrinkEvents ?? 'N/A'}; buffer-low waits: ${rec.bufferLowEvents ?? 'N/A'}`,
+    '',
     'RECEIVER',
     `Storage path: ${na(rec.writerType)}`,
     `Write latency EWMA (last/max): ${rec.lastWriteMsEwma != null ? `${rec.lastWriteMsEwma.toFixed(1)} ms` : 'N/A'} / ${fmtMs(rec.maxWriteMs)}`,
@@ -194,6 +219,16 @@ export function buildLiveTestReport(rec: DeviceTestRecord, meta: DeviceTestMeta)
     `Expected bytes: ${fmtBytes(rec.lastTotalBytes)}`,
     `Received/sent bytes (last sample): ${fmtBytes(rec.lastBytes)}`,
     `SHA-256: ${shaState}${rec.files.length > 0 && rec.files[0].sha256 ? ` (${rec.files[0].sha256.slice(0, 16)}…)` : ''}`,
+    `Hash scheme — receiver/sender: ${
+      rec.integrityAudit
+        ? `${rec.integrityAudit.scheme ?? 'N/A'} / ${rec.integrityAudit.senderScheme ?? 'N/A (pre-v2.5.3 sender)'}${rec.integrityAudit.schemeReverified ? ' — schemes diverged; durable file re-verified under the sender\'s scheme' : ''}`
+        : 'N/A (v2.5.3+ receiver required)'
+    }`,
+    `Chunk audit — processed/duplicates-dropped/reorder-stashed: ${
+      rec.integrityAudit
+        ? `${rec.integrityAudit.chunksProcessed} / ${rec.integrityAudit.duplicatesDropped} / ${rec.integrityAudit.reorderStashed} (max reorder depth ${rec.integrityAudit.maxReorderDepth})`
+        : 'N/A (v2.5.3+ receiver required)'
+    }`,
     '',
     'BOTTLENECK ANALYSIS',
     analysis.firstChanges.length === 0

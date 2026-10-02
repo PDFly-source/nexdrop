@@ -125,6 +125,41 @@ export interface DeviceTestRecord {
   writeP95Ms: number | null;
   /** Peak usedJSHeapSize sampled on THIS device (0 = browser hides it). */
   heapPeakBytes: number | null;
+  /** ---- v2.5.3 sender pump profile (LIVE-1790935144052 root cause
+   *  evidence: hash-mode downgrade throttles the pump invisibly). ---- */
+  /** Negotiated hash engine of the last sampled transfer: inline|merkle|worker. */
+  hashMode: string | null;
+  hashCpuMs: number | null;
+  hashPctOfWall: number | null;
+  /** Pump serial-stage EWMA costs (ms). */
+  pumpSliceMs: number | null;
+  pumpHashMs: number | null;
+  pumpEncodeMs: number | null;
+  pumpIterMs: number | null;
+  /** Unaccounted pump idle (ms EWMA / total). */
+  pumpIdleMs: number | null;
+  pumpIdleMsTotal: number | null;
+  /** Cumulative ACK-window wait (ms). */
+  ackWaitMs: number | null;
+  /** Hash-lag gate: cumulative wait ms + event count (the previously
+   *  INVISIBLE await that pinned the pump under a JS-hash downgrade). */
+  hashLagWaitMs: number | null;
+  hashLagEvents: number | null;
+  /** Flow events (cumulative counts). */
+  windowGrowEvents: number | null;
+  windowShrinkEvents: number | null;
+  bufferLowEvents: number | null;
+  ackWaitEvents: number | null;
+  /** v2.5.3 receiver deterministic integrity audit at the last sample. */
+  integrityAudit: {
+    chunksProcessed: number;
+    duplicatesDropped: number;
+    reorderStashed: number;
+    maxReorderDepth: number;
+    scheme: 'sha256' | 's256m' | null;
+    senderScheme: 'sha256' | 's256m' | null;
+    schemeReverified: boolean;
+  } | null;
   result: 'passed' | 'failed' | null;
   notes: string;
 }
