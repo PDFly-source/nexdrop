@@ -22,7 +22,7 @@ export interface StorageWriter {
   writeChunks(chunks: ArrayBuffer[], firstIndex: number): Promise<void>;
   finish(): Promise<{ blobUrl?: string; success: boolean }>;
   abort(): Promise<void>;
-  getType(): 'filesystem' | 'opfs' | 'blob';
+  getType(): 'filesystem' | 'opfs' | 'opfs-sync' | 'blob';
 }
 
 /**
@@ -167,6 +167,183 @@ export class OpfsStorageWriter implements StorageWriter {
 }
 
 /**
+ * v2.5 OPFS synchronous-access writer: a DEDICATED Worker holding a
+ * FileSystemSyncAccessHandle. Measured evidence (341.48 MB CI profile):
+ * the async createWritable().write() path costs ~5-6 ms PER CALL
+ * (45-58% of receiver wall at ~162 KiB batches) — per-call commit
+ * latency, not bandwidth. The sync access handle (Chromium, dedicated
+ * workers only) removes that per-call latency. Writes are strictly
+ * sequential through the worker's FIFO message queue — byte order is
+ * preserved by construction, one write in flight at a time.
+ *
+ * Capability detection is real: if the worker, OPFS, or
+ * createSyncAccessHandle is unavailable, init() fails and the factory
+ * falls back to the async OPFS writer. Support is NOT assumed identical
+ * to the async OPFS path (sync handles are worker-only and Chromium-only).
+ */
+export class OpfsSyncWorkerWriter implements StorageWriter {
+  private worker: Worker | null = null;
+  private pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void }>();
+  private nextId = 1;
+  private opfsName = '';
+  private closed = false;
+
+  getType(): 'opfs-sync' {
+    return 'opfs-sync';
+  }
+
+  private request(payload: Record<string, unknown>, transfer?: ArrayBuffer[]): Promise<any> {
+    if (!this.worker) return Promise.reject(new Error('worker not started'));
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      try {
+        // Buffers ride in the message AND the transfer list: the worker
+        // receives them zero-copy (transferred), not cloned.
+        this.worker!.postMessage({ ...payload, id }, transfer ?? []);
+      } catch (err) {
+        this.pending.delete(id);
+        reject(err);
+      }
+    });
+  }
+
+  async init(filename: string, _mimeType: string, _expectedSize: number): Promise<boolean> {
+    if (typeof Worker === 'undefined' || typeof navigator === 'undefined') return false;
+    if (!('storage' in navigator) || typeof navigator.storage.getDirectory !== 'function') return false;
+    const cleanName = sanitizeFilename(filename);
+    this.opfsName = `nexdrop_${Date.now()}_${cleanName}`;
+    let url = '';
+    try {
+      const blob = new Blob([OPFS_SYNC_WORKER_SRC], { type: 'application/javascript' });
+      url = URL.createObjectURL(blob);
+      const worker = new Worker(url);
+      // Route worker replies; an unexpected worker death surfaces as a
+      // rejection on every pending request (the writer loop reports it).
+      worker.onmessage = (e: MessageEvent) => {
+        const { id, ok, error, written } = e.data || {};
+        const p = this.pending.get(id);
+        if (!p) return;
+        this.pending.delete(id);
+        if (ok) p.resolve(written ?? 0);
+        else p.reject(new Error(error || 'OPFS sync worker error'));
+      };
+      worker.onerror = (e) => {
+        const err = new Error(`OPFS sync worker failed: ${e.message || 'unknown'}`);
+        for (const p of this.pending.values()) p.reject(err);
+        this.pending.clear();
+      };
+      this.worker = worker;
+      await this.request({ cmd: 'init', filename: this.opfsName }, []);
+      return true;
+    } catch (err) {
+      console.warn('OPFS sync-access writer unavailable, falling back:', err);
+      try { this.worker?.terminate(); } catch {}
+      this.worker = null;
+      this.pending.clear();
+      if (url) URL.revokeObjectURL(url);
+      return false;
+    }
+  }
+
+  async writeChunk(chunk: ArrayBuffer): Promise<void> {
+    await this.writeChunks([chunk], 0);
+  }
+
+  /** One round-trip per BATCH (bounded): the worker appends each buffer in
+   *  order at its tracked position and returns the byte count written. */
+  async writeChunks(chunks: ArrayBuffer[], _firstIndex: number): Promise<void> {
+    if (this.closed || !this.worker) return;
+    if (chunks.length === 0) return;
+    const buffers = chunks.filter((c) => c.byteLength > 0);
+    if (buffers.length === 0) return;
+    const written = await this.request({ cmd: 'write', buffers }, buffers);
+    if (typeof written === 'number' && written !== buffers.reduce((a, c) => a + c.byteLength, 0)) {
+      throw new Error(`OPFS sync short write: ${written} bytes`);
+    }
+  }
+
+  async finish(): Promise<{ blobUrl?: string; success: boolean }> {
+    if (!this.worker) return { success: false };
+    try {
+      await this.request({ cmd: 'finish' }, []);
+    } catch (e) {
+      console.warn('OPFS sync finish warning:', e);
+    }
+    this.closed = true;
+    try { this.worker.terminate(); } catch {}
+    this.worker = null;
+    // Read the finished file back on the MAIN thread for the blob URL —
+    // the sync handle is closed, so the exclusive lock is released.
+    try {
+      const root = await navigator.storage.getDirectory();
+      const handle = await root.getFileHandle(this.opfsName, { create: false });
+      const file = await handle.getFile();
+      const blobUrl = URL.createObjectURL(file);
+      return { blobUrl, success: true };
+    } catch (err) {
+      console.warn('OPFS sync re-open for blob URL failed:', err);
+      return { success: false };
+    }
+  }
+
+  async abort(): Promise<void> {
+    this.closed = true;
+    if (this.worker) {
+      try { await this.request({ cmd: 'abort' }, []); } catch {}
+      try { this.worker.terminate(); } catch {}
+      this.worker = null;
+    }
+    this.pending.clear();
+  }
+}
+
+/** Worker source: createSyncAccessHandle exists ONLY inside dedicated
+ *  workers; the probe failure replies 'no-sync' and init() falls back. */
+const OPFS_SYNC_WORKER_SRC = `
+self.onmessage = async (e) => {
+  const { id, cmd, filename } = e.data || {};
+  const reply = (msg) => self.postMessage(Object.assign({ id }, msg));
+  try {
+    if (cmd === 'init') {
+      if (typeof navigator === 'undefined' || !navigator.storage || !navigator.storage.getDirectory) {
+        return reply({ ok: false, error: 'no-opfs' });
+      }
+      const root = await navigator.storage.getDirectory();
+      self.handle = await root.getFileHandle(filename, { create: true });
+      if (typeof self.handle.createSyncAccessHandle !== 'function') {
+        return reply({ ok: false, error: 'no-sync-handle' });
+      }
+      self.sync = await self.handle.createSyncAccessHandle();
+      self.pos = 0;
+      reply({ ok: true });
+    } else if (cmd === 'write') {
+      if (!self.sync) return reply({ ok: false, error: 'not-open' });
+      const buffers = e.data.buffers || [];
+      let written = 0;
+      for (let i = 0; i < buffers.length; i++) {
+        const view = new Uint8Array(buffers[i]);
+        const n = self.sync.write(view, { at: self.pos });
+        self.pos += n;
+        written += n;
+      }
+      reply({ ok: true, written });
+    } else if (cmd === 'finish') {
+      if (self.sync) { self.sync.flush(); self.sync.close(); self.sync = null; }
+      reply({ ok: true });
+    } else if (cmd === 'abort') {
+      if (self.sync) { try { self.sync.close(); } catch ({} ) {} self.sync = null; }
+      reply({ ok: true });
+    } else {
+      reply({ ok: false, error: 'unknown-cmd' });
+    }
+  } catch (err) {
+    reply({ ok: false, error: String(err && err.message ? err.message : err) });
+  }
+};
+`;
+
+/**
  * Memory Blob Fallback Writer with safe bounds.
  */
 export class MemoryBlobWriter implements StorageWriter {
@@ -230,13 +407,27 @@ export async function createOptimalStorageWriter(
   expectedSize: number,
   preferDirectDiskPicker: boolean = true
 ): Promise<StorageWriter> {
+  // Measurement seam (benchmark A/B only): 'opfs-sync' forces the worker
+  // path with NO async fallback (failures surface honestly); 'opfs-async'
+  // skips the worker path entirely; absent/anything else = auto.
+  const forced = (globalThis as { __NEXDROP_FORCE_WRITER?: string }).__NEXDROP_FORCE_WRITER || 'auto';
+
   if (preferDirectDiskPicker && typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
     const fsWriter = new FileSystemAccessWriter();
     const ok = await fsWriter.init(filename, mimeType, expectedSize);
     if (ok) return fsWriter;
   }
 
-  // Next try OPFS
+  // v2.5: OPFS sync-access worker first (removes the measured ~5-6 ms
+  // per-call async commit latency), then the async OPFS writer, then
+  // the bounded memory fallback. Capability detection at every step.
+  if (forced !== 'opfs-async') {
+    const syncWriter = new OpfsSyncWorkerWriter();
+    const syncOk = await syncWriter.init(filename, mimeType, expectedSize);
+    if (syncOk) return syncWriter;
+    if (forced === 'opfs-sync') throw new Error('forced opfs-sync writer unavailable');
+  }
+
   const opfsWriter = new OpfsStorageWriter();
   const opfsOk = await opfsWriter.init(filename, mimeType, expectedSize);
   if (opfsOk) return opfsWriter;

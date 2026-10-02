@@ -70,7 +70,7 @@ export interface FileItem {
   direction: 'outgoing' | 'incoming';
   startedAt?: number;
   completedAt?: number;
-  storageTarget?: 'filesystem' | 'opfs' | 'blob';
+  storageTarget?: 'filesystem' | 'opfs' | 'opfs-sync' | 'blob';
 }
 
 export interface LocalHistoryItem {

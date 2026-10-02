@@ -65,7 +65,7 @@ export interface ReceiverProgress {
   /** Locally computed SHA-256 hex of the decrypted content (Device Test
    *  evidence — present only when the receiver actually hashed the bytes). */
   hash?: string;
-  writerType: 'filesystem' | 'opfs' | 'blob';
+  writerType: 'filesystem' | 'opfs' | 'opfs-sync' | 'blob';
 }
 
 export interface ReceiverCallbacks {

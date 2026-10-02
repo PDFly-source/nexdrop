@@ -23,6 +23,10 @@ on:
       bench_readahead:
         description: 'Read-ahead depth 1-4 (double/triple buffering sweep). Empty = 1 (v2.3 single-slot).'
         default: ''
+      bench_writer:
+        description: 'Force receiver writer: opfs-sync | opfs-async | (empty=auto)'
+        required: false
+        default: ''
       bench_channels:
         description: 'Force the striping pool size 1-4 (multi-channel gate sweep). Empty = measured auto gate (max 4).'
         default: ''
@@ -152,6 +156,7 @@ jobs:
           NEXDROP_ACK_TUNE_BYTES: ${{ inputs.bench_ack_bytes || '' }}
           NEXDROP_BENCH_HASH_MODE: ${{ inputs.bench_hash_mode || '' }}
           NEXDROP_BENCH_CHUNK_KB: ${{ inputs.bench_chunk_kb || '' }}
+          NEXDROP_BENCH_WRITER: ${{ inputs.bench_writer || '' }}
           NEXDROP_BENCH_READAHEAD: ${{ inputs.bench_readahead || '' }}
           NEXDROP_BENCH_CHANNELS: ${{ inputs.bench_channels || '' }}
 

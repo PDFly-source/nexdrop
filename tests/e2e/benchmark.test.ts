@@ -190,6 +190,7 @@ async function main() {
   const chunkKb = Number(process.env.NEXDROP_BENCH_CHUNK_KB || 0); // pin chunk size
   const readAhead = Number(process.env.NEXDROP_BENCH_READAHEAD || 0); // 1..4
   const forceChannels = Number(process.env.NEXDROP_BENCH_CHANNELS || 0); // 1..4
+  const forceWriter = process.env.NEXDROP_BENCH_WRITER || ''; // opfs-sync|opfs-async
   const initTune = (ctx: any) => {
     let script = '';
     if (ackTuneBytes > 0) script += `window.__NEXDROP_ACK_TUNE_BYTES = ${ackTuneBytes};\n`;
@@ -197,6 +198,7 @@ async function main() {
     if (chunkKb > 0) script += `window.__NEXDROP_CHUNK_CAP_BYTES = ${chunkKb * 1024};\n`;
     if (readAhead > 0) script += `window.__NEXDROP_READAHEAD = ${readAhead};\n`;
     if (forceChannels > 0) script += `window.__NEXDROP_FORCE_CHANNELS = ${forceChannels};\n`;
+    if (forceWriter) script += `window.__NEXDROP_FORCE_WRITER = '${forceWriter}';\n`;
     if (script) void ctx.addInitScript(script);
   };
   const ctxA = await browser.newContext();
@@ -578,7 +580,7 @@ async function main() {
         sendP95Ms: +samples.reduce((m, x) => Math.max(m, x.sendP95Ms), 0).toFixed(1),
         bufferWaitP95Ms: +samples.reduce((m, x) => Math.max(m, x.bufferWaitP95Ms), 0).toFixed(1),
         ackWaitP95Ms: +samples.reduce((m, x) => Math.max(m, x.ackWaitP95Ms), 0).toFixed(1),
-        benchConfig: `mode=${hashMode} chunk=${chunkKb || 'auto'}KB ra=${readAhead || 1} ch=${forceChannels || 'auto'}`,
+        benchConfig: `mode=${hashMode} chunk=${chunkKb || 'auto'}KB ra=${readAhead || 1} ch=${forceChannels || 'auto'} writer=${forceWriter || 'auto'}`,
       };
       results.push(r);
       console.log('[BENCH] ' + JSON.stringify(r));
