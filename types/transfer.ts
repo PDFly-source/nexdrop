@@ -45,7 +45,13 @@ export const BUFFER_LOW_WATER = 1 * 1024 * 1024; // 1 MiB
 export const PACE_INITIAL_BPS = 8 * 1024 * 1024; // 8 MB/s conservative start
 export const PACE_MIN_BPS = 512 * 1024; // 512 KB/s floor (never stop-and-wait)
 export const PACE_MAX_BPS = 64 * 1024 * 1024; // 64 MB/s cap (above every measured WebRTC goodput)
-export const PACE_BURST_BYTES = 512 * 1024; // bucket credit — small transfers start instantly
+// v2.8 verdict: a 1 MiB bucket made the paced collapse-arm 2x faster and
+// the healthy path adapt to 45 MB/s, but REGRESSED the ACK-clocked
+// throttled-clock arm (12.81 -> 7.49 MB/s in the harness): per-wake
+// bursts larger than the path's drain window stretch the ACK return
+// cycle. 512 KiB is the measured optimum across all three regimes —
+// keep it. The ACK-cadence and chunk-ladder changes carry v2.8.
+export const PACE_BURST_BYTES = 512 * 1024;
 /**
  * Late-wake catch-up credit cap. When the pump could NOT run for >200 ms
  * (throttled timers: locked screen / background tab / battery saver),
@@ -72,7 +78,11 @@ export const MAX_WINDOW_BYTES = 16 * 1024 * 1024; // 16 MiB cap (bounded memory)
 // completion, backpressure) always ACK IMMEDIATELY — the checkpoint rule.
 // Defaults chosen by CI benchmark sweep (2026-10-01): see tests/e2e/benchmark.
 export const ACK_BYTE_TARGET = 2 * 1024 * 1024; // 2 MiB cumulative-byte floor
-export const ACK_MAX_DELAY_MS = 20; // time-based coalescing ceiling
+// v2.8: 10 ms ceiling — halves the ACK-clocked wake interval, doubling
+// the ACK-clocked delivery ceiling without touching reliability (immediate
+// ACKs on boundary/final/queue-pressure events are unchanged, and the
+// 2 MiB byte floor still coalesces on fast paths).
+export const ACK_MAX_DELAY_MS = 10; // time-based coalescing ceiling
 /** Upper bound of the coalescing sweep (safety rail, benchmark-only). */
 export const ACK_BYTE_TARGET_MAX = 4 * 1024 * 1024;
 

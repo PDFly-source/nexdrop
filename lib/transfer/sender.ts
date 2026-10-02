@@ -278,6 +278,8 @@ export class SenderEngine {
   // ---- TURBO adaptive chunk ladder (2026-10-01) ----
   /** Corruption-risk freeze: any stall/pressure/shrink freezes the ladder. */
   private chunkFrozen = false;
+  /** v2.8 congestion step-down records (telemetry). */
+  private chunkStepsDown: Array<{ reason: string; at: number; from: number; to: number }> = [];
   private drainsSinceChunkStep = 0;
   // ---- BDP + RTT variance (measured, telemetry + scaling gate) ----
   private rttVarEwma = 0;
@@ -365,7 +367,10 @@ export class SenderEngine {
     // covers the 16-byte chunk header, the 6-byte IV prefix and the GCM tag.
     const negotiated = options.maxMessageSize && options.maxMessageSize > 0 ? options.maxMessageSize : 65536;
     this.negotiatedMaxMessageSize = negotiated;
-    this.chunkCap = Math.max(16 * 1024, Math.min(256 * 1024, negotiated - 256));
+    // v2.8: negotiated-aware ceiling — climb toward 1 MiB where SCTP
+    // maxMessageSize permits (Chromium negotiates 262144 -> effective cap
+    // stays ~256 KiB; browsers/SDPs that negotiate more can climb).
+    this.chunkCap = Math.max(16 * 1024, Math.min(1024 * 1024, negotiated - 256));
     // Start conservative (64 KiB, or a size learned from a previous clean
     // transfer in this session) — growth happens per measured stability.
     this.chunkSteps0 = initialChunkSize(negotiated);
@@ -555,6 +560,7 @@ export class SenderEngine {
         this.chunkFrozen = true; // sustained receiver pressure = risk condition
         this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.85));
         this.paceTargetBps = Math.max(PACE_MIN_BPS, Math.floor(this.paceTargetBps * 0.85));
+        this.stepChunkDown('receiver-pressure');
         this.windowShrinkEvents++;
         this.lastGrowthBytes = this.bytesAcked;
         this.lastPressureAt = Date.now();
@@ -570,6 +576,7 @@ export class SenderEngine {
         this.chunkFrozen = true; // sustained storage pressure = risk condition
         this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.9));
         this.paceTargetBps = Math.max(PACE_MIN_BPS, Math.floor(this.paceTargetBps * 0.9));
+        this.stepChunkDown('storage-pressure');
       this.windowShrinkEvents++;
         this.lastGrowthBytes = this.bytesAcked;
         this.lastPressureAt = Date.now();
@@ -668,7 +675,11 @@ export class SenderEngine {
         const cur = this.chunkSize;
         // v2.6 profile: STANDARD caps the ladder at 128 KiB (one step);
         // TURBO/AUTO may climb to the 256 KiB ceiling once stable.
-        const ladder = this.profile === 'standard' ? [128 * 1024] : [128 * 1024, 256 * 1024];
+        // v2.8: ladder extends to 512 KiB / 1 MiB — reachable only when the
+        // negotiated SCTP maxMessageSize permits (chunkCap clamps it).
+        const ladder = this.profile === 'standard'
+          ? [128 * 1024]
+          : [128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024];
         const next = ladder.find((sz) => sz > cur && sz <= this.chunkCap);
         if (next) {
           // Race-free horizon: never at/below the pump's read-ahead index,
@@ -683,6 +694,9 @@ export class SenderEngine {
       // ---- TURBO multi-channel scaling gate (measured, never blind) ----
       this.evaluateChannelScaling();
       // NOTE: chunk size NEVER grows mid-transfer (2026-10-01 incident).
+      // v2.8 step-DOWN uses the same race-free horizon mechanism: a future
+      // firstIndex beyond the pump's read-ahead can never race a pre-read
+      // slice, so the byte stream stays coherent with bytesAtChunkStart().
       // A mid-transfer grow races the pump's one-slice read-ahead: a chunk
       // pre-read under the old size is then counted under the new step
       // table, the byte stream desyncs from bytesAtChunkStart(), file bytes
@@ -1669,6 +1683,20 @@ export class SenderEngine {
    * bufferedamountlow). All streams carry identical ordered/reliable
    * semantics; the RECEIVER's bounded reorder buffer restores global order.
    */
+  /** v2.8: congestion step-down — halve the chunk at a race-free horizon. */
+  private stepChunkDown(reason: string): void {
+    if (this.chunkSteps.length === 0 || this.chunkPinned > 0 || this.chunkFrozen) return;
+    const cur = this.chunkSteps[this.chunkSteps.length - 1].size;
+    const half = Math.min(cur >> 1, this.chunkCap);
+    if (half < 16 * 1024) return; // floor reached — window/target absorb it
+    this.chunkSteps.push({
+      firstIndex: this.currentChunkIndex + this.readAheadDepth + 1,
+      size: half,
+    });
+    this.chunkFrozen = true; // one down-step per stall episode; ladder stops
+    this.chunkStepsDown.push({ reason, at: Date.now(), from: cur, to: half });
+  }
+
   private sendPacket(packet: ArrayBuffer, index: number): boolean {
     const ch = this.activeChannels[index % this.activeChannels.length];
     if (ch.readyState !== 'open') {
