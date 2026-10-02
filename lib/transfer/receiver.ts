@@ -157,6 +157,12 @@ export class ReceiverEngine {
      *  durable file under the sender's declared scheme. */
     schemeReverified: false,
   };
+  /** v2.6 ACK-latency forensics: receiver-side app delay from the LAST
+   *  chunk arrival to the ACK leaving. Proves whether a huge ACK latency
+   *  was receiver queueing (app) or a network receive gap (transport). */
+  private lastChunkArrivalAt = 0;
+  private ackAppDelayEwmaMs = 0;
+  private ackAppDelayMaxMs = 0;
   private expectedTransferIdHash = 0;
   private nextExpectedChunkIndex = 0;
   private bytesReceived = 0;
@@ -391,6 +397,7 @@ export class ReceiverEngine {
       return;
     }
 
+    this.lastChunkArrivalAt = Date.now();
     this.processQueue.push(packetBuffer);
     await this.drain();
   }
@@ -561,7 +568,12 @@ export class ReceiverEngine {
         // v2.5.1 write-coalescing profile: storage-call size distribution.
         writeBatch: this.writeBatchSummary(this.bytesWritten),
         // v2.5.3 deterministic integrity audit (bounded counters).
-        integrityAudit: { ...this.integrityAudit },
+        // v2.6: ackAppDelay* appended — receiver-side ACK forensics.
+        integrityAudit: {
+          ...this.integrityAudit,
+          ackAppDelayEwmaMs: Math.round(this.ackAppDelayEwmaMs * 10) / 10,
+          ackAppDelayMaxMs: this.ackAppDelayMaxMs,
+        },
         wallMs: this.startTime > 0 ? Date.now() - this.startTime : 0,
         acksSent: this.acksSent,
         throughputBps: avgSpeed,
@@ -809,6 +821,14 @@ export class ReceiverEngine {
           this.lastAckedWrittenBytes = this.bytesWritten;
           this.ackBoundaryPending = false;
           this.acksSent++;
+          // v2.6: receiver app delay (arrival → ACK leave) + send stamp for
+          // the sender to measure transit. Decomposes ACK latency honestly.
+          let ackAppDelay = 0;
+          if (this.lastChunkArrivalAt > 0) {
+            ackAppDelay = Date.now() - this.lastChunkArrivalAt;
+            this.ackAppDelayEwmaMs = this.ackAppDelayEwmaMs > 0 ? this.ackAppDelayEwmaMs * 0.8 + ackAppDelay * 0.2 : ackAppDelay;
+            if (ackAppDelay > this.ackAppDelayMaxMs) this.ackAppDelayMaxMs = ackAppDelay;
+          }
           this.callbacks.sendControlMessage({
             type: 'ACK',
             transferId: this.transferId,
@@ -817,6 +837,8 @@ export class ReceiverEngine {
             wb: this.bytesWritten,
             w: Math.round(this.writeMsEwma * 10) / 10,
             q: queueNow,
+            ts: Date.now(),
+            ad: Math.round(ackAppDelay),
           });
           this.ackStats.record(Date.now() - ackT0);
         }
@@ -877,6 +899,7 @@ export class ReceiverEngine {
     this.lastAckedWrittenBytes = this.bytesWritten;
     this.ackBoundaryPending = false;
     this.acksSent++;
+    const ckAppDelay = this.lastChunkArrivalAt > 0 ? Date.now() - this.lastChunkArrivalAt : 0;
     this.callbacks.sendControlMessage({
       type: 'ACK',
       transferId: this.transferId,
@@ -885,6 +908,8 @@ export class ReceiverEngine {
       wb: this.bytesWritten,
       w: Math.round(this.writeMsEwma * 10) / 10,
       q: this.queueDepth(),
+      ts: Date.now(),
+      ad: Math.round(ckAppDelay),
     });
   }
 

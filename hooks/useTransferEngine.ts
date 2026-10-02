@@ -17,6 +17,7 @@ import {
   FileVerifyMessage,
   FilePauseMessage,
   FileResumeMessage,
+  TransferProfile,
 } from '@/types/transfer';
 import { PeerConnectionManager } from '@/lib/webrtc/peer';
 import type { TransferDirection } from '@/types/session';
@@ -68,6 +69,27 @@ export function useTransferEngine(
   ) => void
 ) {
   const [sendQueue, setSendQueue] = useState<FileItem[]>([]);
+  // v2.6 transfer profile (AUTO default): persisted across sessions,
+  // passed to every SenderEngine. The pacer is always on regardless —
+  // the profile only tunes aggressiveness (margin, ladder, channel gate).
+  const [transferProfile, setTransferProfileState] = useState<TransferProfile>(() => {
+    try {
+      const saved = localStorage.getItem('nexdrop_transfer_profile');
+      return saved === 'turbo' || saved === 'standard' ? saved : 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+  const setTransferProfile = useCallback((p: TransferProfile) => {
+    setTransferProfileState(p);
+    try {
+      localStorage.setItem('nexdrop_transfer_profile', p);
+    } catch {
+      /* storage unavailable — profile applies to this session only */
+    }
+  }, []);
+  const transferProfileRef = useRef(transferProfile);
+  transferProfileRef.current = transferProfile;
   const [incomingFiles, setIncomingFiles] = useState<FileItem[]>([]);
   const [activeTransfer, setActiveTransfer] = useState<ActiveTransferState | null>(null);
 
@@ -269,7 +291,9 @@ export function useTransferEngine(
             typeof msg.w === 'number' ? msg.w : undefined,
             typeof (msg as { q?: number }).q === 'number' ? (msg as { q?: number }).q : undefined,
             typeof a.rb === 'number' ? a.rb : undefined,
-            typeof a.wb === 'number' ? a.wb : undefined
+            typeof a.wb === 'number' ? a.wb : undefined,
+            typeof (msg as { ts?: number }).ts === 'number' ? (msg as { ts?: number }).ts : undefined,
+            typeof (msg as { ad?: number }).ad === 'number' ? (msg as { ad?: number }).ad : undefined
           );
           break;
         }
@@ -379,6 +403,7 @@ export function useTransferEngine(
       const sender = new SenderEngine({
         file: targetItem.file,
         transferId: targetItem.id,
+        profile: transferProfileRef.current,
         fileChannel,
         sendControlMessage: (msg: any) => peerManager.sendControl(msg),
         maxMessageSize: peerManager.getMaxMessageSize(),
@@ -632,6 +657,8 @@ export function useTransferEngine(
     sendQueue,
     incomingFiles,
     activeTransfer,
+    transferProfile,
+    setTransferProfile,
     addFilesToSend,
     removeSendItem,
     reorderSendQueue,

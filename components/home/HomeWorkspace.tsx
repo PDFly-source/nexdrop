@@ -35,6 +35,9 @@ interface HomeWorkspaceProps {
   onNavigate: (tab: 'transfers' | 'devices' | 'settings') => void;
   /** Home → RECEIVE: opens the QR scanner directly. */
   onReceiveScan: () => void;
+  /** v2.6 transfer profile (AUTO/TURBO/STANDARD) — one segmented chip row. */
+  transferProfile: 'auto' | 'turbo' | 'standard';
+  onSetTransferProfile: (p: 'auto' | 'turbo' | 'standard') => void;
 }
 
 const QUICK_ACTIONS: {
@@ -62,6 +65,8 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
   onBeginSend,
   onNavigate,
   onReceiveScan,
+  transferProfile,
+  onSetTransferProfile,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingAcceptRef = useRef<string>('');
@@ -170,6 +175,38 @@ export const HomeWorkspace: React.FC<HomeWorkspaceProps> = ({
                 Accept files from another device
               </span>
             </button>
+          </div>
+
+          {/* v2.6 transfer profile — honest, real engine setting (not a
+              visual toggle): the sender reads this when it starts. */}
+          <div className="mt-4 max-w-md">
+            <p className="text-[10px] font-medium tracking-wide text-nd-text-secondary mb-1.5">
+              Transfer profile
+            </p>
+            <div
+              role="radiogroup"
+              aria-label="Transfer profile"
+              className="inline-flex rounded-lg border border-white/[0.1] bg-nd-surface p-0.5"
+            >
+              {(['standard', 'auto', 'turbo'] as const).map((p) => {
+                const active = transferProfile === p;
+                return (
+                  <button
+                    key={p}
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => onSetTransferProfile(p)}
+                    className={`rounded-md px-3 py-1.5 text-[11px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-nd-teal ${
+                      active
+                        ? 'bg-nd-teal text-nd-bg-0'
+                        : 'text-nd-text-secondary hover:text-nd-text-primary'
+                    }`}
+                  >
+                    {p === 'auto' ? 'AUTO' : p === 'turbo' ? 'TURBO' : 'STANDARD'}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
         </div>

@@ -164,6 +164,9 @@ export interface ReceiverTelemetry {
     scheme: 'sha256' | 's256m' | null;
     senderScheme: 'sha256' | 's256m' | null;
     schemeReverified: boolean;
+    /** v2.6 receiver ACK forensics (ms; 0 when no chunk arrived). */
+    ackAppDelayEwmaMs?: number;
+    ackAppDelayMaxMs?: number;
   };
   /** Elapsed wall ms since receiver start at the last telemetry update. */
   wallMs: number;

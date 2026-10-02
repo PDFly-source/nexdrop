@@ -119,6 +119,8 @@ function NexDropMainContent() {
   const {
     sendQueue,
     incomingFiles,
+    transferProfile,
+    setTransferProfile,
     activeTransfer,
     addFilesToSend,
     removeSendItem,
@@ -254,6 +256,8 @@ function NexDropMainContent() {
               historyItems={transferHistory}
               sendQueueCount={sendQueue.length}
               incomingCount={incomingFiles.length}
+              transferProfile={transferProfile}
+              onSetTransferProfile={setTransferProfile}
               onFilesSelected={sendFlow.queueFiles}
               onBeginSend={openSend}
               onOpenText={() => setIsClipboardOpen(true)}

@@ -25,6 +25,29 @@ export const BUFFER_LOW_WATER = 1 * 1024 * 1024; // 1 MiB
  * real pressure but never below MIN — so a high-RTT link can never
  * collapse into stop-and-wait behavior.
  */
+/**
+ * App-level send pacer (v2.6, the burst-collapse fix). The real-device
+ * cellular run (LIVE 2026-10-02: 358.07 MB APK, sustained 0.53 MB/s,
+ * peak 67.15 MB/s, 29 stalls, ACK gaps to 12.585 s) proved the failure
+ * mode: whenever 'bufferedamountlow' fired, the pump refilled the whole
+ * 4 MiB SCTP buffer INSTANTLY. On a lossy high-RTT path that burst floods
+ * the receiver's UDP socket, SCTP congestion control collapses, and the
+ * association spends minutes in RTO backoff crawling at ~0.5 MB/s — the
+ * same signature CI reproduces (~0.4 MB/s after sustained bursts).
+ *
+ * The pacer bounds the APP send rate with a token bucket (zero standing
+ * memory; bounded by PACE_BURST_BYTES credit) and tracks the MEASURED
+ * goodput with a profile-tuned margin, so a healthy path is never
+ * throttled below what it proves it can sustain, while a fragile path
+ * is never flooded into collapse. Purely additive to the buffer
+ * high/low-water backpressure, which remains as the hard safety net.
+ */
+export const PACE_INITIAL_BPS = 8 * 1024 * 1024; // 8 MB/s conservative start
+export const PACE_MIN_BPS = 512 * 1024; // 512 KB/s floor (never stop-and-wait)
+export const PACE_MAX_BPS = 64 * 1024 * 1024; // 64 MB/s cap (above every measured WebRTC goodput)
+export const PACE_BURST_BYTES = 512 * 1024; // bucket credit — small transfers start instantly
+/** Transfer profile: auto (default, measured), turbo (aggressive margins + channel pool), standard (conservative). */
+export type TransferProfile = 'auto' | 'turbo' | 'standard';
 export const INITIAL_WINDOW_BYTES = 1 * 1024 * 1024; // 1 MiB
 export const MIN_WINDOW_BYTES = 512 * 1024; // 512 KiB floor
 export const MAX_WINDOW_BYTES = 16 * 1024 * 1024; // 16 MiB cap (bounded memory)

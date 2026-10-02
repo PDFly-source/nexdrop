@@ -36,6 +36,11 @@ import {
   INITIAL_WINDOW_BYTES,
   MAX_WINDOW_BYTES,
   MIN_WINDOW_BYTES,
+  PACE_BURST_BYTES,
+  PACE_INITIAL_BPS,
+  PACE_MAX_BPS,
+  PACE_MIN_BPS,
+  TransferProfile,
   FileStartMessage,
 } from '@/types/transfer';
 import { encodeBinaryChunk } from './protocol';
@@ -81,6 +86,11 @@ export interface SenderOptions {
   /** TURBO multi-channel: accessor for extra open file streams (file-1..file-3).
    * Polled when the scaling gate fires; absence means single-channel mode. */
   extraFileChannels?: () => RTCDataChannel[];
+  /** Transfer profile (v2.6): 'auto' measured-adaptive (default), 'turbo'
+   *  aggressive margins + parallel-channel probing, 'standard' conservative.
+   *  The burst-collapse pacer is ALWAYS active in every profile — it is a
+   *  safety property of the transport, not a performance option. */
+  profile?: TransferProfile;
 }
 
 /** Real backpressure stall: buffer drain wait / ACK starvation. */
@@ -89,7 +99,7 @@ const STALL_COOLDOWN_MS = 1500;
 /** Test seam: overrides the HASH_OK negotiation window (used only by
  *  regression tests to reproduce the late-reply race quickly; never set in
  *  production builds). */
-export const senderTestOverrides: { hashOkWaitMs?: number } = {};
+export const senderTestOverrides: { hashOkWaitMs?: number; disablePacer?: boolean } = {};
 
 export class SenderEngine {
   private file: File;
@@ -192,7 +202,11 @@ export class SenderEngine {
      // stage invisible to the old 14-column timeline (hash-mode downgrade
      // to JS hashing). These columns make the next real-device run name
      // the limiting stage from recorded samples alone.
-     'sliceMs','hashMs','encMs','ackWaitMs','bufWaitMs','hashLagMs','idleMs','acks'],
+     'sliceMs','hashMs','encMs','ackWaitMs','bufWaitMs','hashLagMs','idleMs','acks',
+     // v2.6 columns (appended; indices 0..21 unchanged): pacer + ACK
+     // transit forensics — the burst-collapse fix makes the next real
+     // device run show WHY the pump was slow, measured not guessed.
+     'paceMs','paceBps','ackNetMs','ackAppMs'],
   );
   private timelineTimer: ReturnType<typeof setInterval> | null = null;
   /** ACK frontier when the window last grew — grows once per clean window drain. */
@@ -211,6 +225,32 @@ export class SenderEngine {
   private lastChunkRateAt = 0;
   /** Woken by handleAck — the window wait is event-driven, polls only as a failsafe. */
   private windowWaiters: Set<() => void> = new Set();
+  // ---- v2.6 send pacer (burst-collapse fix) ----
+  /** Active transfer profile ('auto' default). */
+  private readonly profile: TransferProfile;
+  /** Current app send-rate target (B/s) — tracks measured goodput with margin. */
+  private paceTargetBps = PACE_INITIAL_BPS;
+  /** Pacing-wait distribution (measured per pump iteration). */
+  private paceWaitStats = new StageStats();
+  /** Receiver app delay from the last ACK (arrival→ACK leave, receiver-measured). */
+  private lastAckAppDelayMs = 0;
+  /** Token-bucket credit (bytes) — capped at PACE_BURST_BYTES, zero standing memory. */
+  private paceTokens = PACE_BURST_BYTES;
+  /** Live probe margin over measured goodput (starts at the profile cap,
+   *  cut to 1.0 on a reality-check, regrows +0.05 per 2 s of stability). */
+  private paceMargin: number;
+  /** Last time the margin was cut (probe regrowth cooldown reference). */
+  private paceMarginCutAt = 0;
+  /** Last time the margin regrew one step. */
+  private paceMarginGrowAt = 0;
+  /** Timestamp of the last bucket refill. */
+  private paceTokensAt = Date.now();
+  /** Total wall time spent in computed pacing waits (measured, honest). */
+  private paceWaitMsTotal = 0;
+  private paceWaitCount = 0;
+  /** ACK transit (network one-way incl. receiver control queue): now − ACK.ts. */
+  private ackTransitEwmaMs = 0;
+  private ackTransitMaxMs = 0;
   // ---- TURBO multi-channel pool (2026-10-01) ----
   private getActiveChannels: () => RTCDataChannel[];
   /** Striping pool. Order is stable; chunk index % length picks the stream. */
@@ -308,6 +348,8 @@ export class SenderEngine {
     this.onCompleted = options.onCompleted;
     this.onError = options.onError;
     this.cipher = options.cipher ?? null;
+    this.profile = options.profile ?? 'auto';
+    this.paceMargin = this.profile === 'turbo' ? 1.4 : this.profile === 'standard' ? 1.15 : 1.3;
 
     // Never send a frame larger than the negotiated SCTP limit. Headroom
     // covers the 16-byte chunk header, the 6-byte IV prefix and the GCM tag.
@@ -317,6 +359,12 @@ export class SenderEngine {
     // Start conservative (64 KiB, or a size learned from a previous clean
     // transfer in this session) — growth happens per measured stability.
     this.chunkSteps0 = initialChunkSize(negotiated);
+    // v2.6: STANDARD clamps the learned initial size too — the profile is
+    // conservative by definition, so a 256 KiB size learned by a previous
+    // TURBO/AUTO transfer must not leak into it.
+    if (this.profile === 'standard' && this.chunkSteps0 > 128 * 1024) {
+      this.chunkSteps0 = 128 * 1024;
+    }
     this.chunkSteps = [{ firstIndex: 0, size: this.chunkSteps0 }];
 
     // ---- v2.4 benchmark/telemetry knobs (measurement ONLY; safe defaults) ----
@@ -391,8 +439,22 @@ export class SenderEngine {
     writeMs?: number,
     queueDepth?: number,
     receivedBytes?: number,
-    writtenBytes?: number
+    writtenBytes?: number,
+    ackSentAt?: number,
+    ackAppDelayMs?: number
   ) {
+    if (ackAppDelayMs !== undefined && ackAppDelayMs >= 0) this.lastAckAppDelayMs = ackAppDelayMs;
+    // v2.6 ACK-latency forensics: the receiver stamps every ACK with its
+    // send time; now − ts = one-way transit (network + receiver control
+    // queue). Combined with the receiver-side arrival→ACK delay this
+    // decomposes the 12.585 s live-run ACK latency into network vs app.
+    if (ackSentAt !== undefined && ackSentAt > 0) {
+      const transit = Date.now() - ackSentAt;
+      if (transit > 0 && transit < 120000) {
+        this.ackTransitEwmaMs = this.ackTransitEwmaMs > 0 ? this.ackTransitEwmaMs * 0.8 + transit * 0.2 : transit;
+        if (transit > this.ackTransitMaxMs) this.ackTransitMaxMs = transit;
+      }
+    }
     if (writeMs !== undefined) this.lastWriteMsEwma = writeMs;
     if (queueDepth !== undefined) this.lastQueueDepth = queueDepth;
     void receivedBytes; // diagnostics only — flow control trusts wb
@@ -478,6 +540,7 @@ export class SenderEngine {
       if (this.deepQueueStreak >= 2 && this.windowBytes > MIN_WINDOW_BYTES) {
         this.chunkFrozen = true; // sustained receiver pressure = risk condition
         this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.85));
+        this.paceTargetBps = Math.max(PACE_MIN_BPS, Math.floor(this.paceTargetBps * 0.85));
         this.windowShrinkEvents++;
         this.lastGrowthBytes = this.bytesAcked;
         this.lastPressureAt = Date.now();
@@ -492,6 +555,7 @@ export class SenderEngine {
       if (this.slowWriteStreak >= 3 && this.windowBytes > MIN_WINDOW_BYTES) {
         this.chunkFrozen = true; // sustained storage pressure = risk condition
         this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.9));
+        this.paceTargetBps = Math.max(PACE_MIN_BPS, Math.floor(this.paceTargetBps * 0.9));
       this.windowShrinkEvents++;
         this.lastGrowthBytes = this.bytesAcked;
         this.lastPressureAt = Date.now();
@@ -517,6 +581,41 @@ export class SenderEngine {
       this.windowGrowEvents++;
       this.lastGrowthBytes = this.bytesAcked;
       return;
+    }
+
+    // v2.6 pacer: track the MEASURED goodput with an adaptive probe
+    // margin on every ACK. Runs before the drain logic so the pacer
+    // follows the live rate even while the window is still ramping.
+    //
+    // Up: target = measured × margin. Down (reality check): when the
+    // target exceeds measured goodput by >50%, the path is refusing the
+    // offered rate — match measured exactly, cut the margin to 1.0
+    // (no probing) and regrow it only +0.05 per 2 s of sustained
+    // stability, up to the profile cap. This is TCP-style probe control:
+    // after a congestion signal, hold the rate; probe gently; never
+    // oscillate hard on a fragile path (the unpaced 2026-10-02 live run
+    // probed +∞: instant 4 MiB refills every drain, 29 stalls).
+    if (this.throughputBps > PACE_MIN_BPS) {
+      const cap = this.profile === 'turbo' ? 1.4 : this.profile === 'standard' ? 1.15 : 1.3;
+      // Margin regrowth: only on stability, one small step at a time.
+      if (
+        this.paceMargin < cap &&
+        Date.now() - this.paceMarginCutAt > 2000 &&
+        Date.now() - this.paceMarginGrowAt > 2000
+      ) {
+        this.paceMargin = Math.min(cap, this.paceMargin + 0.05);
+        this.paceMarginGrowAt = Date.now();
+      }
+      const tracked = this.throughputBps * this.paceMargin;
+      if (tracked > this.paceTargetBps) {
+        this.paceTargetBps = Math.min(PACE_MAX_BPS, tracked);
+      } else if (this.paceTargetBps > this.throughputBps * 1.5) {
+        // Reality check: the offered rate is far above what the path is
+        // delivering — track down to measured and stop probing.
+        this.paceTargetBps = Math.max(PACE_MIN_BPS, this.throughputBps);
+        this.paceMargin = 1.0;
+        this.paceMarginCutAt = Date.now();
+      }
     }
 
     // One clean full-window drain since the last change: grow. Below the
@@ -553,7 +652,9 @@ export class SenderEngine {
         this.currentChunkIndex + this.readAheadDepth + 1 > this.chunkSteps[this.chunkSteps.length - 1].firstIndex
       ) {
         const cur = this.chunkSize;
-        const ladder = [128 * 1024, 256 * 1024];
+        // v2.6 profile: STANDARD caps the ladder at 128 KiB (one step);
+        // TURBO/AUTO may climb to the 256 KiB ceiling once stable.
+        const ladder = this.profile === 'standard' ? [128 * 1024] : [128 * 1024, 256 * 1024];
         const next = ladder.find((sz) => sz > cur && sz <= this.chunkCap);
         if (next) {
           // Race-free horizon: never at/below the pump's read-ahead index,
@@ -603,6 +704,9 @@ export class SenderEngine {
       // that keeps high-RTT links well above stop-and-wait.
       this.windowBytes = Math.max(MIN_WINDOW_BYTES, Math.floor(this.windowBytes * 0.7));
       this.windowShrinkEvents++;
+      // v2.6: the pacer backs off too — the buffer stalled for >1 s, so
+      // the app-level rate target is provably above what the path accepts.
+      this.paceTargetBps = Math.max(PACE_MIN_BPS, Math.floor(this.paceTargetBps * 0.6));
     }
     this.lastGrowthBytes = this.bytesAcked;
   }
@@ -624,6 +728,9 @@ export class SenderEngine {
     inFlightBytes: number;
     hashMode: HashMode; hashCpuMs: number; hashPctOfWall: number;
     readAheadDepth: number; forcedChannels: number; chunkPinned: number;
+    profile: TransferProfile;
+    paceTargetBps: number; paceWaitMsTotal: number; paceWaitCount: number;
+    ackTransitMs: number; ackTransitMaxMs: number; ackAppDelayMs: number;
     stages: Record<'slice' | 'hash' | 'encode' | 'send' | 'bufferWait' | 'ackWait' | 'finalize', StageSummary>;
   } {
     const elapsedS = (Date.now() - this.startTime) / 1000;
@@ -681,6 +788,14 @@ export class SenderEngine {
       readAheadDepth: this.readAheadDepth,
       forcedChannels: this.forcedChannels,
       chunkPinned: this.chunkPinned,
+      // ---- v2.6 pacer + ACK-transit forensics (measured) ----
+      profile: this.profile,
+      paceTargetBps: this.paceTargetBps,
+      paceWaitMsTotal: this.paceWaitMsTotal,
+      paceWaitCount: this.paceWaitCount,
+      ackTransitMs: this.ackTransitEwmaMs,
+      ackTransitMaxMs: this.ackTransitMaxMs,
+      ackAppDelayMs: this.lastAckAppDelayMs,
       stages,
     };
   }
@@ -744,6 +859,11 @@ export class SenderEngine {
         Math.round(this.hashLagWaitEwma * 10) / 10,
         Math.round(this.idleMsEwma * 10) / 10,
         this.ackCount,
+        // v2.6 pacer + ACK-transit forensics
+        Math.round(this.paceWaitStats.summary().ewmaMs * 10) / 10,
+        this.paceTargetBps,
+        Math.round(this.ackTransitEwmaMs * 10) / 10,
+        Math.round((this.lastAckAppDelayMs || 0) * 10) / 10,
       ]);
     };
     // First sample immediately (t=0), then on the timeline's own cadence.
@@ -766,6 +886,9 @@ export class SenderEngine {
   }
 
   public resume() {
+    // v2.6: restart bucket accrual timing on resume (no credit granted —
+    // the pump re-fills at the learned rate instead of bursting).
+    this.paceTokensAt = Date.now();
     if (!this.isPaused || this.isCancelled || this.isDone) return;
     this.isPaused = false;
     this.sendControlMessage({
@@ -1073,6 +1196,14 @@ export class SenderEngine {
       this.encodeMsEwma = this.encodeMsEwma > 0 ? this.encodeMsEwma * 0.8 + encodeDt * 0.2 : encodeDt;
       iterAccountedMs += encodeDt;
 
+      // v2.6 pacer — bound the app send rate BEFORE handing to SCTP. Runs
+      // after the encode so the pipeline stays fully overlapped (slice /
+      // hash / encrypt happen behind the pacing gap, never idle).
+      const paceDt = await this.pace(chunkBytes);
+      this.paceWaitStats.record(paceDt, chunkBytes);
+      iterAccountedMs += paceDt;
+      if (this.isCancelled || this.isPaused) return;
+
       // TURBO striping: per-stream SCTP buffer backpressure, then send.
       const stripe = this.activeChannels[index % this.activeChannels.length];
       if (stripe.readyState !== 'open') {
@@ -1340,6 +1471,55 @@ export class SenderEngine {
    * only acts as an ACK-starvation failsafe (a real instability signal,
    * not a silent continue).
    */
+  /**
+   * v2.6 send pacer — the burst-collapse fix.
+   *
+   * Token bucket: credit accrues at paceTargetBps (capped at
+   * PACE_BURST_BYTES, so standing burst debt is bounded and memory is
+   * zero). A chunk may send instantly while credit covers it; otherwise
+   * the pump waits exactly the computed deficit — a PACED gap derived
+   * from the measured rate target, not an arbitrary sleep. This is the
+   * only safe way to keep a fragile SCTP path out of RTO collapse: the
+   * buffer high/low-water backpressure reacts AFTER the flood; pacing
+   * prevents the flood. On a healthy path the target tracks measured
+   * goodput × margin within one ACK interval, so the pacer never becomes
+   * the ceiling.
+   */
+  private refillPace(): void {
+    const now = Date.now();
+    const acc = ((now - this.paceTokensAt) / 1000) * this.paceTargetBps;
+    this.paceTokens = Math.min(PACE_BURST_BYTES, this.paceTokens + acc);
+    this.paceTokensAt = now;
+  }
+
+  /** Returns the pacing wait in ms (0 when credit covered the chunk). */
+  private async pace(bytes: number): Promise<number> {
+    if (senderTestOverrides.disablePacer) return 0;
+    this.refillPace();
+    if (this.paceTokens < bytes) {
+      const deficitMs = ((bytes - this.paceTokens) / this.paceTargetBps) * 1000;
+      // Sub-5 ms deficits BORROW instead of sleeping: setTimeout()
+      // granularity (+0-4 ms scheduling) would otherwise make tiny gaps
+      // systematically late and cap a healthy path below its real rate.
+      // The borrowed debt (negative balance) delays the next real wait, so
+      // the AVERAGE rate stays exactly on target.
+      if (deficitMs <= 5) {
+        this.paceTokens -= bytes;
+        return 0;
+      }
+      const t0 = Date.now();
+      await new Promise((r) => setTimeout(r, Math.ceil(deficitMs)));
+      const dt = Date.now() - t0;
+      this.paceWaitMsTotal += dt;
+      this.paceWaitCount++;
+      this.paceTokensAt = Date.now();
+      this.paceTokens = bytes; // waited exactly the deficit — spend it now
+      return dt;
+    }
+    this.paceTokens -= bytes;
+    return 0;
+  }
+
   private waitForWindow(): Promise<void> {
     const waitStart = Date.now();
     return new Promise((resolve) => {
@@ -1457,6 +1637,9 @@ export class SenderEngine {
    */
   private evaluateChannelScaling(): void {
     if (this.forcedChannels > 0) return; // explicit benchmark/sweep override
+    // v2.6 profile: STANDARD is single-stream by definition — no pool
+    // growth, no evaluation timers. TURBO/AUTO keep the measured gate.
+    if (this.profile === 'standard') return;
     const now = Date.now();
     const available = this.getActiveChannels();
     const active = this.activeChannels.length;
