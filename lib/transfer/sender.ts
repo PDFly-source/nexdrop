@@ -38,6 +38,8 @@ import {
   MIN_WINDOW_BYTES,
   PACE_BURST_BYTES,
   PACE_INITIAL_BPS,
+  PACE_LATE_CATCHUP_BYTES,
+  PACE_LATE_WAKE_MS,
   PACE_MAX_BPS,
   PACE_MIN_BPS,
   TransferProfile,
@@ -99,7 +101,7 @@ const STALL_COOLDOWN_MS = 1500;
 /** Test seam: overrides the HASH_OK negotiation window (used only by
  *  regression tests to reproduce the late-reply race quickly; never set in
  *  production builds). */
-export const senderTestOverrides: { hashOkWaitMs?: number; disablePacer?: boolean } = {};
+export const senderTestOverrides: { hashOkWaitMs?: number; disablePacer?: boolean; paceThrottleMs?: number; disablePaceAckWake?: boolean } = {};
 
 export class SenderEngine {
   private file: File;
@@ -236,6 +238,14 @@ export class SenderEngine {
   private lastAckAppDelayMs = 0;
   /** Token-bucket credit (bytes) — capped at PACE_BURST_BYTES, zero standing memory. */
   private paceTokens = PACE_BURST_BYTES;
+  /** Pace-wait resolvers — woken by every ACK (network events fire even
+   *  when the browser throttles timers: locked screen / background tab). */
+  private paceWakeResolvers = new Set<() => void>();
+  /** Telemetry: pump wakes that fired >50 ms after their intended time —
+   *  the honest signature of browser timer throttling on the real phone. */
+  private paceWakeLateCount = 0;
+  private paceWakeLateMsMax = 0;
+  private paceWakeLateMsEwma = 0;
   /** Live probe margin over measured goodput (starts at the profile cap,
    *  cut to 1.0 on a reality-check, regrows +0.05 per 2 s of stability). */
   private paceMargin: number;
@@ -514,8 +524,12 @@ export class SenderEngine {
     if (queueDepth !== undefined) this.lastAckQueueDepth = queueDepth;
 
     this.tune(index, writeMs, queueDepth);
-    // Wake the pump: the window has slid forward.
+    // Wake the pump: the window has slid forward. This ALSO interrupts the
+    // pace wait — the ACK clock keeps the pump fed even when the browser
+    // throttles its timers (real-phone evidence 2026-10-02: timers >=1 s
+    // late pinned a 40 MB/s path at 0.70 MB/s; ACK events still fired).
     for (const wake of [...this.windowWaiters]) wake();
+    this.wakePaceWaiters();
   }
 
   /**
@@ -714,6 +728,7 @@ export class SenderEngine {
   /** Measured link metrics (for diagnostics — never faked). */
   public get metrics(): {
     rttMs: number; minRttMs: number; window: number; windowBytes: number; chunkSize: number;
+    paceWakeLateMsMax: number; paceWakeLateMsEwma: number; paceWakeLateCount: number;
     throughputBps: number; stalls: number; bufferedAmount: number;
     chunksPerSec: number; acksPerSec: number; sctpMaxMessageSize: number;
     windowHighWaterBytes: number; sustainedBps: number; slowWriteStreak: number;
@@ -791,6 +806,9 @@ export class SenderEngine {
       // ---- v2.6 pacer + ACK-transit forensics (measured) ----
       profile: this.profile,
       paceTargetBps: this.paceTargetBps,
+    paceWakeLateMsMax: this.paceWakeLateMsMax,
+    paceWakeLateMsEwma: this.paceWakeLateMsEwma,
+    paceWakeLateCount: this.paceWakeLateCount,
       paceWaitMsTotal: this.paceWaitMsTotal,
       paceWaitCount: this.paceWaitCount,
       ackTransitMs: this.ackTransitEwmaMs,
@@ -1487,16 +1505,60 @@ export class SenderEngine {
    */
   private refillPace(): void {
     const now = Date.now();
-    const acc = ((now - this.paceTokensAt) / 1000) * this.paceTargetBps;
-    this.paceTokens = Math.min(PACE_BURST_BYTES, this.paceTokens + acc);
+    const elapsedMs = now - this.paceTokensAt;
+    const acc = (elapsedMs / 1000) * this.paceTargetBps;
+    // Late-wake catch-up: when the pump could not run for >PACE_LATE_WAKE_MS
+    // (throttled timers — locked screen / background tab / battery saver),
+    // the standing PACE_BURST_BYTES cap would throw the elapsed budget away
+    // and pin the rate at one burst per wake (the real-phone 0.7 MB/s pin).
+    // Credit then covers the genuinely elapsed budget, bounded so a single
+    // wake can never flood SCTP (the burst-collapse trigger the pacer fixed).
+    const cap =
+      elapsedMs > PACE_LATE_WAKE_MS
+        ? Math.min(PACE_LATE_CATCHUP_BYTES, Math.max(acc, PACE_BURST_BYTES))
+        : PACE_BURST_BYTES;
+    this.paceTokens = Math.min(cap, this.paceTokens + acc);
     this.paceTokensAt = now;
+  }
+
+  /** Wakes every pending pace wait (called on every ACK). */
+  private wakePaceWaiters(): void {
+    if (this.paceWakeResolvers.size === 0) return;
+    for (const fn of [...this.paceWakeResolvers]) fn();
+    this.paceWakeResolvers.clear();
+  }
+
+  /**
+   * Pace wait: resolves on the timer OR on the next ACK (whichever first).
+   * ACK arrival is proof the path is alive and delivering; it re-accrues
+   * credit when pace() resumes, so the pump can send immediately if the
+   * budget covers the chunk — timers become a failsafe, not the clock.
+   */
+  private waitPace(ms: number): Promise<void> {
+    return new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(handle);
+        this.paceWakeResolvers.delete(finish);
+        resolve();
+      };
+      const handle = setTimeout(finish, ms + (senderTestOverrides.paceThrottleMs ?? 0));
+      if (!senderTestOverrides.disablePaceAckWake) this.paceWakeResolvers.add(finish);
+    });
   }
 
   /** Returns the pacing wait in ms (0 when credit covered the chunk). */
   private async pace(bytes: number): Promise<number> {
     if (senderTestOverrides.disablePacer) return 0;
-    this.refillPace();
-    if (this.paceTokens < bytes) {
+    let waitedMs = 0;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      this.refillPace();
+      if (this.paceTokens >= bytes) {
+        this.paceTokens -= bytes;
+        return waitedMs;
+      }
       const deficitMs = ((bytes - this.paceTokens) / this.paceTargetBps) * 1000;
       // Sub-5 ms deficits BORROW instead of sleeping: setTimeout()
       // granularity (+0-4 ms scheduling) would otherwise make tiny gaps
@@ -1505,19 +1567,31 @@ export class SenderEngine {
       // the AVERAGE rate stays exactly on target.
       if (deficitMs <= 5) {
         this.paceTokens -= bytes;
-        return 0;
+        return waitedMs;
       }
+      const intendedMs = Math.ceil(deficitMs);
       const t0 = Date.now();
-      await new Promise((r) => setTimeout(r, Math.ceil(deficitMs)));
+      await this.waitPace(intendedMs);
       const dt = Date.now() - t0;
+      waitedMs += dt;
       this.paceWaitMsTotal += dt;
       this.paceWaitCount++;
-      this.paceTokensAt = Date.now();
-      this.paceTokens = bytes; // waited exactly the deficit — spend it now
-      return dt;
+      // Browser-scheduling-delay telemetry: a wake >50 ms after its
+      // intended time is timer throttling (or event-loop starvation) — the
+      // honest evidence the real-phone report now surfaces directly.
+      const lateMs = dt - intendedMs;
+      if (lateMs > 50) {
+        this.paceWakeLateCount++;
+        this.paceWakeLateMsMax = Math.max(this.paceWakeLateMsMax, lateMs);
+        this.paceWakeLateMsEwma =
+          this.paceWakeLateMsEwma > 0 ? this.paceWakeLateMsEwma * 0.8 + lateMs * 0.2 : lateMs;
+      }
     }
+    // Bounded retries exhausted: >=4 wait cycles of wall time have accrued
+    // (each at target rate), so the credit now provably covers the chunk.
+    this.refillPace();
     this.paceTokens -= bytes;
-    return 0;
+    return waitedMs;
   }
 
   private waitForWindow(): Promise<void> {

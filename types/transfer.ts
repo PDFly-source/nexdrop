@@ -46,6 +46,17 @@ export const PACE_INITIAL_BPS = 8 * 1024 * 1024; // 8 MB/s conservative start
 export const PACE_MIN_BPS = 512 * 1024; // 512 KB/s floor (never stop-and-wait)
 export const PACE_MAX_BPS = 64 * 1024 * 1024; // 64 MB/s cap (above every measured WebRTC goodput)
 export const PACE_BURST_BYTES = 512 * 1024; // bucket credit — small transfers start instantly
+/**
+ * Late-wake catch-up credit cap. When the pump could NOT run for >200 ms
+ * (throttled timers: locked screen / background tab / battery saver),
+ * the standing 512 KB credit pins the rate at one burst per wake — the
+ * measured real-phone pin (0.70 MB/s sustained, 39.85 MB/s bursts, on a
+ * healthy 40 MB/s path). Credit then covers the genuinely elapsed budget
+ * (refill accrual), bounded to 1 MiB (= BUFFER_LOW_WATER) so one wake
+ * can never flood SCTP and re-trigger the burst-collapse the pacer fixed.
+ */
+export const PACE_LATE_CATCHUP_BYTES = 1024 * 1024; // bounded catch-up per late wake
+export const PACE_LATE_WAKE_MS = 200; // elapsed-idle threshold that enables catch-up
 /** Transfer profile: auto (default, measured), turbo (aggressive margins + channel pool), standard (conservative). */
 export type TransferProfile = 'auto' | 'turbo' | 'standard';
 export const INITIAL_WINDOW_BYTES = 1 * 1024 * 1024; // 1 MiB

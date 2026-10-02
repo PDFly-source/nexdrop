@@ -47,6 +47,8 @@ export class PeerConnectionManager {
   private disconnectGraceTimer: ReturnType<typeof setTimeout> | null = null;
   private lastPongAt = 0;
   private fileChunksReceived = 0;
+  /** Last file-chunk arrival time — live payload evidence for state calls. */
+  private lastChunkAt = 0;
 
   constructor(callbacks: PeerCallbacks) {
     this.callbacks = callbacks;
@@ -90,6 +92,23 @@ export class PeerConnectionManager {
 
   public isConnected(): boolean {
     return this.state === 'connected';
+  }
+
+  /**
+   * Live transport evidence: an OPEN file channel (a live SCTP association)
+   * that is actively carrying payload (file chunks) or answering PINGs.
+   * Real-device evidence (2026-10-02): connectionState can report 'failed'
+   * and ICE 'disconnected' as STALE intermediate states while a DataChannel
+   * stays OPEN and the transfer completes at full speed. An open association
+   * carrying bytes IS the ground truth; the aggregate states are derived.
+   * Terminal 'failed' therefore requires the channel to be gone (closed or
+   * idle past the liveness window), never merely a stale aggregate state.
+   */
+  private hasLiveTransport(): boolean {
+    const channelsOpen = this.getOpenFileChannels().length > 0;
+    if (!channelsOpen) return false;
+    const now = Date.now();
+    return now - this.lastChunkAt < 15000 || now - this.lastPongAt < 15000;
   }
 
   private updateState(state: WebRTCConnectionState) {
@@ -173,6 +192,7 @@ export class PeerConnectionManager {
         // TURBO: all parallel file streams feed the same reordering receiver.
         if (data instanceof ArrayBuffer) {
           this.fileChunksReceived++;
+          this.lastChunkAt = Date.now();
           this.callbacks.onFileChunk(data);
         } else {
           console.warn('[nexdrop] file channel dropped non-ArrayBuffer payload:', Object.prototype.toString.call(data));
@@ -246,6 +266,9 @@ export class PeerConnectionManager {
           this.scheduleDisconnectGrace();
           break;
         case 'failed':
+          // Phase 20: an actively-flowing open DataChannel is ground truth —
+          // a stale aggregate 'failed' must not mark a live transfer failed.
+          if (this.hasLiveTransport()) break;
           this.updateState('failed');
           break;
         case 'closed':
@@ -266,6 +289,7 @@ export class PeerConnectionManager {
           this.scheduleDisconnectGrace();
           break;
         case 'failed':
+          if (this.hasLiveTransport()) break; // stale ICE state, live SCTP
           this.updateState('failed');
           break;
         case 'closed':
