@@ -10,7 +10,8 @@ tap_by_text() {
   # The app is a ScrollView: tall states (e.g. Receive with the QR shown)
   # can push buttons off-screen, where uiautomator no longer reports them.
   # Dump, find, tap — and scroll down and retry if the label is not visible.
-  local i
+  local i found=0
+  rm -f /tmp/tap.cmd
   for i in 1 2 3 4 5; do
     adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
     adb pull /sdcard/ui.xml ui.xml >/dev/null
@@ -27,12 +28,18 @@ for m in re.finditer(r'text="([^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]
 sys.exit(1)
 PYEOF
     then
+      found=1
       break
     fi
     echo "  (label '$1' not visible — scrolling down, attempt $i)"
     adb shell input swipe 160 500 160 150 300
     sleep 1
   done
+  if [ "$found" = 0 ]; then
+    echo "SMOKE FAIL: label '$1' never became visible after scrolling"
+    cat ui.xml
+    exit 1
+  fi
   cat /tmp/tap.cmd
   bash /tmp/tap.cmd
   sleep 2
@@ -87,8 +94,8 @@ grep -qi 'receiving' ui.xml || { echo 'SMOKE FAIL: receive QR not ready'; cat ui
 echo 'receive path OK — native receiver bound, no crash'
 
 echo '== 5) Benchmark: scanner opens for the native benchmark path =='
-adb shell input keyevent 4
-sleep 1
+# NOTE: no BACK here — on MainActivity (receive state) BACK backgrounds the
+# app to the launcher; the benchmark button is simply below the fold.
 tap_by_text 'Benchmark NATIVE 358 MB'
 sleep 3
 resumed | grep -q CaptureActivity || { echo 'SMOKE FAIL: benchmark scan did not open'; adb logcat -d > logcat.txt; exit 1; }
