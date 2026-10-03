@@ -47,16 +47,20 @@ class TurboReceiver(
     val ss = ServerSocket(port)
     try { ss.receiveBufferSize = Ndt1Tunables.socketBufferBytes } catch (_: Exception) {}
     server = ss
-    thread(name = "ndt1-receiver") {
-      while (!stopped.get()) {
-        val sock = try { ss.accept() } catch (e: Exception) { break }
-        sock.tcpNoDelay = true
-        try { sock.receiveBufferSize = Ndt1Tunables.socketBufferBytes } catch (_: Exception) {}
-        try { sock.sendBufferSize = Ndt1Tunables.socketBufferBytes } catch (_: Exception) {}
-        handleConnection(sock)
-      }
-    }
+    thread(name = "ndt1-receiver") { acceptLoop(ss) }
     return ss.localPort
+  }
+
+  /** Separate function so break/continue live in normal function scope
+   *  (Kotlin forbids them inside the non-inline thread lambda). */
+  private fun acceptLoop(ss: ServerSocket) {
+    while (!stopped.get()) {
+      val sock = try { ss.accept() } catch (e: Exception) { return }
+      sock.tcpNoDelay = true
+      try { sock.receiveBufferSize = Ndt1Tunables.socketBufferBytes } catch (_: Exception) {}
+      try { sock.sendBufferSize = Ndt1Tunables.socketBufferBytes } catch (_: Exception) {}
+      handleConnection(sock)
+    }
   }
 
   fun stop() {

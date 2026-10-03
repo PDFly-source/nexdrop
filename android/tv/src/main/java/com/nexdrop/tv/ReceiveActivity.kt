@@ -41,7 +41,7 @@ class ReceiveActivity : AppCompatActivity(), TurboReceiver.Listener {
     super.onCreate(savedInstanceState)
     title = TextView(this).apply { text = "NexDrop TV"; textSize = 40f; gravity = Gravity.CENTER }
     body = TextView(this).apply { textSize = 28f; gravity = Gravity.CENTER }
-    qrView = ImageView(this).apply { visibility = View.GONE; setBackgroundColor(Color.WHITE }
+    qrView = ImageView(this).apply { visibility = View.GONE; setBackgroundColor(Color.WHITE) }
     buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
     val accept = Button(this).apply { text = "ACCEPT"; textSize = 28f }
     val decline = Button(this).apply { text = "DECLINE"; textSize = 28f }

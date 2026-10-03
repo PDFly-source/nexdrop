@@ -1,7 +1,5 @@
 package com.nexdrop.ndt1
 
-import android.content.Context
-import android.net.wifi.WifiManager
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -43,7 +41,8 @@ class DiscoveryBeacon(
         try {
           val pkt = DatagramPacket(buf, buf.size)
           sock!!.receive(pkt)
-          val parsed = parseBeacon(buf.copyOf(pkt.length), pkt.address.hostAddress ?: continue)
+          val host = pkt.address.hostAddress ?: return@Thread
+          val parsed = parseBeacon(buf.copyOf(pkt.length), host)
           if (parsed != null && parsed.sessionId != session.sessionId) {
             seen[parsed.sessionId] = parsed
             onPeers(seen.values.toList())

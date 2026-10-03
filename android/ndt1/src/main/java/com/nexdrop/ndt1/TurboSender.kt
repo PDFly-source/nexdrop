@@ -125,26 +125,26 @@ class TurboSender(private val context: Context) {
                 when (f.first) {
                   FrameType.PROGRESS -> durable = decodeOffset(f.second).second
                   FrameType.CREDIT -> {} // window headroom explicit grant
-                  FrameType.CANCEL -> { listener.onError("cancelled by receiver"); return }
+                  FrameType.CANCEL -> { listener.onError("cancelled by receiver"); return@thread }
                   FrameType.PAUSE -> { readUntilResume(decoder, input, readBuf) }
                   else -> {}
                 }
-                continue
-              }
-              val want = minOf(Ndt1Tunables.frameBytes, sizeBytes - sent).toInt()
-              val n = src.read(readBuf, 0, want)
-              if (n <= 0) throw Ndt1Exception("source stream ended early at $sent")
-              // DATA frame: header + {fileId, offset, size, len, bytes}
-              encodeDataFrameInto(frameBuf, fileId, sent, sizeBytes, readBuf, n)
-              out.write(frameBuf, 0, Ndt1.HEADER_SIZE + 24 + n)
-              sent += n
+              } else {
+                val want = minOf(Ndt1Tunables.frameBytes, sizeBytes - sent).toInt()
+                val n = src.read(readBuf, 0, want)
+                if (n <= 0) throw Ndt1Exception("source stream ended early at $sent")
+                // DATA frame: header + {fileId, offset, size, len, bytes}
+                encodeDataFrameInto(frameBuf, fileId, sent, sizeBytes, readBuf, n)
+                out.write(frameBuf, 0, Ndt1.HEADER_SIZE + 24 + n)
+                sent += n
 
-              // sampler + throttled UI (max 10 Hz — never per-chunk)
-              sampler.sample(sent)
-              val now = System.currentTimeMillis()
-              if (now - lastNotify >= 100) {
-                lastNotify = now
-                listener.onProgress(durable, sizeBytes)
+                // sampler + throttled UI (max 10 Hz — never per-chunk)
+                sampler.sample(sent)
+                val now = System.currentTimeMillis()
+                if (now - lastNotify >= 100) {
+                  lastNotify = now
+                  listener.onProgress(durable, sizeBytes)
+                }
               }
             }
           }
@@ -157,12 +157,12 @@ class TurboSender(private val context: Context) {
             when (f.first) {
               FrameType.VERIFY_OK -> {
                 listener.onComplete(shaHex, sampler.stats(sizeBytes - startOffset))
-                return
+                return@thread
               }
               FrameType.VERIFY_FAIL -> {
                 val (_, recvSha) = decodeComplete(f.second)
                 listener.onError("VERIFY_FAIL: receiver sha=$recvSha")
-                return
+                return@thread
               }
               else -> {}
             }

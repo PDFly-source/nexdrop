@@ -218,7 +218,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         BenchFile.generate(cacheDir, f.name, mib.toLong() * 1024 * 1024)
         val session = SessionToken(QrPairing.tokenBytesFrom(pairing), pairing.tokenB64, pairing.sessionId)
         runOnUiThread { beginTransferUi("Sending benchmark…") }
-        TurboSender(this).send(
+        // Keep the reference so the on-screen Pause/Resume/Cancel actually
+        // control the benchmark sender too (not just normal transfers).
+        sender = TurboSender(this)
+        sender?.send(
           Uri.fromFile(f), f.name, f.length(), pairing.ip, pairing.port, session,
           object : TurboSender.Listener {
             override fun onProgress(durable: Long, total: Long) = this@MainActivity.onProgress(durable, total)
