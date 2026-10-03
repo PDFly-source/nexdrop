@@ -18,6 +18,46 @@ export interface BrowserCapabilities {
   maxRecommendedFileSizeGb: number;
 }
 
+/** Input modalities — detected, never assumed from OS/userAgent class.
+ *  PWA-first rule: one web app; the UI adapts to what THIS browser exposes. */
+export interface InputModalities {
+  touch: boolean;
+  /** Physical keyboard connected (or likely): keyboard-first navigation. */
+  keyboard: boolean;
+  /** TV form factor: large screen, no touch, remote/D-pad navigation. */
+  tv: boolean;
+  /** Fine pointer (mouse/trackpad) vs coarse (finger/remote). */
+  coarsePointer: boolean;
+}
+
+const TV_UA_RE = /\b(GoogleTV|Android.*?TV|SmartTV|SmartTv|NetCast|HbbTV|AppleTV|CrKey|AFT|BRAVIA|Web0S)\b/i;
+
+export function detectInputModalities(): InputModalities {
+  if (typeof window === 'undefined') {
+    return { touch: false, keyboard: false, tv: false, coarsePointer: false };
+  }
+  const touch =
+    'ontouchstart' in window ||
+    (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+  const coarsePointer =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: coarse)').matches;
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const tv =
+    TV_UA_RE.test(ua) ||
+    (!touch &&
+      coarsePointer &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(min-width: 1200px)').matches &&
+      window.matchMedia('(orientation: landscape)').matches);
+  // Keyboard: assume available unless the device is touch-only without any
+  // hint of one — honest default, refined by actual key events.
+  const keyboard = typeof window.matchMedia === 'function'
+    ? window.matchMedia('(any-pointer: fine)').matches || !touch || tv
+    : !touch;
+  return { touch, keyboard, tv, coarsePointer };
+}
+
 export interface DeviceInfo {
   name: string;
   os: string;

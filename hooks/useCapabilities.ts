@@ -3,9 +3,11 @@
 import { useSyncExternalStore } from 'react';
 import {
   detectBrowserCapabilities,
+  detectInputModalities,
   getDeviceInfo,
   BrowserCapabilities,
   DeviceInfo,
+  InputModalities,
 } from '@/lib/detection/capabilities';
 
 const DEFAULT_CAPABILITIES: BrowserCapabilities = {
@@ -34,6 +36,8 @@ const DEFAULT_DEVICE_INFO: DeviceInfo = {
 
 const emptySubscribe = () => () => {};
 
+let cachedModalities: InputModalities | null = null;
+
 let cachedCapabilities: BrowserCapabilities | null = null;
 let cachedDeviceInfo: DeviceInfo | null = null;
 
@@ -47,6 +51,22 @@ export function useBrowserCapabilities(): BrowserCapabilities {
       return cachedCapabilities;
     },
     () => DEFAULT_CAPABILITIES
+  );
+}
+
+const DEFAULT_MODALITIES: InputModalities = {
+  touch: false, keyboard: false, tv: false, coarsePointer: false,
+};
+
+/** Detected input modalities — touch/keyboard/TV — never assumed from OS. */
+export function useInputModalities(): InputModalities {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => {
+      if (!cachedModalities) cachedModalities = detectInputModalities();
+      return cachedModalities;
+    },
+    () => DEFAULT_MODALITIES
   );
 }
 

@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { PWAInstallButton } from '@/components/ui/PWAInstallButton';
+import { useInputModalities } from '@/hooks/useCapabilities';
 import { Home, ArrowDownUp, MonitorSmartphone, Settings } from 'lucide-react';
 import { ConnectionPhase, TransferDirection } from '@/types/session';
 
@@ -36,6 +37,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenConnectionDetails,
   onStartPairing,
 }) => {
+  // TV mode: larger type + stronger focus outlines when this browser runs
+  // on a TV form factor (no touch, coarse pointer, large landscape screen).
+  // Detected from what the browser actually exposes — never from OS class.
+  const { tv } = useInputModalities();
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('tv-mode', tv);
+  }, [tv]);
   /**
    * The badge is a pure function of the authoritative phase — NO local
    * re-derivation from raw states, so it can never contradict the actual

@@ -68,6 +68,26 @@ function resetState() {
   telemetry.dataChannelState = null;
 }
 
+// ---- PWA-first capability layer: input modalities (SSR-safe, detected) ----
+{
+  const caps = require('../lib/detection/capabilities') as typeof import('../lib/detection/capabilities');
+  const w = globalThis as any;
+  const prevWin = w.window; const prevNav = w.navigator;
+  // SSR: never touches browser globals (sampler mocks above may have left
+  // a window on globalThis — clear it to prove the SSR path is safe)
+  w.window = undefined;
+  try { Object.defineProperty(w, 'navigator', { value: undefined, configurable: true }); } catch { /* getter-only env: SSR path already proven by w.window */ }
+  const m0 = caps.detectInputModalities();
+  check(m0.touch === false && m0.tv === false && m0.keyboard === false, true, 'SSR: modalities default to false (no browser globals)');
+  // Browser: TV UA string detects TV form factor
+  w.window = { matchMedia: (q: string) => ({ matches: q.includes('coarse') }), navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 9; AFTSSS Build/PTT1.190515.001) SmartTV' } };
+  Object.defineProperty(w, 'navigator', { value: w.window.navigator, configurable: true, writable: true });
+  const m1 = caps.detectInputModalities();
+  check(m1.tv, true, 'Android TV UA (CrKey/AFT/SmartTV) detected as TV form factor');
+  check(m1.touch, false, 'TV form factor: no touch assumed');
+  w.window = prevWin; w.navigator = prevNav;
+}
+
 console.log('[devicetest]');
 
 // --- matrix -----------------------------------------------------------------
