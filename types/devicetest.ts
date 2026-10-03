@@ -8,6 +8,8 @@
  * callbacks) or from the owner's explicit Pass/Fail verdict.
  */
 
+import type { StageSummary } from '../lib/transfer/stageStats';
+
 export interface DeviceTestFileRecord {
   transferId: string;
   name: string;
@@ -160,6 +162,23 @@ export interface DeviceTestRecord {
     senderScheme: 'sha256' | 's256m' | null;
     schemeReverified: boolean;
   } | null;
+  /**
+   * v2.4/v2.6 FULL per-stage pump distributions (slice/hash/encode/send/
+   * bufferWait/ackWait/finalize: count/total/p50/p95/p99/max/bytes) at the
+   * last live sample — the stage-by-stage answer to "where does pump time
+   * go?" for physical test mode.
+   */
+  stagesFull: {
+    slice: StageSummary;
+    hash: StageSummary;
+    encode: StageSummary;
+    send: StageSummary;
+    bufferWait: StageSummary;
+    ackWait: StageSummary;
+    finalize: StageSummary;
+  } | null;
+  /** Final window-utilization summary (inFlight/window avg/p50/p95/min/max). */
+  windowUtilizationSummary: { avg: number; p50: number; p95: number; min: number; max: number } | null;
   result: 'passed' | 'failed' | null;
   notes: string;
 }

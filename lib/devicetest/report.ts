@@ -128,6 +128,15 @@ export function liveCollapseAnalysis(rec: DeviceTestRecord): LiveCollapseAnalysi
 }
 
 /** The Phase-6 layout report for the guided live test. Text only. */
+/** Share of pump wall spent in each measured stage — for stage-timing forensics. */
+function stageShareOfWall(stagesFull: DeviceTestRecord['stagesFull']): string {
+  if (!stagesFull) return '  Share of wall: N/A';
+  const keys = Object.keys(stagesFull) as (keyof typeof stagesFull)[];
+  const wall = keys.reduce((a, k) => a + stagesFull[k].totalMs, 0);
+  const shares = keys.map((k) => `${k} ${((stagesFull[k].totalMs / Math.max(1, wall)) * 100).toFixed(1)}%`).join(' · ');
+  return `  Share of wall: ${shares} (measured total ${Math.round(wall)} ms)`;
+}
+
 export function buildLiveTestReport(rec: DeviceTestRecord, meta: DeviceTestMeta): string {
   const avg = deviceTestAvgBps(rec);
   const duration = deviceTestDurationSeconds(rec);
@@ -202,6 +211,20 @@ export function buildLiveTestReport(rec: DeviceTestRecord, meta: DeviceTestMeta)
     `Iteration wall / idle EWMA: ${rec.pumpIterMs != null ? `${rec.pumpIterMs.toFixed(1)} / ${rec.pumpIdleMs != null ? rec.pumpIdleMs.toFixed(1) : 'N/A'} ms` : 'N/A'}${rec.pumpIdleMsTotal != null ? ` (idle total ${rec.pumpIdleMsTotal.toFixed(0)} ms)` : ''}`,
     `Waits — ACK-window: ${rec.ackWaitMs != null ? `${rec.ackWaitMs.toFixed(0)} ms over ${rec.ackWaitEvents ?? '?'} waits` : 'N/A'}; hash-lag gate: ${rec.hashLagWaitMs != null ? `${rec.hashLagWaitMs.toFixed(0)} ms over ${rec.hashLagEvents ?? '?'} waits` : 'N/A'}`,
     `Flow events — window grow/shrink: ${rec.windowGrowEvents ?? 'N/A'} / ${rec.windowShrinkEvents ?? 'N/A'}; buffer-low waits: ${rec.bufferLowEvents ?? 'N/A'}`,
+    '',
+    'STAGE TIMING (measured per pump stage — where does pump time go?)',
+    ...(rec.stagesFull
+      ? (Object.keys(rec.stagesFull) as (keyof typeof rec.stagesFull)[]).map((k) => {
+          const st = rec.stagesFull![k];
+          return `  ${k.padEnd(10)} p50 ${String(st.p50Ms).padStart(7)} ms · p95 ${String(st.p95Ms).padStart(7)} ms · max ${String(st.maxMs).padStart(7)} ms · total ${String(st.totalMs).padStart(9)} ms (${st.count} samples, ${fmtBytes(st.bytes)})`;
+        })
+      : ['  N/A (v2.4+ sender required)']),
+    stageShareOfWall(rec.stagesFull),
+    `Window utilization (inFlight/window): ${
+      rec.windowUtilizationSummary
+        ? `avg ${(rec.windowUtilizationSummary.avg * 100).toFixed(1)}% · p50 ${(rec.windowUtilizationSummary.p50 * 100).toFixed(1)}% · p95 ${(rec.windowUtilizationSummary.p95 * 100).toFixed(1)}% · min ${(rec.windowUtilizationSummary.min * 100).toFixed(1)}% · max ${(rec.windowUtilizationSummary.max * 100).toFixed(1)}%`
+        : 'N/A (present once the transfer completes)'
+    }`,
     '',
     'RECEIVER',
     `Storage path: ${na(rec.writerType)}`,

@@ -121,6 +121,8 @@ function defaultRecords(): DeviceTestRecord[] {
     bufferLowEvents: null,
     ackWaitEvents: null,
     integrityAudit: null,
+    stagesFull: null,
+    windowUtilizationSummary: null,
   }));
 }
 
@@ -425,6 +427,9 @@ export function sampleDeviceTestNow(): void {
     bufferLowEvents: sender?.bufferLowEvents ?? rec.bufferLowEvents,
     ackWaitEvents: sender?.ackWaitEvents ?? rec.ackWaitEvents,
     integrityAudit: receiver?.integrityAudit ?? rec.integrityAudit,
+    // ---- v2.4/v2.6 full stage distributions + window utilization ----
+    stagesFull: sender?.stagesFull ?? rec.stagesFull,
+    windowUtilizationSummary: sender?.utilizationSummary ?? rec.windowUtilizationSummary,
   };
   updateRecord(rec.caseId, patch, false);
 }

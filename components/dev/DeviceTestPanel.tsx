@@ -20,7 +20,7 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { X, Play, Check, Ban, RotateCcw, ClipboardCopy, Download, FileText, Trash2, Braces, Activity } from 'lucide-react';
 import type { DeviceTestMeta, DeviceTestRecord } from '@/types/devicetest';
-import { DEVICE_TEST_CASES } from '@/lib/devicetest/matrix';
+import { DEVICE_TEST_CASES, GUIDED_CASES, MANUAL_CASES } from '@/lib/devicetest/matrix';
 import { liveCollapseAnalysis, buildLiveTestReport, buildLiveTestJson } from '@/lib/devicetest/report';
 import {
   armTest,
@@ -120,7 +120,8 @@ function getTelemetry() {
 /** ---------------------------------------------------------------------------
  * Guided live test card (case 'live').
  */
-function LiveCard({ record, meta }: { record: DeviceTestRecord; meta: DeviceTestMeta }) {
+function LiveCard({ record, meta, caseDef }: { record: DeviceTestRecord; meta: DeviceTestMeta; caseDef: { id: string; title: string; hint: string } }) {
+  const caseId = caseDef.id;
   const armed = record.armedAt !== null && record.endedAt === null;
   const avg = deviceTestAvgBps(record);
   const duration = deviceTestDurationSeconds(record);
@@ -169,7 +170,7 @@ function LiveCard({ record, meta }: { record: DeviceTestRecord; meta: DeviceTest
     <div className={`rounded-xl border p-3 ${armed ? 'border-nd-teal' : record.result === 'passed' ? 'border-emerald-600/40' : record.result === 'failed' ? 'border-red-500/40' : 'border-white/10'}`}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-nd-text-primary">Guided Two-Device Test — 341.48 MB</p>
+          <p className="text-sm font-semibold text-nd-text-primary">{caseDef.title}</p>
           <p className="text-[11px] text-nd-text-secondary mt-0.5">
             Real-device diagnostics with the production engine. Every recorded value is measured; nothing is simulated.
           </p>
@@ -201,12 +202,12 @@ function LiveCard({ record, meta }: { record: DeviceTestRecord; meta: DeviceTest
         <li>STEP 2 — Device names: fill &quot;Devices &amp; network&quot; above (or tap &quot;Use this device&quot;).</li>
         <li>STEP 3 — Network: note the real path (Wi-Fi / hotspot / cellular) in the Network field.</li>
         <li>STEP 4 — Pair: tap Start Test below, close this screen, then pair both phones with the normal NexDrop QR flow.</li>
-        <li>STEP 5 — Transfer: send the real 341.48 MB file (or any real file — the report records the actual size). Keep this screen open to watch the live readout.</li>
+        <li>STEP 5 — Transfer: <span className="text-nd-text-primary">{caseDef.hint}</span> Keep this screen open to watch the live readout.</li>
       </ol>
 
       <div className="mt-3 flex flex-wrap gap-2 items-center">
         {!armed && !record.result && (
-          <button type="button" onClick={() => armTest('live')} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-nd-teal text-nd-bg-0">
+          <button type="button" onClick={() => armTest(caseId)} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-nd-teal text-nd-bg-0">
             <Play className="w-3 h-3" aria-hidden="true" /> Start Test
           </button>
         )}
@@ -214,20 +215,20 @@ function LiveCard({ record, meta }: { record: DeviceTestRecord; meta: DeviceTest
           <>
             <button
               type="button"
-              onClick={() => markTest('live', 'passed')}
+              onClick={() => markTest(caseId, 'passed')}
               disabled={record.shaVerified === false}
               className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg ${record.shaVerified === false ? 'bg-white/5 text-nd-text-secondary cursor-not-allowed' : 'bg-emerald-600 text-white'}`}
               title={record.shaVerified === false ? 'SHA-256 verification failed — cannot be marked Passed' : 'Record the owner verdict'}
             >
               <Check className="w-3 h-3" aria-hidden="true" /> Mark Passed
             </button>
-            <button type="button" onClick={() => markTest('live', 'failed')} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-500/40 text-red-400">
+            <button type="button" onClick={() => markTest(caseId, 'failed')} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-500/40 text-red-400">
               <Ban className="w-3 h-3" aria-hidden="true" /> Mark Failed
             </button>
           </>
         )}
         {(record.armedAt !== null || record.result) && (
-          <button type="button" onClick={() => resetTest('live')} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-white/10 text-nd-text-secondary">
+          <button type="button" onClick={() => resetTest(caseId)} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-white/10 text-nd-text-secondary">
             <RotateCcw className="w-3 h-3" aria-hidden="true" /> Reset
           </button>
         )}
@@ -285,7 +286,7 @@ function LiveCard({ record, meta }: { record: DeviceTestRecord; meta: DeviceTest
               </button>
               <button
                 type="button"
-                onClick={() => download(buildLiveTestJson(record, meta), `nexdrop-device-test-${new Date().toISOString().slice(0, 10)}.json`, 'application/json')}
+                onClick={() => download(buildLiveTestJson(record, meta), `nexdrop-device-test-${caseId}-${new Date().toISOString().slice(0, 10)}.json`, 'application/json')}
                 className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-white/10 text-nd-text-primary"
               >
                 <Braces className="w-3 h-3" aria-hidden="true" /> Download JSON
@@ -408,8 +409,10 @@ export default function DeviceTestPanel() {
 
   if (!snap.open) return null;
   const { records, meta } = snap;
-  const liveRecord = records.find((r) => r.caseId === 'live');
-  const matrixRecords = records.filter((r) => r.caseId !== 'live');
+  const [guidedId, setGuidedId] = useState('live');
+  const guidedDef = GUIDED_CASES.find((c) => c.id === guidedId) ?? GUIDED_CASES[0];
+  const liveRecord = records.find((r) => r.caseId === guidedDef.id) ?? null;
+  const matrixRecords = records.filter((r) => MANUAL_CASES.some((c) => c.id === r.caseId));
 
   const copyReport = async () => {
     try {
@@ -498,13 +501,31 @@ export default function DeviceTestPanel() {
           </div>
         </section>
 
-        {liveRecord && (
-          <div className="mt-4">
-            <LiveCard record={liveRecord} meta={meta} />
+        <div className="mt-4">
+          <p className="text-xs font-semibold text-nd-text-secondary mb-1">Guided diagnostics — pick a scenario</p>
+          <div className="flex flex-wrap gap-1.5 mb-2" role="tablist" aria-label="Guided test scenarios">
+            {GUIDED_CASES.map((c) => {
+              const r = records.find((x) => x.caseId === c.id);
+              const armed = r && r.armedAt !== null && r.endedAt === null;
+              const done = r?.result === 'passed' ? ' ✓' : r?.result === 'failed' ? ' ✗' : '';
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={c.id === guidedDef.id}
+                  onClick={() => setGuidedId(c.id)}
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border ${armed ? 'border-nd-teal text-nd-teal' : c.id === guidedDef.id ? 'bg-white/10 text-nd-text-primary border-white/20' : 'border-white/10 text-nd-text-secondary hover:text-nd-text-primary'}`}
+                >
+                  {c.id === 'live' ? c.title : c.id.toUpperCase()}{done}
+                </button>
+              );
+            })}
           </div>
-        )}
+          {liveRecord && <LiveCard record={liveRecord} meta={meta} caseDef={guidedDef} />}
+        </div>
 
-        <p className="mt-5 text-xs font-semibold text-nd-text-secondary">Manual validation matrix</p>
+        <p className="mt-5 text-xs font-semibold text-nd-text-secondary">Manual validation matrix (10 cases)</p>
         <div className="mt-1 space-y-3">
           {matrixRecords.map((r) => (
             <CaseCard key={r.caseId} record={r} />

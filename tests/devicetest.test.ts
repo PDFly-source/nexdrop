@@ -24,7 +24,7 @@ import {
   sampleDeviceTestNow,
   setDeviceTestMeta,
 } from '../lib/devicetest/recorder';
-import { DEVICE_TEST_CASES } from '../lib/devicetest/matrix';
+import { DEVICE_TEST_CASES, GUIDED_CASES, MANUAL_CASES } from '../lib/devicetest/matrix';
 import { buildLiveTestJson, buildLiveTestReport, liveCollapseAnalysis, throughputPercentile } from '../lib/devicetest/report';
 import type { TimelineSeries } from '../lib/transfer/timeline';
 
@@ -92,8 +92,9 @@ console.log('[devicetest]');
 
 // --- matrix -----------------------------------------------------------------
 
-check(DEVICE_TEST_CASES.map((c) => c.id), ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', 'live'],
-  'matrix has the ten manual cases plus the guided live test');
+check(DEVICE_TEST_CASES.map((c) => c.id), ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', 'live',
+  'pt-a', 'pt-b', 'pt-c', 'pt-d', 'pt-e', 'pt-1gb', 'pt-chunks'],
+  'matrix has the ten manual cases, the guided live test, and the 7 physical-test-mode cases');
 check(DEVICE_TEST_CASES.map((c) => c.title), [
   'Small file',
   '100 MB file',
@@ -106,8 +107,35 @@ check(DEVICE_TEST_CASES.map((c) => c.title), [
   'QR expiry',
   'Disconnect → Reconnect',
   '341.48 MB Guided Two-Device Test',
+  'TEST A — Android → Android · 358 MB',
+  'TEST B — Android → Windows · 358 MB',
+  'TEST C — Windows → Android · 358 MB',
+  'TEST D — Android → Android TV · 358 MB',
+  'TEST E — Android TV → Android · 358 MB (only if the TV browser can select/send a file)',
+  'TEST F — 1 GB · fastest stable path',
+  'Chunk-size experiment — 128 KiB / 256 KiB / 512 KiB / 1 MiB',
 ], 'case titles match the physical validation spec');
 check(DEVICE_TEST_CASES.every((c) => c.hint.length > 10), true, 'every case carries a real-world instruction');
+
+// --- FINAL PHYSICAL PERFORMANCE TEST MODE (2026-10-03 directive) ------------
+
+check(MANUAL_CASES.length, 10, 'manual matrix is exactly the ten 01-10 cases');
+check(GUIDED_CASES.length, 8, 'guided group: live test + tests A-F + chunk experiment');
+check(GUIDED_CASES.every((c) => ['live', 'pt-a', 'pt-b', 'pt-c', 'pt-d', 'pt-e', 'pt-1gb', 'pt-chunks'].includes(c.id)), true,
+  'guided cases are exactly the physical scenarios the owner must run');
+{
+  const ptA = DEVICE_TEST_CASES.find((c) => c.id === 'pt-a');
+  check(ptA?.hint.includes('358 MB'), true, 'TEST A names the exact 358 MB file size');
+  check(ptA?.hint.includes('same local Wi-Fi') || ptA?.hint.includes('Same local Wi-Fi'), true, 'TEST A requires same local Wi-Fi');
+  const ptE = DEVICE_TEST_CASES.find((c) => c.id === 'pt-e');
+  check(ptE?.hint.includes('ONLY if the TV browser'), true, 'TEST E is explicitly conditional — never faked');
+  check(ptE?.hint.includes('N/A'), true, 'TEST E instructs N/A when the TV cannot send');
+  const pt1gb = DEVICE_TEST_CASES.find((c) => c.id === 'pt-1gb');
+  check(pt1gb?.hint.includes('1 GB'), true, 'TEST F is the 1 GB repeat');
+  const ptChunks = DEVICE_TEST_CASES.find((c) => c.id === 'pt-chunks');
+  check(ptChunks?.hint.includes('128 KiB, 256 KiB, 512 KiB, 1 MiB'), true, 'chunk experiment tests exactly the four directive sizes');
+  check(ptChunks?.hint.includes('never a CI winner'), true, 'chunk experiment forbids hard-coding a CI winner');
+}
 
 // --- recorder: arm + telemetry sampling -------------------------------------
 
@@ -387,6 +415,36 @@ check(report.includes('RECEIVER') && report.includes('INTEGRITY') && report.incl
 check(report.includes('LOCAL_DIRECT'), true, 'live report states the measured path');
 check(report.includes('FIRST'), true, 'live report names the first-changing variable');
 check(report.includes('N/A'), true, 'live report prints N/A for unexposed metrics (honest)');
+check(report.includes('STAGE TIMING'), true, 'live report has the per-stage timing section');
+check(report.includes('Window utilization (inFlight/window)'), true, 'live report prints measured window utilization');
+{
+  // Physical-test-mode record with FULL stage distributions — the stage
+  // table must print p50/p95/max per stage plus an honest share-of-wall.
+  const st = (totalMs: number, p50: number, p95: number, max: number, bytes: number) =>
+    ({ count: 64, ewmaMs: p50, p50Ms: p50, p95Ms: p95, p99Ms: max, maxMs: max, totalMs, bytes });
+  const rec2 = {
+    ...liveRec(),
+    stagesFull: {
+      slice: st(1000, 1, 2, 8, 33554432),
+      hash: st(500, 0.5, 1, 4, 33554432),
+      encode: st(250, 0.25, 0.5, 2, 33554432),
+      send: st(2000, 2, 4, 16, 33554432),
+      bufferWait: st(6000, 6, 12, 40, 0),
+      ackWait: st(8000, 8, 16, 64, 0),
+      finalize: st(50, 0.05, 0.1, 0.4, 0),
+    },
+    windowUtilizationSummary: { avg: 0.42, p50: 0.38, p95: 0.61, min: 0.02, max: 0.9 },
+  };
+  const rep2 = buildLiveTestReport(rec2 as never, getDeviceTestSnapshot().meta);
+  check(rep2.includes('STAGE TIMING (measured per pump stage'), true, 'stage table prints with distributions present');
+  check(rep2.includes('p50'), true && rep2.includes('p95'), 'stage table prints p50/p95 columns');
+  check(rep2.includes('Share of wall'), true, 'stage table prints share-of-wall');
+  check(rep2.includes('ackWait'), true, 'stage table covers ackWait (the directive\u2019s underfeeding question)');
+  check(rep2.includes('42.0%'), true, 'window utilization prints measured avg');
+  const json2 = JSON.parse(buildLiveTestJson(rec2 as never, getDeviceTestSnapshot().meta));
+  check(json2.record.stagesFull.ackWait.maxMs, 64, 'JSON export carries the full stage distributions');
+  check(json2.record.windowUtilizationSummary.p95, 0.61, 'JSON export carries window utilization');
+}
 const json = JSON.parse(buildLiveTestJson(liveRec(), getDeviceTestSnapshot().meta));
 check(json.kind, 'nexdrop-device-test', 'JSON export carries the kind tag');
 check(json.record.caseId, 'live', 'JSON export carries the raw record');
