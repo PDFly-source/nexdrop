@@ -3,7 +3,16 @@ plugins {
   id("org.jetbrains.kotlin.android")
 }
 android {
-  namespace = "com.nexdrop.ndt1.app"
+  // MUST equal the Kotlin package of MainActivity/TransferService
+  // (com.nexdrop.ndt1). The manifest declares components as ".MainActivity";
+  // AGP resolves those names against THIS namespace. With the mismatched
+  // "com.nexdrop.ndt1.app" namespace the merged manifest pointed at a class
+  // that does not exist, and the app crashed instantly on launch:
+  //   java.lang.RuntimeException: Unable to instantiate activity
+  //   ComponentInfo{com.nexdrop.ndt1/com.nexdrop.ndt1.app.MainActivity}:
+  //   java.lang.ClassNotFoundException: com.nexdrop.ndt1.app.MainActivity
+  // (verified in the shipped NexDrop-debug.apk merged manifest).
+  namespace = "com.nexdrop.ndt1"
   compileSdk = 34
   defaultConfig {
     applicationId = "com.nexdrop.ndt1"

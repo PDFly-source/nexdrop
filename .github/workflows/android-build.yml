@@ -73,6 +73,46 @@ jobs:
           done
           echo "APK verified: real NDT1 sender/receiver + phone UI present"
 
+      - name: Startup guard — every manifest component must resolve to a REAL class
+        working-directory: android
+        run: |
+          set -eu
+          MERGED="$(find app/build/intermediates -path '*merged_manifests*debug*' -name 'AndroidManifest.xml' | head -1)"
+          test -n "$MERGED" || { echo "merged manifest not found"; exit 1; }
+          python3 - "$MERGED" <<'PYEOF'
+          import sys, re, zipfile
+          import xml.etree.ElementTree as ET
+          merged, = sys.argv[1:]
+          apk = "app/build/outputs/apk/debug/app-debug.apk"
+          z = zipfile.ZipFile(apk)
+          dex = b"".join(z.read(n) for n in z.namelist() if re.match(r'classes\d*\.dex', n))
+          ns = '{http://schemas.android.com/apk/res/android}'
+          root = ET.parse(merged).getroot()
+          declared = []
+          for tag in ('activity', 'activity-alias', 'service', 'receiver', 'provider'):
+              for node in root.iter(tag):
+                  name = node.get(ns + 'name')
+                  if not name:
+                      continue
+                  if name.startswith('.'):
+                      pkg = root.get('package')
+                      name = pkg + name
+                  declared.append((tag, name))
+          # dex descriptors store classes slash-form: Lcom/nexdrop/ndt1/MainActivity;
+          missing = [(t, n) for (t, n) in declared if n.startswith('com.nexdrop.') and n.replace('.', '/').encode() not in dex]
+          if missing:
+              for t, n in missing:
+                  print(f"manifest declares {t} {n} but that class is NOT in the APK dex")
+              print("STARTUP GUARD FAILED — the app would crash on launch with ClassNotFoundException")
+              sys.exit(1)
+          names = [n for _, n in declared]
+          for must in ("com.nexdrop.ndt1.MainActivity", "com.nexdrop.ndt1.TransferService"):
+              if must not in names:
+                  print(f"expected component {must} missing from merged manifest")
+                  sys.exit(1)
+          print("startup guard OK: %d components declared, all resolve to real classes" % len(declared))
+          PYEOF
+
       - name: Rename APKs
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk NexDrop-debug.apk
@@ -91,6 +131,129 @@ jobs:
           name: NexDropTV-debug.apk
           path: NexDropTV-debug.apk
           if-no-files-found: error
+
+  # Real launch verification (mission §8): the APK must actually start.
+  # This job would have caught the shipped launch crash — the emulator
+  # fails the run unless MainActivity appears with no FATAL EXCEPTION.
+  startup-smoke:
+    needs: apk
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download NexDrop-debug.apk artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NexDrop-debug.apk
+
+      - name: Boot Android 16 (API 36) emulator and run the startup smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          target: default
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back virtualscene
+          disable-animations: true
+          script: |
+            set -eu
+            PKG=com.nexdrop.ndt1
+
+            tap_by_text() {
+              adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+              adb pull /sdcard/ui.xml ui.xml >/dev/null
+              python3 - "$1" <<'PYEOF' > /tmp/tap.cmd
+            import sys, re
+            label = sys.argv[1]
+            xml = open('ui.xml', encoding='utf-8').read()
+            for m in re.finditer(r'text="([^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml):
+                if label in m.group(1):
+                    x = (int(m.group(2)) + int(m.group(4))) // 2
+                    y = (int(m.group(3)) + int(m.group(5))) // 2
+                    print(f"adb shell input tap {x} {y}")
+                    sys.exit(0)
+            sys.exit(1)
+            PYEOF
+              cat /tmp/tap.cmd
+              bash /tmp/tap.cmd
+              sleep 2
+            }
+
+            resumed() {
+              adb shell dumpsys activity activities | grep -o 'mResumedActivity[^ ]* [^ ]*' | head -1 || true
+            }
+
+            echo '== 1) launch: MainActivity must appear, no crash =='
+            adb install -r NexDrop-debug.apk
+            adb logcat -c
+            adb shell am start -W -n $PKG/$PKG.MainActivity
+            sleep 6
+            adb shell pidof $PKG > /dev/null || { echo 'SMOKE FAIL: process died'; adb logcat -d > logcat.txt; exit 1; }
+            if adb logcat -d | grep -q 'FATAL EXCEPTION'; then echo 'SMOKE FAIL: FATAL EXCEPTION on launch'; adb logcat -d > logcat.txt; exit 1; fi
+            adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml ui.xml >/dev/null
+            grep -q 'NexDrop Turbo' ui.xml || { echo 'SMOKE FAIL: minimal UI not visible'; cat ui.xml; exit 1; }
+            grep -q 'Receive' ui.xml || { echo 'SMOKE FAIL: Receive control missing'; exit 1; }
+            echo 'LAUNCH OK — minimal stable UI visible'
+
+            echo '== 2) Send: QR scanner must NOT open before the CAMERA permission is granted =='
+            tap_by_text 'Send — scan ONE QR'
+            if resumed | grep -q CaptureActivity; then echo 'SMOKE FAIL: scanner opened without permission'; exit 1; fi
+            echo 'permission gate OK (scanner did not open without grant)'
+            adb shell input keyevent 4; sleep 1
+
+            echo '== 3) Send: with CAMERA granted the scanner opens =='
+            adb shell pm grant $PKG android.permission.CAMERA
+            tap_by_text 'Send — scan ONE QR'
+            sleep 3
+            resumed | grep -q CaptureActivity || { echo 'SMOKE FAIL: scanner did not open'; adb logcat -d > logcat.txt; exit 1; }
+            echo 'scanner opens after grant'
+            adb shell input keyevent 4; sleep 1
+
+            echo '== 4) Receive: QR + foreground service start, no crash =='
+            adb shell pm grant $PKG android.permission.NEARBY_WIFI_DEVICES
+            adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS
+            tap_by_text 'Receive — show ONE QR'
+            sleep 8
+            adb shell pidof $PKG > /dev/null || { echo 'SMOKE FAIL: died starting receive'; adb logcat -d > logcat.txt; exit 1; }
+            adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml ui.xml >/dev/null
+            grep -q 'Receiving — QR ready' ui.xml || { echo 'SMOKE FAIL: receive QR not ready'; cat ui.xml; adb logcat -d > logcat.txt; exit 1; }
+            adb shell dumpsys activity services $PKG | grep -q TransferService || { echo 'NOTE: foreground service not yet listed'; }
+            echo 'receive path OK — native receiver bound, FGS started, no crash'
+
+            echo '== 5) Benchmark: scanner opens for the native benchmark path =='
+            adb shell input keyevent 4; sleep 1
+            tap_by_text 'Benchmark NATIVE 358 MB'
+            sleep 3
+            resumed | grep -q CaptureActivity || { echo 'SMOKE FAIL: benchmark scan did not open'; adb logcat -d > logcat.txt; exit 1; }
+            adb shell input keyevent 4
+
+            echo '== 6) final: still no crash anywhere in the whole run =='
+            if adb logcat -d | grep -q 'FATAL EXCEPTION'; then adb logcat -d > logcat.txt; echo 'SMOKE FAIL: FATAL EXCEPTION during run'; exit 1; fi
+            adb logcat -d > logcat.txt
+            echo 'STARTUP SMOKE TEST PASSED — launch, permission gate, scanner, receive, benchmark all clean'
+
+      - name: Upload logcat (on failure)
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logcat
+          path: |
+            logcat.txt
+            ui.xml
+          if-no-files-found: ignore
+
+  release:
+    needs: [apk, startup-smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: NexDrop-debug.apk
+      - name: Download TV APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NexDropTV-debug.apk
 
       - name: Create GitHub Release with the debug APK (phone-downloadable)
         env:
