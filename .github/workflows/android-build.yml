@@ -35,9 +35,16 @@ jobs:
       - name: Android SDK (preinstalled; accept licenses)
         working-directory: android
         run: |
+          set -eu
           echo "ANDROID_HOME=$ANDROID_HOME"
-          sdkmanager --version
-          yes | sdkmanager --licenses > /dev/null || true
+          SDKM="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -1 || true)"
+          if [ -n "$SDKM" ] && [ -x "$SDKM" ]; then
+            "$SDKM" --version
+            yes | "$SDKM" --licenses > /dev/null || true
+            echo "licenses accepted via $SDKM"
+          else
+            echo "sdkmanager not found (runner SDK licenses are pre-accepted); continuing"
+          fi
 
       - name: Gradle wrapper sanity (real wrapper, committed in-repo)
         working-directory: android
