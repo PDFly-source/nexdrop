@@ -10,7 +10,7 @@ name: Android Debug APK
 on:
   push:
     branches: ['main']
-    paths: ['android/**', '.github/workflows/android-build.yml']
+    paths: ['android/**', '.github/workflows/android-build.yml', '.github/scripts/android-smoke.sh']
   workflow_dispatch:
 
 permissions:
