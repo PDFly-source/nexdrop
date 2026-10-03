@@ -29,8 +29,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK (accept licenses)
-        uses: android-actions/setup-android@v3
+      # ubuntu-latest ships the Android SDK (with cmdline-tools) already;
+      # the android-actions/setup-android action broke on the runner image
+      # ("Failed to find package 'tools'"), so accept licenses directly.
+      - name: Android SDK (preinstalled; accept licenses)
+        working-directory: android
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          sdkmanager --version
+          yes | sdkmanager --licenses > /dev/null || true
 
       - name: Gradle wrapper sanity (real wrapper, committed in-repo)
         working-directory: android
@@ -52,7 +59,6 @@ jobs:
           test -s "$APK"
           # The real NDT1 classes must be inside the APK
           unzip -o -q "$APK" 'classes*.dex' -d /tmp/apkcheck
-          # dexdump is in build-tools; grep the dex bytes for the class names
           for token in "com/nexdrop/ndt1/TurboSender" "com/nexdrop/ndt1/TurboReceiver" "com/nexdrop/ndt1/MainActivity"; do
             if ! grep -qa "$token" /tmp/apkcheck/classes*.dex; then
               echo "MISSING $token in APK — refusing to upload a fake APK"; exit 1
@@ -85,12 +91,11 @@ jobs:
         run: |
           set -eu
           TAG="nexdrop-android-debug-${GITHUB_SHA::7}"
-          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           if ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
               --title "NexDrop Android debug APK ($GITHUB_SHA)" \
               --notes "Debug APK built from $GITHUB_SHA by GitHub Actions.
-          Install on your phone: download NexDrop-debug.apk → allow 'install unknown apps' → install. Includes the real native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256, 358 MB + 1 GB benchmarks, and the PWA (WebRTC) fallback.
+          Install on your phone: download NexDrop-debug.apk, allow 'install unknown apps', then install. Contains the real native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, 358 MB + 1 GB benchmarks, and the PWA (WebRTC) fallback.
           NexDropTV-debug.apk is the optional receive-only TV client." \
               --prerelease
           fi
