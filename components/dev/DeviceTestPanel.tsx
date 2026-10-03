@@ -406,10 +406,10 @@ export default function DeviceTestPanel() {
   const snap = useSyncExternalStore(subscribeDeviceTest, getDeviceTestSnapshot, getServerDeviceTestSnapshot);
   const [report, setReport] = useState('');
   const [copied, setCopied] = useState(false);
+  const [guidedId, setGuidedId] = useState('live');
 
   if (!snap.open) return null;
   const { records, meta } = snap;
-  const [guidedId, setGuidedId] = useState('live');
   const guidedDef = GUIDED_CASES.find((c) => c.id === guidedId) ?? GUIDED_CASES[0];
   const liveRecord = records.find((r) => r.caseId === guidedDef.id) ?? null;
   const matrixRecords = records.filter((r) => MANUAL_CASES.some((c) => c.id === r.caseId));
