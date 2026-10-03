@@ -144,6 +144,13 @@ jobs:
         with:
           name: NexDrop-debug.apk
 
+      # ubuntu-latest has KVM but the runner user is not in the kvm group
+      # (ProbeKVM: "This user doesn't have permissions to use KVM"), which
+      # forced TCG software emulation — an API 36 image cannot cold-boot
+      # under TCG in the action's default 600 s. Open the device node.
+      - name: Grant KVM access
+        run: sudo chmod 666 /dev/kvm || true
+
       - name: Boot Android 16 (API 36) emulator and run the startup smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -152,6 +159,7 @@ jobs:
           target: default
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back virtualscene
+          emulator-boot-timeout: 1800
           disable-animations: true
           script: |
             set -eu
