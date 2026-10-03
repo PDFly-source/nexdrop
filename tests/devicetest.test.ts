@@ -93,8 +93,9 @@ console.log('[devicetest]');
 // --- matrix -----------------------------------------------------------------
 
 check(DEVICE_TEST_CASES.map((c) => c.id), ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', 'live',
-  'pt-a', 'pt-b', 'pt-c', 'pt-d', 'pt-e', 'pt-1gb', 'pt-chunks'],
-  'matrix has the ten manual cases, the guided live test, and the 7 physical-test-mode cases');
+  'pt-a', 'pt-b', 'pt-c', 'pt-d', 'pt-e', 'pt-1gb', 'pt-chunks',
+  'nb-native-358', 'nb-native-1gb', 'nb-webrtc-358', 'nb-webrtc-1gb'],
+  'matrix has the ten manual cases, the guided live test, the 7 physical-test-mode cases, and the 4 native-vs-WebRTC A/B benchmark cases');
 check(DEVICE_TEST_CASES.map((c) => c.title), [
   'Small file',
   '100 MB file',
@@ -114,14 +115,19 @@ check(DEVICE_TEST_CASES.map((c) => c.title), [
   'TEST E — Android TV → Android · 358 MB (only if the TV browser can select/send a file)',
   'TEST F — 1 GB · fastest stable path',
   'Chunk-size experiment — 128 KiB / 256 KiB / 512 KiB / 1 MiB',
+  'NATIVE-358MB — Android → Android · NDT1 TCP',
+  'NATIVE-1GB — Android → Android · NDT1 TCP',
+  'WEBRTC-358MB — Android → Android · PWA WebRTC',
+  'WEBRTC-1GB — Android → Android · PWA WebRTC',
 ], 'case titles match the physical validation spec');
 check(DEVICE_TEST_CASES.every((c) => c.hint.length > 10), true, 'every case carries a real-world instruction');
 
 // --- FINAL PHYSICAL PERFORMANCE TEST MODE (2026-10-03 directive) ------------
 
 check(MANUAL_CASES.length, 10, 'manual matrix is exactly the ten 01-10 cases');
-check(GUIDED_CASES.length, 8, 'guided group: live test + tests A-F + chunk experiment');
-check(GUIDED_CASES.every((c) => ['live', 'pt-a', 'pt-b', 'pt-c', 'pt-d', 'pt-e', 'pt-1gb', 'pt-chunks'].includes(c.id)), true,
+check(GUIDED_CASES.length, 12, 'guided group: live test + A-F + chunk experiment + 4 native-vs-WebRTC A/B cases');
+check(GUIDED_CASES.every((c) => ['live', 'pt-a', 'pt-b', 'pt-c', 'pt-d', 'pt-e', 'pt-1gb', 'pt-chunks',
+  'nb-native-358', 'nb-native-1gb', 'nb-webrtc-358', 'nb-webrtc-1gb'].includes(c.id)), true,
   'guided cases are exactly the physical scenarios the owner must run');
 {
   const ptA = DEVICE_TEST_CASES.find((c) => c.id === 'pt-a');
@@ -135,6 +141,18 @@ check(GUIDED_CASES.every((c) => ['live', 'pt-a', 'pt-b', 'pt-c', 'pt-d', 'pt-e',
   const ptChunks = DEVICE_TEST_CASES.find((c) => c.id === 'pt-chunks');
   check(ptChunks?.hint.includes('128 KiB, 256 KiB, 512 KiB, 1 MiB'), true, 'chunk experiment tests exactly the four directive sizes');
   check(ptChunks?.hint.includes('never a CI winner'), true, 'chunk experiment forbids hard-coding a CI winner');
+  const nbN = DEVICE_TEST_CASES.find((c) => c.id === 'nb-native-358');
+  const nbN1 = DEVICE_TEST_CASES.find((c) => c.id === 'nb-native-1gb');
+  const nbW = DEVICE_TEST_CASES.find((c) => c.id === 'nb-webrtc-358');
+  const nbW1 = DEVICE_TEST_CASES.find((c) => c.id === 'nb-webrtc-1gb');
+  check(nbN?.hint.includes('NexDrop Turbo companion'), true, 'native benchmark runs in the native companion, not the PWA');
+  check(nbN?.hint.includes('Retransmissions are honest N/A'), true, 'native case declares TCP retransmissions N/A honestly');
+  check(nbW?.hint.includes('SAME phone pair, SAME network, SAME direction'), true, 'WebRTC A/B requires the identical physical setup');
+  check(nbW?.hint.includes('Never mix different devices or networks'), true, 'A/B comparison forbids mixed conditions');
+  check(nbN1?.hint.includes('pause/resume') || nbN1?.hint.includes('pause once'), true, 'NATIVE-1GB requires a mid-transfer pause/resume');
+  check(nbN1?.hint.includes('resume'), true, 'NATIVE-1GB verifies resume-from-durable-offset');
+  check(nbW1?.hint.includes('RELAY') && nbW1?.hint.includes('DIRECT'), true, 'WEBRTC-1GB requires recording the actual direct-vs-relay path');
+  check([nbN, nbN1, nbW, nbW1].every((c) => c && c.hint.length > 10), true, 'all four A/B cases carry real instructions');
 }
 
 // --- recorder: arm + telemetry sampling -------------------------------------

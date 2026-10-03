@@ -86,6 +86,35 @@ export const DEVICE_TEST_CASES: DeviceTestCase[] = [
     title: 'Chunk-size experiment — 128 KiB / 256 KiB / 512 KiB / 1 MiB',
     hint: 'On the SAME device pair and SAME file, run the 358 MB transfer once per chunk size (128 KiB, 256 KiB, 512 KiB, 1 MiB) where the negotiated SCTP maxMessageSize safely allows. Reset between runs and record REAL sustained throughput for each. Keep the configuration that actually performs best on this pair — never a CI winner.',
   },
+  // ---- NATIVE vs WEBRTC A/B BENCHMARK (2026-10-03 speed mission) ----
+  // Same file, same devices, same network, same direction, same storage.
+  // Native runs use the NexDrop Turbo companion (Settings-free: its
+  // Benchmark button); every value comes from its measured run JSON.
+  // NEVER declare a winner before both physical measurements exist.
+  {
+    id: 'nb-native-358',
+    group: 'guided',
+    title: 'NATIVE-358MB — Android → Android · NDT1 TCP',
+    hint: 'Both phones run the NexDrop Turbo companion (native local, not this PWA). Receiver: Receive → ONE QR. Sender: Benchmark NATIVE 358 MB → scan → Accept. Enter the run JSON values: transport, duration, average, sustained, peak-sustained, bytes, SHA-256, socket throughput. Retransmissions are honest N/A (TCP internal). CPU/memory on a physical run: enter the phone-reported values or N/A.',
+  },
+  {
+    id: 'nb-native-1gb',
+    group: 'guided',
+    title: 'NATIVE-1GB — Android → Android · NDT1 TCP',
+    hint: 'Same pair, same network, same direction as NATIVE-358MB, but Benchmark NATIVE 1 GB. Verify memory stays bounded (no OOM), pause/resume once mid-transfer, then cancel once and confirm the part file can resume. Enter the run JSON values and SHA-256 verdict.',
+  },
+  {
+    id: 'nb-webrtc-358',
+    group: 'guided',
+    title: 'WEBRTC-358MB — Android → Android · PWA WebRTC',
+    hint: 'The SAME phone pair, SAME network, SAME direction, SAME 358 MB file — but through the PWA (this app, normal QR flow). Auto-captured: RTT, in-flight, bufferedAmount, ACK latency, stage timing, window utilization, direct-vs-relay, receiver write latency, SHA-256. Compare directly against NATIVE-358MB. Never mix different devices or networks between the two runs.',
+  },
+  {
+    id: 'nb-webrtc-1gb',
+    group: 'guided',
+    title: 'WEBRTC-1GB — Android → Android · PWA WebRTC',
+    hint: 'Same pair and network as NATIVE-1GB, 1 GB file through the PWA. Record duration, average, sustained, peak-sustained, heap/memory peak, receiver durability, SHA-256, and the transport path (must say DIRECT — if it says RELAY, note that: a relay path invalidates the A/B comparison).',
+  },
 ];
 
 export const GUIDED_CASES = DEVICE_TEST_CASES.filter((c) => c.group === 'guided');
