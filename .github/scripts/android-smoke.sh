@@ -26,8 +26,12 @@ PYEOF
   sleep 2
 }
 
+# The resumed-activity grep must be robust across API levels: older releases
+# print mResumedActivity in `dumpsys activity activities`; API 36 puts the
+# foreground component in `dumpsys window` as mCurrentFocus. Report both.
 resumed() {
-  adb shell dumpsys activity activities | grep -o 'mResumedActivity[^ ]* [^ ]*' | head -1 || true
+  adb shell dumpsys window 2>/dev/null | grep -i 'mCurrentFocus' || true
+  adb shell dumpsys activity activities 2>/dev/null | grep -i 'ResumedActivity' || true
 }
 
 echo '== 1) launch: MainActivity must appear, no crash =='
