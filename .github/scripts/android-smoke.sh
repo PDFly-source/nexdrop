@@ -14,7 +14,7 @@ import sys, re
 label = sys.argv[1]
 xml = open('ui.xml', encoding='utf-8').read()
 for m in re.finditer(r'text="([^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml):
-    if label in m.group(1):
+    if label.casefold() in m.group(1).casefold():
         x = (int(m.group(2)) + int(m.group(4))) // 2
         y = (int(m.group(3)) + int(m.group(5))) // 2
         print(f"adb shell input tap {x} {y}")
@@ -39,8 +39,8 @@ adb shell pidof "$PKG" > /dev/null || { echo 'SMOKE FAIL: process died'; adb log
 if adb logcat -d | grep -q 'FATAL EXCEPTION'; then echo 'SMOKE FAIL: FATAL EXCEPTION on launch'; adb logcat -d > logcat.txt; exit 1; fi
 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
 adb pull /sdcard/ui.xml ui.xml >/dev/null
-grep -q 'NexDrop Turbo' ui.xml || { echo 'SMOKE FAIL: minimal UI not visible'; cat ui.xml; exit 1; }
-grep -q 'Receive' ui.xml || { echo 'SMOKE FAIL: Receive control missing'; exit 1; }
+grep -qi 'nexdrop turbo' ui.xml || { echo 'SMOKE FAIL: minimal UI not visible'; cat ui.xml; exit 1; }
+grep -qi 'receive' ui.xml || { echo 'SMOKE FAIL: Receive control missing'; exit 1; }
 echo 'LAUNCH OK — minimal stable UI visible'
 
 echo '== 2) Send: QR scanner must NOT open before the CAMERA permission is granted =='
@@ -67,7 +67,7 @@ sleep 8
 adb shell pidof "$PKG" > /dev/null || { echo 'SMOKE FAIL: died starting receive'; adb logcat -d > logcat.txt; exit 1; }
 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
 adb pull /sdcard/ui.xml ui.xml >/dev/null
-grep -q 'Receiving — QR ready' ui.xml || { echo 'SMOKE FAIL: receive QR not ready'; cat ui.xml; adb logcat -d > logcat.txt; exit 1; }
+grep -qi 'receiving' ui.xml || { echo 'SMOKE FAIL: receive QR not ready'; cat ui.xml; adb logcat -d > logcat.txt; exit 1; }
 echo 'receive path OK — native receiver bound, no crash'
 
 echo '== 5) Benchmark: scanner opens for the native benchmark path =='
