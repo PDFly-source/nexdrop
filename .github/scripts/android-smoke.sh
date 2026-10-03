@@ -7,9 +7,14 @@ set -eu
 PKG=com.nexdrop.ndt1
 
 tap_by_text() {
-  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
-  adb pull /sdcard/ui.xml ui.xml >/dev/null
-  python3 - "$1" <<'PYEOF' > /tmp/tap.cmd
+  # The app is a ScrollView: tall states (e.g. Receive with the QR shown)
+  # can push buttons off-screen, where uiautomator no longer reports them.
+  # Dump, find, tap — and scroll down and retry if the label is not visible.
+  local i
+  for i in 1 2 3 4 5; do
+    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+    adb pull /sdcard/ui.xml ui.xml >/dev/null
+    if python3 - "$1" <<'PYEOF' > /tmp/tap.cmd
 import sys, re
 label = sys.argv[1]
 xml = open('ui.xml', encoding='utf-8').read()
@@ -21,6 +26,13 @@ for m in re.finditer(r'text="([^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]
         sys.exit(0)
 sys.exit(1)
 PYEOF
+    then
+      break
+    fi
+    echo "  (label '$1' not visible — scrolling down, attempt $i)"
+    adb shell input swipe 160 500 160 150 300
+    sleep 1
+  done
   cat /tmp/tap.cmd
   bash /tmp/tap.cmd
   sleep 2
