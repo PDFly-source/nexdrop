@@ -130,7 +130,7 @@ class TurboSender(private val context: Context) {
                   else -> {}
                 }
               } else {
-                val want = minOf(Ndt1Tunables.frameBytes, sizeBytes - sent).toInt()
+                val want = minOf(Ndt1Tunables.frameBytes.toLong(), sizeBytes - sent).toInt()
                 val n = src.read(readBuf, 0, want)
                 if (n <= 0) throw Ndt1Exception("source stream ended early at $sent")
                 // DATA frame: header + {fileId, offset, size, len, bytes}

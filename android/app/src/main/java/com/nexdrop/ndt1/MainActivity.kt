@@ -143,7 +143,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     if (now - lastProgressMs < 250 && durable < total) return
     lastProgressMs = now
     val elapsedS = ((now - transferStart).coerceAtLeast(1)) / 1000.0
-    val pct = if (total > 0) durable * 100 / total else 0
+    val pct = if (total > 0) durable * 100 / total else 0L
     val avgMBps = durable / 1048576.0 / elapsedS
     val eta = if (avgMBps > 0.01) "${"%.0f".format((total - durable) / 1048576.0 / avgMBps)} s" else "—"
     detail.text = "durable ${durable / 1048576} / ${total / 1048576} MiB\n" +

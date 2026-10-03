@@ -145,7 +145,7 @@ class TurboReceiver(
                 synchronized(out) {
                   out.write(encodeHeader(FrameType.PROGRESS, 12) + encodeOffset(offer.fileId, durable))
                   // CREDIT: full window headroom — RAM stays bounded at 8 MiB.
-                  out.write(encodeHeader(FrameType.CREDIT, 16) + encodeOffset(offer.fileId, Ndt1Tunables.windowBytes, Ndt1Tunables.windowBytes))
+                  out.write(encodeHeader(FrameType.CREDIT, 16) + encodeOffset(offer.fileId, Ndt1Tunables.windowBytes.toLong(), Ndt1Tunables.windowBytes))
                 }
                 sampler.sample(durable)
                 val now = System.currentTimeMillis()

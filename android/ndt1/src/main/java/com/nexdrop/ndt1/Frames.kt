@@ -61,7 +61,7 @@ object Ndt1 {
 private val CRC_TABLE = IntArray(256).also { t ->
   for (n in 0..255) {
     var c = n
-    repeat(8) { c = if (c and 1 != 0) (0xedb88320 xor (c ushr 1)) else (c ushr 1) }
+    repeat(8) { c = if (c and 1 != 0) (0xedb88320.toInt() xor (c ushr 1)) else (c ushr 1) }
     t[n] = c
   }
 }

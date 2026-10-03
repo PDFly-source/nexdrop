@@ -37,7 +37,7 @@ object Handshake {
 
   private fun constantTimeEquals(a: ByteArray, b: ByteArray): Boolean {
     var r = a.size xor b.size
-    for (i in a.indices) r = r or (a[i].toInt() xor b.getOrElse(i) { 0 }).toInt()
+    for (i in a.indices) r = r or (a[i].toInt() xor b.getOrElse(i) { 0 }.toInt())
     return r == 0
   }
 
