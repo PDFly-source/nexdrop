@@ -5,6 +5,7 @@ import { Navbar, WorkspaceTab } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Footer } from '@/components/layout/Footer';
 import { HomeWorkspace } from '@/components/home/HomeWorkspace';
+import { navigateToTab, subscribeRouter, getRouterTab, getServerRouterTab } from '@/lib/navigation/routing';
 import { OnboardingOverlay } from '@/components/home/OnboardingOverlay';
 import { TransfersWorkspace } from '@/components/transfers/TransfersWorkspace';
 import { DevicesWorkspace } from '@/components/devices/DevicesWorkspace';
@@ -48,8 +49,11 @@ function NexDropMainContent() {
   // Mounted status to guard against any client-server hydration mismatch
   const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
-  // Active top-level workspace tab
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('home');
+  // Active workspace tab (LAYER 3 — real routing). The URL is the store:
+  // #/home, #/transfers, #/devices, #/settings are deep-linkable and
+  // support browser back/forward. Transitions go through navigateToTab
+  // (pushState + notify); #join= invite links bypass tab routing untouched.
+  const activeTab = useSyncExternalStore(subscribeRouter, getRouterTab, getServerRouterTab);
 
   // Text & Clipboard sheet (re-homed from the old bottom-nav tab)
   const [isClipboardOpen, setIsClipboardOpen] = useState<boolean>(false);
@@ -165,11 +169,11 @@ function NexDropMainContent() {
   const sendFlow = useSendFlow({
     sessionState, sendQueue, addFiles: addFilesToSend, createPairing, disconnect,
   });
-  const openSend = () => { sendFlow.beginSend(); setActiveTab('transfers'); };
+  const openSend = () => { sendFlow.beginSend(); navigateToTab('transfers'); };
   // Home → RECEIVE opens the QR scanner directly (camera permission is
   // only requested when the scanner opens). One tap, zero technical steps.
   const [receiveScanTick, setReceiveScanTick] = useState(0);
-  const openReceive = () => { setActiveTab('devices'); setReceiveScanTick((t) => t + 1); };
+  const openReceive = () => { navigateToTab('devices'); setReceiveScanTick((t) => t + 1); };
 
   // Handle invite links: #join=<pairing code> loads the offer automatically
   useEffect(() => {
@@ -188,10 +192,10 @@ function NexDropMainContent() {
   const prevSessionStateRef = useRef(sessionState);
   useEffect(() => {
     if (prevSessionStateRef.current !== sessionState && PAIRING_STATES.has(sessionState)) {
-      setActiveTab((current) => (current === 'home' ? 'devices' : current));
+      if (activeTab === 'home') navigateToTab('devices');
     }
     prevSessionStateRef.current = sessionState;
-  }, [sessionState]);
+  }, [sessionState, activeTab]);
 
   // A live transfer starting should be visible too — send the user to
   // Transfers so real progress/speed/ETA is on screen (only from Home).
@@ -199,10 +203,10 @@ function NexDropMainContent() {
   const prevHasActiveTransferRef = useRef(hasActiveTransfer);
   useEffect(() => {
     if (hasActiveTransfer && !prevHasActiveTransferRef.current) {
-      setActiveTab((current) => (current === 'home' ? 'transfers' : current));
+      if (activeTab === 'home') navigateToTab('transfers');
     }
     prevHasActiveTransferRef.current = hasActiveTransfer;
-  }, [hasActiveTransfer]);
+  }, [hasActiveTransfer, activeTab]);
 
   return (
     <div className="min-h-screen bg-nd-bg-0 text-nd-text-primary selection:bg-nd-teal/20 selection:text-nd-teal-bright flex flex-col justify-between">
@@ -227,14 +231,14 @@ function NexDropMainContent() {
         {/* Workspace Header */}
         <Navbar
           activeTab={activeTab}
-          onTabChange={(tab) => setActiveTab(tab)}
+          onTabChange={(tab) => navigateToTab(tab)}
           connectionPhase={connectionPhase}
           transferDirection={transferActivity.direction}
           peerName={peerInfo?.name}
           peerPlatform={peerInfo?.platform}
-          onOpenConnectionDetails={() => setActiveTab('devices')}
+          onOpenConnectionDetails={() => navigateToTab('devices')}
           onStartPairing={() => {
-            setActiveTab('devices');
+            navigateToTab('devices');
             createPairing();
           }}
         />
@@ -261,7 +265,7 @@ function NexDropMainContent() {
               onFilesSelected={sendFlow.queueFiles}
               onBeginSend={openSend}
               onOpenText={() => setIsClipboardOpen(true)}
-              onNavigate={(tab) => setActiveTab(tab)}
+              onNavigate={(tab) => navigateToTab(tab)}
               onReceiveScan={openReceive}
             />
           )}
@@ -278,7 +282,7 @@ function NexDropMainContent() {
               incomingFiles={incomingFiles}
               activeTransfer={activeTransfer}
               historyItems={transferHistory}
-              onNavigateHome={() => setActiveTab('home')}
+              onNavigateHome={() => navigateToTab('home')}
               isConnected={isPeerConnected}
               supportsFileSystemAccess={isMounted ? !!capabilities?.fileSystemAccess : false}
               onFilesSelected={sendFlow.queueFiles}
@@ -288,7 +292,7 @@ function NexDropMainContent() {
               onResumeTransfer={resumeActiveTransfer}
               onCancelTransfer={cancelActiveTransfer}
               onClearHistory={clearHistory}
-              onPromptConnect={() => setActiveTab('devices')}
+              onPromptConnect={() => navigateToTab('devices')}
               pairingExpiresAt={pairingExpiresAt}
               onPreviewFile={(file) => setPreviewFile(file)}
             />
@@ -380,14 +384,14 @@ function NexDropMainContent() {
         onSendClipboard={sendClipboardItem}
         onPromptConnect={() => {
           setIsClipboardOpen(false);
-          setActiveTab('devices');
+          navigateToTab('devices');
         }}
       />
 
       {/* Mobile Bottom Navigation */}
       <BottomNav
         activeTab={activeTab}
-        onTabChange={(tab) => setActiveTab(tab)}
+        onTabChange={(tab) => navigateToTab(tab)}
         activeTransferCount={activeTransfer ? 1 : 0}
       />
 
