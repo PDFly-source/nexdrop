@@ -167,6 +167,12 @@ export function useNexDropSession() {
   const [joinRequestInfo, setJoinRequestInfo] = useState<{ deviceName: string; platform: string | null } | null>(null);
   /** JOINER signal mode: the answer build is in flight (one-shot poll guard). */
   const joinerBuildingRef = useRef(false);
+  /** Single-flight guard for the joiner's pollJoin loop (1.2 s interval,
+   *  slow network): an overlapping in-flight poll could resolve AFTER the
+   *  session was consumed/destroyed and return 404, killing a connection
+   *  that had actually opened. One request at a time, and a late 404 must
+   *  never abort an answer that is already in flight. */
+  const joinerPollingRef = useRef(false);
   /** HOST signal mode: request card shown once (notification guard). */
   const joinRequestShownRef = useRef(false);
   const [rttMs, setRttMs] = useState<number | null>(null);
@@ -309,6 +315,7 @@ export function useNexDropSession() {
     setSignalJoinerAccepted(false);
     setJoinRequestInfo(null);
     joinerBuildingRef.current = false;
+    joinerPollingRef.current = false;
     joinRequestShownRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -776,7 +783,8 @@ export function useNexDropSession() {
       const signal = new SignalingClient(pending.endpoint);
       const generation = pairingGenerationRef.current;
       signalPollRef.current = setInterval(async () => {
-        if (joinerBuildingRef.current) return;
+        if (joinerBuildingRef.current || joinerPollingRef.current) return;
+        joinerPollingRef.current = true;
         try {
           const res = await signal.pollJoin(pending.joinToken);
           if (generation !== pairingGenerationRef.current) return;
@@ -791,6 +799,8 @@ export function useNexDropSession() {
           }
           if (res.status === 'host-accepted' && res.offerReady && res.offer) {
             joinerBuildingRef.current = true; // one-shot: build the answer once
+            stopSignalPolling(); // the poll loop's job is done — no late poll may
+                                  // see the consumed session as a fatal 404
             setSessionState('connecting');
             void (async () => {
               try {
@@ -821,12 +831,18 @@ export function useNexDropSession() {
         } catch (err) {
           if (generation !== pairingGenerationRef.current) return;
           if (err instanceof SignalingError && (err.kind === 'expired' || err.kind === 'not-found')) {
+            // A 404/410 that arrives while the answer is already being built
+            // is a straggler response from before the session was consumed —
+            // the connection is opening; it must NOT be treated as fatal.
+            if (joinerBuildingRef.current) return;
             stopSignalPolling();
             setPairingError('expired');
             setSessionState('failed');
             sounds.playError();
           }
           // Transient network errors: keep polling silently until TTL.
+        } finally {
+          joinerPollingRef.current = false;
         }
       }, 1200);
     },
