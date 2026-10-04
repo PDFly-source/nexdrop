@@ -17,4 +17,6 @@
   <color name="ndAmber">#D97706</color>
   <color name="ndRed">#B91C1C</color>
   <color name="ndQrDark">#0B1220</color>
+  <!-- adaptive launcher icon background (was in the pre-mockup colors.xml) -->
+  <color name="ic_launcher_background">#070A10</color>
 </resources>
