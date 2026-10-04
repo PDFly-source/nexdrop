@@ -23,14 +23,41 @@ android {
     versionCode = 2
     versionName = "1.1.0"
   }
+  // Production signing (mission 2026-10-04 signing pipeline): the keystore
+  // and passwords live ONLY in GitHub Actions secrets
+  // (NEXDROP_RELEASE_KEYSTORE_B64 / NEXDROP_KEYSTORE_PASSWORD /
+  // NEXDROP_KEY_PASSWORD) — never in this repository. CI decodes the
+  // keystore to a runner-local file and exports these env vars before
+  // assembleRelease; locally, without the env vars, the build falls back
+  // to unsigned so nothing breaks for engineering builds.
+  signingConfigs {
+    create("release") {
+      val ksFile = System.getenv("NEXDROP_KEYSTORE_FILE")
+      val ksPw = System.getenv("NEXDROP_KEYSTORE_PASSWORD")
+      val keyPw = System.getenv("NEXDROP_KEY_PASSWORD")
+      if (ksFile != null && ksPw != null && keyPw != null) {
+        storeFile = file(ksFile)
+        storePassword = ksPw
+        keyAlias = "nexdrop" // stable production alias
+        keyPassword = keyPw
+        // minSdk 26: v2+v3 are what modern Android verifies; v1 (JAR) adds
+        // bloat and is only needed below API 24.
+        enableV1Signing = false
+        enableV2Signing = true
+        enableV3Signing = true
+      }
+    }
+  }
   buildTypes {
     release {
-      // Unsigned by design: no keystore in CI. CI ships
-      // NexDrop-release-unsigned.apk; the owner runs the one signing step:
-      //   apksigner sign --ks release.keystore NexDrop-release-unsigned.apk
-      // (minify off: no reflection-sensitive code; keeps the APK debuggable
-      //  in stack traces and avoids an unverifiable R8 pass at this stage)
+      // minify off: no reflection-sensitive code; keeps the APK debuggable
+      // in stack traces and avoids an unverifiable R8 pass at this stage
       isMinifyEnabled = false
+      // Sign only when CI provided the keystore via env; otherwise the
+      // artifact stays unsigned (never silently debug-signed).
+      if (System.getenv("NEXDROP_KEYSTORE_FILE") != null) {
+        signingConfig = signingConfigs.getByName("release")
+      }
     }
   }
   compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

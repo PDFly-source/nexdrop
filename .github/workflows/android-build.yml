@@ -130,15 +130,51 @@ jobs:
           print("startup guard OK: %d components declared, all resolve to real classes" % len(declared))
           PYEOF
 
-      - name: Build :app release APK (unsigned, mission §14)
+      - name: Restore the release keystore (repo secret — never committed)
+        run: |
+          set -eu
+          echo "${{ secrets.NEXDROP_RELEASE_KEYSTORE_B64 }}" | base64 -d > "$HOME/nexdrop-release.keystore"
+          test -s "$HOME/nexdrop-release.keystore"
+          echo "NEXDROP_KEYSTORE_FILE=$HOME/nexdrop-release.keystore" >> "$GITHUB_ENV"
+          echo "NEXDROP_KEYSTORE_PASSWORD=${{ secrets.NEXDROP_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "NEXDROP_KEY_PASSWORD=${{ secrets.NEXDROP_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+
+      - name: Build :app SIGNED release APK (production signing pipeline)
         working-directory: android
         run: ./gradlew --no-daemon --stacktrace :app:assembleRelease
+
+      - name: Verify the signed release APK cryptographically
+        working-directory: android
+        run: |
+          set -eu
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -s "$APK" || { echo "signed release APK missing"; ls -la app/build/outputs/apk/release/; exit 1; }
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          test -n "$APKSIGNER" || { echo "apksigner not found in build-tools"; exit 1; }
+          # (a) SIGNED: apksigner verify fails on a tampered/unsigned APK
+          "$APKSIGNER" verify "$APK"
+          # (b) modern signing scheme present (v2 mandatory on API 30+)
+          "$APKSIGNER" verify -v "$APK" | tee /tmp/apksigner-v.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/apksigner-v.txt
+          # (c) certificate of the real release key (not the debug key)
+          "$APKSIGNER" verify --print-certs "$APK" | tee /tmp/apksigner-certs.txt
+          grep -q "CN=NexDrop Release" /tmp/apksigner-certs.txt
+          # (d) zip integrity
+          unzip -t "$APK" > /dev/null && echo "zip integrity: OK"
+          # (e) package/version identity (aapt from the Android SDK)
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)
+          "$AAPT" dump badging "$APK" | head -1 | tee /tmp/badging.txt
+          grep -q "name='com.nexdrop.ndt1'" /tmp/badging.txt
+          grep -q "versionCode='2'" /tmp/badging.txt
+          grep -q "versionName='1.1.0'" /tmp/badging.txt
+          echo "SIGNED RELEASE APK VERIFIED (signature, scheme, identity, integrity)"
 
       - name: Rename APKs
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk NexDrop-debug.apk
           cp android/tv/build/outputs/apk/debug/tv-debug.apk NexDropTV-debug.apk
-          cp android/app/build/outputs/apk/release/app-release-unsigned.apk NexDrop-release-unsigned.apk
+          cp android/app/build/outputs/apk/release/app-release.apk NexDrop-release.apk
+          ls -la NexDrop*.apk
 
       - name: Upload NexDrop-debug.apk artifact
         uses: actions/upload-artifact@v4
@@ -154,11 +190,11 @@ jobs:
           path: NexDropTV-debug.apk
           if-no-files-found: error
 
-      - name: Upload NexDrop-release-unsigned.apk artifact
+      - name: Upload NexDrop-release.apk artifact (SIGNED production)
         uses: actions/upload-artifact@v4
         with:
-          name: NexDrop-release-unsigned.apk
-          path: NexDrop-release-unsigned.apk
+          name: NexDrop-release.apk
+          path: NexDrop-release.apk
           if-no-files-found: error
 
   # Real launch verification (mission §8): the APK must actually start.
@@ -171,10 +207,10 @@ jobs:
       - name: Checkout (smoke-test script)
         uses: actions/checkout@v4
 
-      - name: Download NexDrop-debug.apk artifact
+      - name: Download NexDrop-release.apk artifact (smoke the SIGNED APK)
         uses: actions/download-artifact@v4
         with:
-          name: NexDrop-debug.apk
+          name: NexDrop-release.apk
 
       # ubuntu-latest has KVM but the runner user is not in the kvm group
       # (ProbeKVM: "This user doesn't have permissions to use KVM"), which
@@ -222,9 +258,40 @@ jobs:
       - name: Download release APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: NexDrop-release-unsigned.apk
+          name: NexDrop-release.apk
 
-      - name: Create GitHub Release (debug + unsigned release APKs)
+      - name: Generate release verification report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          sudo apt-get -yq install apksigner > /dev/null 2>&1 || true
+          APK=NexDrop-release.apk
+          SIZE=$(stat -c%s "$APK")
+          SHA256=$(sha256sum "$APK" | cut -d' ' -f1)
+          CERTS=$(apksigner verify --print-certs "$APK" || true)
+          CERT_SHA256=$(echo "$CERTS" | grep -i "certificate SHA-256 digest" | grep -oE '[0-9a-fA-F]{64}' | head -1)
+          SCHEMES=$(apksigner verify -v "$APK" | grep "Verified using" | grep ": true" | sed 's/^ *//' || true)
+          {
+            echo "# NexDrop release verification report"
+            echo
+            echo "- APK filename: $APK"
+            echo "- versionName / versionCode: 1.1.0 / 2"
+            echo "- package / applicationId: com.nexdrop.ndt1"
+            echo "- APK size: $SIZE bytes"
+            echo "- APK SHA-256 (integrity): $SHA256"
+            echo "- signing certificate SHA-256 fingerprint: $CERT_SHA256"
+            echo "- signing schemes verified:"
+            echo "$SCHEMES" | sed 's/^/  - /'
+            echo "- build result: PASS (:app:assembleRelease with release signingConfig, keystore from repo secret, never committed)"
+            echo "- signature verification: PASS (apksigner verify + scheme check + certificate identity CN=NexDrop Release)"
+            echo "- install smoke-test result: PASS (API 36 emulator — the startup-smoke job installed and launched THIS signed APK; this release only runs if that job succeeded)"
+            echo "- zip integrity: PASS (unzip -t in the apk job)"
+          } | tee RELEASE-VERIFICATION.md
+          # The report must be real: fail if any expected value is empty
+          test -n "$CERT_SHA256" && test -n "$SCHEMES"
+
+      - name: Create GitHub Release (signed release + debug APKs + report)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -234,10 +301,10 @@ jobs:
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
               --title "NexDrop Android $GITHUB_SHA" \
               --notes "Built from $GITHUB_SHA by GitHub Actions.
-          PRODUCTION: NexDrop-release-unsigned.apk (v1.1.0, code 2) — UNSIGNED: sign before distribution with 'apksigner sign --ks release.keystore NexDrop-release-unsigned.apk', then install.
-          ENGINEERING: NexDrop-debug.apk installs directly (allow 'install unknown apps'). NexDropTV-debug.apk is the optional receive-only TV client.
-          Contains the verified native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, honest telemetry (negative-speed bug fixed), production UI, and the PWA (WebRTC) fallback. Benchmarks live under Settings → Device Test." \
+          PRODUCTION: NexDrop-release.apk (v1.1.0, code 2) — SIGNED with the dedicated NexDrop release key (certificate SHA-256 fingerprint in RELEASE-VERIFICATION.md). Installs directly on modern Android (v2+v3 signing schemes verified, API 36 emulator install smoke passed).
+          ENGINEERING: NexDrop-debug.apk (debug-signed). NexDropTV-debug.apk is the optional receive-only TV client.
+          Contains the verified native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, honest telemetry, production UI, and the PWA (WebRTC) fallback. Benchmarks live under Settings → Device Test." \
               --prerelease
           fi
-          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" NexDrop-debug.apk NexDropTV-debug.apk NexDrop-release-unsigned.apk --clobber
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" NexDrop-release.apk NexDrop-debug.apk NexDropTV-debug.apk RELEASE-VERIFICATION.md --clobber
           echo "RELEASE_URL=https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"

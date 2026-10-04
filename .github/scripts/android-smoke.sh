@@ -61,7 +61,7 @@ resumed() {
 }
 
 echo '== 1) launch: production HOME must appear, no crash, no debug buttons =='
-adb install -r NexDrop-debug.apk
+adb install -r NexDrop-release.apk  # smoke the SIGNED production artifact
 adb logcat -c
 adb shell am start -W -n "$PKG/$PKG.MainActivity"
 sleep 6
