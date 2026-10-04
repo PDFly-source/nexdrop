@@ -1446,7 +1446,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         completedStats = stats
         hideTransferUi()
         recordHistory(name, stats.averageBps, stats.durationMs, sha256, verified = true)
-        backStack.clear(); screen = Screen.RESULT }
+        backStack.clear(); screen = Screen.RESULT
         render()
         TransferService.stop(this@MainActivity)
       }
@@ -1464,7 +1464,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private fun transferFailed(message: String) {
     hideTransferUi()
     failedMessage = message
-    backStack.clear(); screen = Screen.FAILED }
+    backStack.clear(); screen = Screen.FAILED
     render()
     TransferService.stop(this)
   }
@@ -1483,7 +1483,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     transferStartNanos = System.nanoTime()
     paused = false
     transferGotFirstProgress = false
-    backStack.clear(); screen = Screen.TRANSFER }
+    backStack.clear(); screen = Screen.TRANSFER
     render()
   }
 
@@ -1533,7 +1533,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       currentFile = file
       hideTransferUi()
       recordHistory(file.name, stats.averageBps, stats.durationMs, sha256, verified = true)
-      backStack.clear(); screen = Screen.RESULT }
+      backStack.clear(); screen = Screen.RESULT
       render()
       TransferService.stop(this)
     }
@@ -1587,7 +1587,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
                 completedSha = sha256
                 completedStats = stats
                 currentName = f.name
-                backStack.clear(); screen = Screen.RESULT }
+                backStack.clear(); screen = Screen.RESULT
                 render()
                 TransferService.stop(this@MainActivity)
                 shareRunJson(stats, sha256, f.name) // Device Test only

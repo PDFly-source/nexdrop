@@ -1,0 +1,465 @@
+﻿2026-10-04T14:54:58.2858836Z ##[group]Run ./gradlew --no-daemon --stacktrace :app:assembleDebug
+2026-10-04T14:54:58.2859366Z [36;1m./gradlew --no-daemon --stacktrace :app:assembleDebug[0m
+2026-10-04T14:54:58.2922953Z shell: /usr/bin/bash -e {0}
+2026-10-04T14:54:58.2923235Z env:
+2026-10-04T14:54:58.2923575Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T14:54:58.2924505Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T14:54:58.2924951Z ##[endgroup]
+2026-10-04T14:54:58.9304319Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.7/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-04T14:55:00.0299063Z Daemon will be stopped at the end of the build 
+2026-10-04T14:55:08.3345306Z > Task :app:preBuild UP-TO-DATE
+2026-10-04T14:55:08.3354816Z > Task :app:preDebugBuild UP-TO-DATE
+2026-10-04T14:55:08.4335564Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+2026-10-04T14:55:08.4339312Z > Task :app:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T14:55:08.4364936Z > Task :ndt1:preBuild UP-TO-DATE
+2026-10-04T14:55:08.4392142Z > Task :ndt1:preDebugBuild UP-TO-DATE
+2026-10-04T14:55:08.5315379Z > Task :app:generateDebugResValues
+2026-10-04T14:55:08.5324911Z > Task :ndt1:writeDebugAarMetadata
+2026-10-04T14:55:08.5354933Z > Task :ndt1:generateDebugResValues UP-TO-DATE
+2026-10-04T14:55:12.6302455Z > Task :ndt1:generateDebugResources UP-TO-DATE
+2026-10-04T14:55:12.6344893Z > Task :app:checkDebugAarMetadata
+2026-10-04T14:55:12.6353454Z > Task :ndt1:packageDebugResources UP-TO-DATE
+2026-10-04T14:55:12.7303354Z > Task :app:mapDebugSourceSetPaths
+2026-10-04T14:55:12.7304768Z > Task :app:generateDebugResources
+2026-10-04T14:55:13.5315453Z > Task :app:packageDebugResources
+2026-10-04T14:55:13.6293530Z > Task :app:createDebugCompatibleScreenManifests
+2026-10-04T14:55:13.6329621Z > Task :app:extractDeepLinksDebug
+2026-10-04T14:55:13.6384790Z > Task :ndt1:extractDeepLinksDebug
+2026-10-04T14:55:14.2305060Z > Task :app:parseDebugLocalResources
+2026-10-04T14:55:14.2317773Z > Task :ndt1:processDebugManifest
+2026-10-04T14:55:14.3325028Z > Task :app:mergeDebugResources
+2026-10-04T14:55:14.3374911Z > Task :ndt1:compileDebugLibraryResources
+2026-10-04T14:55:14.5324479Z 
+2026-10-04T14:55:14.5342171Z > Task :app:processDebugMainManifest
+2026-10-04T14:55:14.5355128Z /home/runner/work/nexdrop/nexdrop/android/app/src/main/AndroidManifest.xml Warning:
+2026-10-04T14:55:14.5386106Z 	Namespace 'com.nexdrop.ndt1' is used in multiple modules and/or libraries: AndroidManifest.xml, :ndt1. Please ensure that all modules and libraries have a unique namespace. For more information, See https://developer.android.com/studio/build/configure-app-module#set-namespace
+2026-10-04T14:55:14.6289163Z 
+2026-10-04T14:55:14.6306669Z > Task :app:processDebugManifest
+2026-10-04T14:55:14.6307807Z > Task :ndt1:parseDebugLocalResources UP-TO-DATE
+2026-10-04T14:55:14.6308834Z > Task :app:processDebugManifestForPackage
+2026-10-04T14:55:14.7305329Z > Task :ndt1:generateDebugRFile UP-TO-DATE
+2026-10-04T14:55:15.2289133Z > Task :ndt1:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T14:55:15.3295091Z > Task :ndt1:compileDebugKotlin UP-TO-DATE
+2026-10-04T14:55:15.3334759Z > Task :ndt1:javaPreCompileDebug UP-TO-DATE
+2026-10-04T14:55:15.3335830Z > Task :ndt1:compileDebugJavaWithJavac NO-SOURCE
+2026-10-04T14:55:15.3359135Z > Task :ndt1:bundleLibCompileToJarDebug UP-TO-DATE
+2026-10-04T14:55:15.4295944Z > Task :app:javaPreCompileDebug
+2026-10-04T14:55:15.4297547Z > Task :app:mergeDebugShaders
+2026-10-04T14:55:15.4325769Z > Task :app:compileDebugShaders NO-SOURCE
+2026-10-04T14:55:15.4354594Z > Task :app:generateDebugAssets UP-TO-DATE
+2026-10-04T14:55:15.4374783Z > Task :ndt1:mergeDebugShaders
+2026-10-04T14:55:15.4384771Z > Task :ndt1:compileDebugShaders NO-SOURCE
+2026-10-04T14:55:15.4414734Z > Task :ndt1:generateDebugAssets UP-TO-DATE
+2026-10-04T14:55:15.4432487Z > Task :ndt1:packageDebugAssets
+2026-10-04T14:55:15.5305358Z > Task :app:mergeDebugAssets
+2026-10-04T14:55:15.5345047Z > Task :app:compressDebugAssets
+2026-10-04T14:55:15.5374829Z > Task :ndt1:bundleLibRuntimeToJarDebug UP-TO-DATE
+2026-10-04T14:55:15.5404879Z > Task :app:desugarDebugFileDependencies
+2026-10-04T14:55:15.5434691Z > Task :ndt1:processDebugJavaRes UP-TO-DATE
+2026-10-04T14:55:15.8288077Z > Task :app:processDebugResources
+2026-10-04T14:55:16.3288517Z > Task :app:checkDebugDuplicateClasses
+2026-10-04T14:55:17.7309511Z > Task :app:mergeDebugStartupProfile
+2026-10-04T14:55:46.2305552Z > Task :app:compileDebugKotlin
+2026-10-04T14:55:47.7305086Z > Task :app:mergeExtDexDebug
+2026-10-04T14:55:47.9304515Z 
+2026-10-04T14:55:47.9332054Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1468:5 Expecting a top level declaration
+2026-10-04T14:55:47.9333448Z > Task :app:compileDebugKotlin FAILED
+2026-10-04T14:55:47.9365230Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1468:11 Expecting a top level declaration
+2026-10-04T14:55:47.9375370Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1468:12 Expecting a top level declaration
+2026-10-04T14:55:47.9425324Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1469:5 Expecting a top level declaration
+2026-10-04T14:55:47.9455223Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1469:20 Expecting a top level declaration
+2026-10-04T14:55:47.9477267Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1469:21 Expecting a top level declaration
+2026-10-04T14:55:47.9501709Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1469:25 Expecting a top level declaration
+2026-10-04T14:55:47.9545352Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1469:26 Expecting a top level declaration
+2026-10-04T14:55:47.9575417Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1469:30 Expecting a top level declaration
+2026-10-04T14:55:47.9598808Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1470:3 Expecting a top level declaration
+2026-10-04T14:55:47.9615286Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1487:5 Expecting a top level declaration
+2026-10-04T14:55:47.9656991Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1487:11 Expecting a top level declaration
+2026-10-04T14:55:47.9673904Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1487:12 Expecting a top level declaration
+2026-10-04T14:55:47.9676017Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1488:3 Expecting a top level declaration
+2026-10-04T14:55:47.9678351Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1540:3 Expecting a top level declaration
+2026-10-04T14:55:47.9680270Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1595:15 Expecting member declaration
+2026-10-04T14:55:47.9715240Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1595:16 Expecting member declaration
+2026-10-04T14:55:47.9735152Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1595:17 Expecting member declaration
+2026-10-04T14:55:47.9775311Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1595:23 Expecting member declaration
+2026-10-04T14:55:47.9805192Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1595:24 Expecting member declaration
+2026-10-04T14:55:47.9825047Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1597:108 Expecting ')'
+2026-10-04T14:55:47.9855193Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1598:12 Expecting 'catch' or 'finally'
+2026-10-04T14:55:47.9865848Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1598:12 Unexpected tokens (use ';' to separate expressions on the same line)
+2026-10-04T14:55:47.9882572Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1599:9 Expecting an element
+2026-10-04T14:55:47.9896155Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1600:17 Expecting ')'
+2026-10-04T14:55:47.9925572Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1600:17 Unexpected tokens (use ';' to separate expressions on the same line)
+2026-10-04T14:55:47.9955320Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1604:3 Expecting a top level declaration
+2026-10-04T14:55:47.9985118Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1703:19 Name expected
+2026-10-04T14:55:47.9987207Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1713:1 Expecting a top level declaration
+2026-10-04T14:55:48.0016544Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:85:1 Class 'MainActivity' is not abstract and does not implement abstract member public abstract fun onComplete(file: File, sha256: String, stats: ThroughputSampler.Stats): Unit defined in com.nexdrop.ndt1.TurboReceiver.Listener
+2026-10-04T14:55:48.0045348Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:160:26 Unresolved reference: PREFS
+2026-10-04T14:55:48.0075277Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:160:58 Unresolved reference: KEY_KEEP_AWAKE
+2026-10-04T14:55:48.0105188Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:204:41 Unresolved reference: PREFS
+2026-10-04T14:55:48.0107257Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:204:73 Unresolved reference: KEY_WELCOMED
+2026-10-04T14:55:48.0135162Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:351:28 Unresolved reference: PREFS
+2026-10-04T14:55:48.0165315Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:351:67 Unresolved reference: KEY_WELCOMED
+2026-10-04T14:55:48.0195034Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:591:99 Unresolved reference: REQ_CAMERA
+2026-10-04T14:55:48.0196901Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:632:61 Unresolved reference: REQ_NOTIF
+2026-10-04T14:55:48.0233469Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1147:96 Unresolved reference: REQ_NOTIF
+2026-10-04T14:55:48.0255133Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1244:30 Unresolved reference: PREFS
+2026-10-04T14:55:48.0284273Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1244:69 Unresolved reference: KEY_KEEP_AWAKE
+2026-10-04T14:55:48.0315154Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1248:96 Unresolved reference: REQ_NOTIF
+2026-10-04T14:55:48.0345115Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1311:66 Unresolved reference: PWA_URL
+2026-10-04T14:55:48.0375231Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1313:18 Unresolved reference: PWA_FALLBACK_NOTE
+2026-10-04T14:55:48.0405027Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1376:24 Unresolved reference: PWA_FALLBACK_NOTE
+2026-10-04T14:55:48.0415180Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1415:97 Unresolved reference: REQ_CAMERA
+2026-10-04T14:55:48.0435117Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1432:61 Unresolved reference: REQ_NOTIF
+2026-10-04T14:55:48.0437639Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1440:74 Object is not abstract and does not implement abstract member public abstract fun onError(message: String): Unit defined in com.nexdrop.ndt1.TurboSender.Listener
+2026-10-04T14:55:48.0440125Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1454:95 Unresolved reference: pairing
+2026-10-04T14:55:48.0441680Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1454:109 Unresolved reference: pairing
+2026-10-04T14:55:48.0443125Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1458:25 'this' is not defined in this context
+2026-10-04T14:55:48.0444834Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1459:28 Unresolved reference: currentSize
+2026-10-04T14:55:48.0446569Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1459:48 Unresolved reference: role
+2026-10-04T14:55:48.0448229Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1459:56 Unresolved reference: Role
+2026-10-04T14:55:48.0449938Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1467:5 Unresolved reference: backStack
+2026-10-04T14:55:48.0475047Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1467:24 Unresolved reference: screen
+2026-10-04T14:55:48.0505063Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1467:33 Unresolved reference: Screen
+2026-10-04T14:55:48.0525135Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1474:34 Unresolved reference: sender
+2026-10-04T14:55:48.0565076Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1474:49 Unresolved reference: receiver
+2026-10-04T14:55:48.0595172Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1477:5 Unresolved reference: transferActive
+2026-10-04T14:55:48.0618953Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1478:5 Unresolved reference: applyKeepAwake
+2026-10-04T14:55:48.0641877Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1483:5 Unresolved reference: transferStartNanos
+2026-10-04T14:55:48.0665352Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1484:5 Unresolved reference: paused
+2026-10-04T14:55:48.0667436Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1485:5 Unresolved reference: transferGotFirstProgress
+2026-10-04T14:55:48.0669939Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1486:5 Unresolved reference: backStack
+2026-10-04T14:55:48.0672122Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1486:24 Unresolved reference: screen
+2026-10-04T14:55:48.0674200Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1486:33 Unresolved reference: Screen
+2026-10-04T14:55:48.0676604Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1490:3 Modifier 'override' is not applicable to 'top level function'
+2026-10-04T14:55:48.0678860Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1491:5 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0680764Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1492:11 Unresolved reference: screen
+2026-10-04T14:55:48.0682674Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1492:21 Unresolved reference: Screen
+2026-10-04T14:55:48.0684771Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1493:7 Unresolved reference: currentSize
+2026-10-04T14:55:48.0715032Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1494:43 Unresolved reference: transferStartNanos
+2026-10-04T14:55:48.0716923Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1495:43 Overload resolution ambiguity: 
+2026-10-04T14:55:48.0718210Z public final operator fun div(other: Byte): Long defined in kotlin.Long
+2026-10-04T14:55:48.0719130Z public final operator fun div(other: Double): Double defined in kotlin.Long
+2026-10-04T14:55:48.0720053Z public final operator fun div(other: Float): Float defined in kotlin.Long
+2026-10-04T14:55:48.0720929Z public final operator fun div(other: Int): Long defined in kotlin.Long
+2026-10-04T14:55:48.0721780Z public final operator fun div(other: Long): Long defined in kotlin.Long
+2026-10-04T14:55:48.0722665Z public final operator fun div(other: Short): Long defined in kotlin.Long
+2026-10-04T14:55:48.0724162Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1497:7 Unresolved reference: ring
+2026-10-04T14:55:48.0725863Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1497:13 Variable expected
+2026-10-04T14:55:48.0727570Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1498:7 Unresolved reference: ringPct
+2026-10-04T14:55:48.0729253Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1498:16 Variable expected
+2026-10-04T14:55:48.0730980Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1499:7 Unresolved reference: ringBytes
+2026-10-04T14:55:48.0732702Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1499:18 Variable expected
+2026-10-04T14:55:48.0734727Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1500:7 Unresolved reference: transferGotFirstProgress
+2026-10-04T14:55:48.0736629Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1501:38 Unresolved reference: paused
+2026-10-04T14:55:48.0738407Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1503:7 Unresolved reference: speedView
+2026-10-04T14:55:48.0740107Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1503:18 Variable expected
+2026-10-04T14:55:48.0742170Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1504:7 Unresolved reference: speedUnitView
+2026-10-04T14:55:48.0743900Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1504:22 Variable expected
+2026-10-04T14:55:48.0752614Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1505:7 Unresolved reference: etaView
+2026-10-04T14:55:48.0754424Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1505:16 Variable expected
+2026-10-04T14:55:48.0755983Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1505:27 Unresolved reference: paused
+2026-10-04T14:55:48.0757588Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1507:7 Unresolved reference: currentName
+2026-10-04T14:55:48.0759206Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1507:57 'this' is not defined in this context
+2026-10-04T14:55:48.0760762Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1507:63 Unresolved reference: it
+2026-10-04T14:55:48.0762435Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1512:3 Modifier 'override' is not applicable to 'top level function'
+2026-10-04T14:55:48.0764372Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1514:5 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0765951Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1515:7 Unresolved reference: currentName
+2026-10-04T14:55:48.0767503Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1516:7 Unresolved reference: currentSize
+2026-10-04T14:55:48.0769049Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1517:7 Unresolved reference: onOfferUi
+2026-10-04T14:55:48.0770793Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1517:26 Cannot infer a type for this parameter. Please specify it explicitly.
+2026-10-04T14:55:48.0772692Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1517:61 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0774821Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1517:77 Unresolved reference: render
+2026-10-04T14:55:48.0776788Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1520:19 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0778887Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1520:35 Unresolved reference: transferGotFirstProgress
+2026-10-04T14:55:48.0781008Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1521:10 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0782952Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1521:30 Unresolved reference: screen
+2026-10-04T14:55:48.0784806Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1521:40 Unresolved reference: Screen
+2026-10-04T14:55:48.0786507Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1521:56 Unresolved reference: render
+2026-10-04T14:55:48.0788346Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1525:3 Modifier 'override' is not applicable to 'top level function'
+2026-10-04T14:55:48.0790115Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1526:5 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0791965Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1526:21 Unresolved reference: peerIp
+2026-10-04T14:55:48.0794373Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1529:3 Modifier 'override' is not applicable to 'top level function'
+2026-10-04T14:55:48.0796375Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1530:5 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0798187Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1531:7 Unresolved reference: completedSha
+2026-10-04T14:55:48.0799993Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1532:7 Unresolved reference: completedStats
+2026-10-04T14:55:48.0802113Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1533:7 Unresolved reference: currentFile
+2026-10-04T14:55:48.0803977Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1536:7 Unresolved reference: backStack
+2026-10-04T14:55:48.0805938Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1536:26 Unresolved reference: screen
+2026-10-04T14:55:48.0807889Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1536:35 Unresolved reference: Screen
+2026-10-04T14:55:48.0809793Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1537:7 Unresolved reference: render
+2026-10-04T14:55:48.0811412Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1538:28 'this' is not defined in this context
+2026-10-04T14:55:48.0813323Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1542:3 Modifier 'override' is not applicable to 'top level function'
+2026-10-04T14:55:48.0815438Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1543:5 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0817237Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1548:44 'this' is not defined in this context
+2026-10-04T14:55:48.0819021Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1548:52 Unresolved reference: packageName
+2026-10-04T14:55:48.0820722Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1552:7 Unresolved reference: startActivity
+2026-10-04T14:55:48.0822477Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1563:5 Unresolved reference: benchModeMiB
+2026-10-04T14:55:48.0824392Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1564:97 Unresolved reference: REQ_CAMERA
+2026-10-04T14:55:48.0826103Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1569:18 Unresolved reference: cacheDir
+2026-10-04T14:55:48.0827645Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1570:5 Unresolved reference: role
+2026-10-04T14:55:48.0829316Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1570:12 Unresolved reference: Role
+2026-10-04T14:55:48.0830998Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1571:5 Unresolved reference: currentName
+2026-10-04T14:55:48.0832718Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1572:5 Unresolved reference: currentSize
+2026-10-04T14:55:48.0834836Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1576:28 Unresolved reference: cacheDir
+2026-10-04T14:55:48.0836521Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1578:9 Unresolved reference: peerIp
+2026-10-04T14:55:48.0838490Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1579:9 Unresolved reference: sender
+2026-10-04T14:55:48.0840201Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1579:30 'this' is not defined in this context
+2026-10-04T14:55:48.0841916Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1580:9 Unresolved reference: sender
+2026-10-04T14:55:48.0843612Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1583:71 Unresolved reference: @MainActivity
+2026-10-04T14:55:48.0855245Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1585:15 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0856341Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1587:17 Unresolved reference: completedSha
+2026-10-04T14:55:48.0857367Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1588:17 Unresolved reference: completedStats
+2026-10-04T14:55:48.0858392Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1589:17 Unresolved reference: currentName
+2026-10-04T14:55:48.0859384Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1590:17 Unresolved reference: backStack
+2026-10-04T14:55:48.0860337Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1590:36 Unresolved reference: screen
+2026-10-04T14:55:48.0861273Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1590:45 Unresolved reference: Screen
+2026-10-04T14:55:48.0862213Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1591:17 Unresolved reference: render
+2026-10-04T14:55:48.0863169Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1592:42 Unresolved reference: @MainActivity
+2026-10-04T14:55:48.0864480Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1597:13 Unresolved reference: override
+2026-10-04T14:55:48.0866313Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1597:26 Anonymous functions with names are prohibited
+2026-10-04T14:55:48.0868137Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1597:65 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0869847Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1600:9 Unresolved reference: catch
+2026-10-04T14:55:48.0871480Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1600:16 Unresolved reference: e
+2026-10-04T14:55:48.0873148Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1601:9 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0874961Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1601:40 Unresolved reference: e
+2026-10-04T14:55:48.0876655Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1612:25 'this' is not defined in this context
+2026-10-04T14:55:48.0878399Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1616:9 Unresolved reference: startActivity
+2026-10-04T14:55:48.0880552Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1627:5 Unresolved reference: scanQr
+2026-10-04T14:55:48.0882563Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1645:9 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0884679Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1645:25 Unresolved reference: qrView
+2026-10-04T14:55:48.0886644Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1647:9 Unresolved reference: runOnUiThread
+2026-10-04T14:55:48.0888480Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1659:5 Unresolved reference: contentResolver
+2026-10-04T14:55:48.0890466Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1659:63 Cannot infer a type for this parameter. Please specify it explicitly.
+2026-10-04T14:55:48.0892400Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1661:40 'return' is not allowed here
+2026-10-04T14:55:48.0894411Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1667:5 Unresolved reference: contentResolver
+2026-10-04T14:55:48.0896401Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1667:63 Cannot infer a type for this parameter. Please specify it explicitly.
+2026-10-04T14:55:48.0898341Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1669:58 'return' is not allowed here
+2026-10-04T14:55:48.0900254Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1675:11 Unresolved reference: startActivity
+2026-10-04T14:55:48.0902245Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1675:62 Unresolved reference: PWA_URL
+2026-10-04T14:55:48.0904443Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1681:14 Unresolved reference: getSystemService
+2026-10-04T14:55:48.0906957Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1683:31 Cannot infer a type for this parameter. Please specify it explicitly.
+2026-10-04T14:55:48.0909099Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1686:18 Unresolved reference: hasTransport
+2026-10-04T14:55:48.0910915Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1686:83 Unresolved reference: interfaceName
+2026-10-04T14:55:48.0912799Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1690:76 'this' is not defined in this context
+2026-10-04T14:55:48.0915004Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1691:87 'this' is not defined in this context
+2026-10-04T14:55:48.0916916Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1692:3 Modifier 'override' is not applicable to 'top level function'
+2026-10-04T14:55:48.0918855Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1695:9 Unresolved reference: REQ_CAMERA
+2026-10-04T14:55:48.0920635Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1695:27 Unresolved reference: benchModeMiB
+2026-10-04T14:55:48.0922526Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1695:64 Unresolved reference: benchModeMiB
+2026-10-04T14:55:48.0924607Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1696:15 Unresolved reference: pendingUri
+2026-10-04T14:55:48.0926617Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1696:87 Unresolved reference: screen
+2026-10-04T14:55:48.0928678Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1696:96 Unresolved reference: Screen
+2026-10-04T14:55:48.0930440Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1696:109 Unresolved reference: render
+2026-10-04T14:55:48.0932359Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1701:51 'this' is not defined in this context
+2026-10-04T14:55:48.0935514Z e: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1703:3 Modifier 'companion' is not applicable inside 'file'
+2026-10-04T14:55:50.4344759Z 
+2026-10-04T14:55:50.4394946Z FAILURE: Build failed with an exception.
+2026-10-04T14:55:50.4454390Z 
+2026-10-04T14:55:50.4484752Z 40 actionable tasks: 30 executed, 10 up-to-date
+2026-10-04T14:55:50.4514652Z * What went wrong:
+2026-10-04T14:55:50.4544614Z Execution failed for task ':app:compileDebugKotlin'.
+2026-10-04T14:55:50.4575468Z > A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+2026-10-04T14:55:50.4604699Z    > Compilation error. See log for more details
+2026-10-04T14:55:50.4605349Z 
+2026-10-04T14:55:50.4614981Z * Try:
+2026-10-04T14:55:50.4644854Z > Run with --info or --debug option to get more log output.
+2026-10-04T14:55:50.4668953Z > Run with --scan to get full insights.
+2026-10-04T14:55:50.4674364Z > Get more help at https://help.gradle.org.
+2026-10-04T14:55:50.4675018Z 
+2026-10-04T14:55:50.4675318Z * Exception is:
+2026-10-04T14:55:50.4676345Z org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileDebugKotlin'.
+2026-10-04T14:55:50.4678280Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.lambda$executeIfValid$1(ExecuteActionsTaskExecuter.java:130)
+2026-10-04T14:55:50.4724423Z 	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:282)
+2026-10-04T14:55:50.4767574Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:128)
+2026-10-04T14:55:50.4775626Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:116)
+2026-10-04T14:55:50.4779785Z 	at org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(FinalizePropertiesTaskExecuter.java:46)
+2026-10-04T14:55:50.4781926Z 	at org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(ResolveTaskExecutionModeExecuter.java:51)
+2026-10-04T14:55:50.4784301Z 	at org.gradle.api.internal.tasks.execution.SkipTaskWithNoActionsExecuter.execute(SkipTaskWithNoActionsExecuter.java:57)
+2026-10-04T14:55:50.4786249Z 	at org.gradle.api.internal.tasks.execution.SkipOnlyIfTaskExecuter.execute(SkipOnlyIfTaskExecuter.java:74)
+2026-10-04T14:55:50.4788065Z 	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+2026-10-04T14:55:50.4789890Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(EventFiringTaskExecuter.java:77)
+2026-10-04T14:55:50.4791603Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:55)
+2026-10-04T14:55:50.4793271Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:52)
+2026-10-04T14:55:50.4795424Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:200)
+2026-10-04T14:55:50.4797609Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:195)
+2026-10-04T14:55:50.4799925Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+2026-10-04T14:55:50.4801606Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+2026-10-04T14:55:50.4803565Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:157)
+2026-10-04T14:55:50.4805651Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+2026-10-04T14:55:50.4807506Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+2026-10-04T14:55:50.4810274Z 	at org.gradle.internal.operations.DefaultBuildOperationExecutor.call(DefaultBuildOperationExecutor.java:73)
+2026-10-04T14:55:50.4812050Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter.execute(EventFiringTaskExecuter.java:52)
+2026-10-04T14:55:50.4813632Z 	at org.gradle.execution.plan.LocalTaskNodeExecutor.execute(LocalTaskNodeExecutor.java:42)
+2026-10-04T14:55:50.4815821Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:331)
+2026-10-04T14:55:50.4817878Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:318)
+2026-10-04T14:55:50.4820035Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.lambda$execute$0(DefaultTaskExecutionGraph.java:314)
+2026-10-04T14:55:50.4821951Z 	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:80)
+2026-10-04T14:55:50.4823814Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:314)
+2026-10-04T14:55:50.4826204Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:303)
+2026-10-04T14:55:50.4828124Z 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:463)
+2026-10-04T14:55:50.4829634Z 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:380)
+2026-10-04T14:55:50.4831270Z 	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+2026-10-04T14:55:50.4832810Z 	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+2026-10-04T14:55:50.4835350Z Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+2026-10-04T14:55:50.4837958Z 	at org.gradle.workers.internal.DefaultWorkerExecutor$WorkItemExecution.waitForCompletion(DefaultWorkerExecutor.java:287)
+2026-10-04T14:55:50.4839867Z 	at org.gradle.internal.work.DefaultAsyncWorkTracker.lambda$waitForItemsAndGatherFailures$2(DefaultAsyncWorkTracker.java:130)
+2026-10-04T14:55:50.4841337Z 	at org.gradle.internal.Factories$1.create(Factories.java:31)
+2026-10-04T14:55:50.4842637Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLocks(DefaultWorkerLeaseService.java:336)
+2026-10-04T14:55:50.4844501Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLocks(DefaultWorkerLeaseService.java:319)
+2026-10-04T14:55:50.4846138Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLock(DefaultWorkerLeaseService.java:324)
+2026-10-04T14:55:50.4847959Z 	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:126)
+2026-10-04T14:55:50.4849885Z 	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:92)
+2026-10-04T14:55:50.4851590Z 	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForAll(DefaultAsyncWorkTracker.java:78)
+2026-10-04T14:55:50.4853472Z 	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForCompletion(DefaultAsyncWorkTracker.java:66)
+2026-10-04T14:55:50.4855191Z 	at org.gradle.api.internal.tasks.execution.TaskExecution$3.run(TaskExecution.java:252)
+2026-10-04T14:55:50.4856970Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:29)
+2026-10-04T14:55:50.4858690Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:26)
+2026-10-04T14:55:50.4860410Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+2026-10-04T14:55:50.4862191Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+2026-10-04T14:55:50.4864232Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:157)
+2026-10-04T14:55:50.4866023Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+2026-10-04T14:55:50.4867734Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:47)
+2026-10-04T14:55:50.4869542Z 	at org.gradle.internal.operations.DefaultBuildOperationExecutor.run(DefaultBuildOperationExecutor.java:68)
+2026-10-04T14:55:50.4871163Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeAction(TaskExecution.java:229)
+2026-10-04T14:55:50.4872774Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeActions(TaskExecution.java:212)
+2026-10-04T14:55:50.4874826Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.executeWithPreviousOutputFiles(TaskExecution.java:195)
+2026-10-04T14:55:50.4876586Z 	at org.gradle.api.internal.tasks.execution.TaskExecution.execute(TaskExecution.java:162)
+2026-10-04T14:55:50.4878067Z 	at org.gradle.internal.execution.steps.ExecuteStep.executeInternal(ExecuteStep.java:105)
+2026-10-04T14:55:50.4879497Z 	at org.gradle.internal.execution.steps.ExecuteStep.access$000(ExecuteStep.java:44)
+2026-10-04T14:55:50.4880821Z 	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:59)
+2026-10-04T14:55:50.4882109Z 	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:56)
+2026-10-04T14:55:50.4883892Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:200)
+2026-10-04T14:55:50.4886438Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:195)
+2026-10-04T14:55:50.4888450Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+2026-10-04T14:55:50.4890246Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+2026-10-04T14:55:50.4892033Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:157)
+2026-10-04T14:55:50.4893841Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+2026-10-04T14:55:50.4895838Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+2026-10-04T14:55:50.4897642Z 	at org.gradle.internal.operations.DefaultBuildOperationExecutor.call(DefaultBuildOperationExecutor.java:73)
+2026-10-04T14:55:50.4899277Z 	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:56)
+2026-10-04T14:55:50.4900575Z 	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:44)
+2026-10-04T14:55:50.4902094Z 	at org.gradle.internal.execution.steps.CancelExecutionStep.execute(CancelExecutionStep.java:41)
+2026-10-04T14:55:50.4903777Z 	at org.gradle.internal.execution.steps.TimeoutStep.executeWithoutTimeout(TimeoutStep.java:74)
+2026-10-04T14:55:50.4905480Z 	at org.gradle.internal.execution.steps.TimeoutStep.execute(TimeoutStep.java:55)
+2026-10-04T14:55:50.4906692Z 	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:50)
+2026-10-04T14:55:50.4908298Z 	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:28)
+2026-10-04T14:55:50.4909557Z 	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.execute(RemovePreviousOutputsStep.java:67)
+2026-10-04T14:55:50.4910980Z 	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.execute(RemovePreviousOutputsStep.java:37)
+2026-10-04T14:55:50.4912252Z 	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:61)
+2026-10-04T14:55:50.4913580Z 	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:26)
+2026-10-04T14:55:50.4915298Z 	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:67)
+2026-10-04T14:55:50.4916765Z 	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:45)
+2026-10-04T14:55:50.4918270Z 	at org.gradle.internal.execution.steps.ResolveInputChangesStep.execute(ResolveInputChangesStep.java:40)
+2026-10-04T14:55:50.4919112Z 	at org.gradle.internal.execution.steps.ResolveInputChangesStep.execute(ResolveInputChangesStep.java:29)
+2026-10-04T14:55:50.4920040Z 	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithoutCache(BuildCacheStep.java:189)
+2026-10-04T14:55:50.4921402Z 	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$1(BuildCacheStep.java:75)
+2026-10-04T14:55:50.4922404Z 	at org.gradle.internal.Either$Right.fold(Either.java:175)
+2026-10-04T14:55:50.4923298Z 	at org.gradle.internal.execution.caching.CachingState.fold(CachingState.java:62)
+2026-10-04T14:55:50.4924651Z 	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:73)
+2026-10-04T14:55:50.4925883Z 	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:48)
+2026-10-04T14:55:50.4927331Z 	at org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(StoreExecutionStateStep.java:46)
+2026-10-04T14:55:50.4928837Z 	at org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(StoreExecutionStateStep.java:35)
+2026-10-04T14:55:50.4930353Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.executeBecause(SkipUpToDateStep.java:76)
+2026-10-04T14:55:50.4931781Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.lambda$execute$2(SkipUpToDateStep.java:54)
+2026-10-04T14:55:50.4933153Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:54)
+2026-10-04T14:55:50.4934817Z 	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:36)
+2026-10-04T14:55:50.4936495Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:37)
+2026-10-04T14:55:50.4938573Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:27)
+2026-10-04T14:55:50.4940785Z 	at org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(ResolveIncrementalCachingStateStep.java:49)
+2026-10-04T14:55:50.4942936Z 	at org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(ResolveIncrementalCachingStateStep.java:27)
+2026-10-04T14:55:50.4945217Z 	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:71)
+2026-10-04T14:55:50.4947091Z 	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:39)
+2026-10-04T14:55:50.4948714Z 	at org.gradle.internal.execution.steps.ResolveChangesStep.execute(ResolveChangesStep.java:65)
+2026-10-04T14:55:50.4949539Z 	at org.gradle.internal.execution.steps.ResolveChangesStep.execute(ResolveChangesStep.java:36)
+2026-10-04T14:55:50.4950549Z 	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:106)
+2026-10-04T14:55:50.4952014Z 	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:55)
+2026-10-04T14:55:50.4953710Z 	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.java:64)
+2026-10-04T14:55:50.4956452Z 	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.java:43)
+2026-10-04T14:55:50.4958605Z 	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.executeWithNonEmptySources(AbstractSkipEmptyWorkStep.java:125)
+2026-10-04T14:55:50.4960414Z 	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:61)
+2026-10-04T14:55:50.4962004Z 	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:36)
+2026-10-04T14:55:50.4963781Z 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
+2026-10-04T14:55:50.4966186Z 	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:36)
+2026-10-04T14:55:50.4968076Z 	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:23)
+2026-10-04T14:55:50.4969813Z 	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.execute(HandleStaleOutputsStep.java:75)
+2026-10-04T14:55:50.4971406Z 	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.execute(HandleStaleOutputsStep.java:41)
+2026-10-04T14:55:50.4973121Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$execute$0(AssignMutableWorkspaceStep.java:35)
+2026-10-04T14:55:50.4974990Z 	at org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(TaskExecution.java:289)
+2026-10-04T14:55:50.4976654Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:31)
+2026-10-04T14:55:50.4978399Z 	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:22)
+2026-10-04T14:55:50.4979914Z 	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:40)
+2026-10-04T14:55:50.4981363Z 	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:23)
+2026-10-04T14:55:50.4983153Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.lambda$execute$2(ExecuteWorkBuildOperationFiringStep.java:67)
+2026-10-04T14:55:50.4985727Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:67)
+2026-10-04T14:55:50.4987788Z 	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:39)
+2026-10-04T14:55:50.4989475Z 	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:46)
+2026-10-04T14:55:50.4990766Z 	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:34)
+2026-10-04T14:55:50.4992014Z 	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:48)
+2026-10-04T14:55:50.4993209Z 	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:35)
+2026-10-04T14:55:50.4994878Z 	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:61)
+2026-10-04T14:55:50.4996611Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:127)
+2026-10-04T14:55:50.4998538Z 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:116)
+2026-10-04T14:55:50.5000382Z 	at org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(FinalizePropertiesTaskExecuter.java:46)
+2026-10-04T14:55:50.5002316Z 	at org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(ResolveTaskExecutionModeExecuter.java:51)
+2026-10-04T14:55:50.5009226Z 	at org.gradle.api.internal.tasks.execution.SkipTaskWithNoActionsExecuter.execute(SkipTaskWithNoActionsExecuter.java:57)
+2026-10-04T14:55:50.5011043Z 	at org.gradle.api.internal.tasks.execution.SkipOnlyIfTaskExecuter.execute(SkipOnlyIfTaskExecuter.java:74)
+2026-10-04T14:55:50.5012940Z 	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+2026-10-04T14:55:50.5014992Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(EventFiringTaskExecuter.java:77)
+2026-10-04T14:55:50.5016948Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:55)
+2026-10-04T14:55:50.5018591Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:52)
+2026-10-04T14:55:50.5020383Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:200)
+2026-10-04T14:55:50.5022453Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:195)
+2026-10-04T14:55:50.5024686Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+2026-10-04T14:55:50.5026307Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+2026-10-04T14:55:50.5027943Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:157)
+2026-10-04T14:55:50.5029576Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+2026-10-04T14:55:50.5031161Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+2026-10-04T14:55:50.5032745Z 	at org.gradle.internal.operations.DefaultBuildOperationExecutor.call(DefaultBuildOperationExecutor.java:73)
+2026-10-04T14:55:50.5034618Z 	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter.execute(EventFiringTaskExecuter.java:52)
+2026-10-04T14:55:50.5036004Z 	at org.gradle.execution.plan.LocalTaskNodeExecutor.execute(LocalTaskNodeExecutor.java:42)
+2026-10-04T14:55:50.5037630Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:331)
+2026-10-04T14:55:50.5039587Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:318)
+2026-10-04T14:55:50.5041696Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.lambda$execute$0(DefaultTaskExecutionGraph.java:314)
+2026-10-04T14:55:50.5043568Z 	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:80)
+2026-10-04T14:55:50.5045684Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:314)
+2026-10-04T14:55:50.5047890Z 	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:303)
+2026-10-04T14:55:50.5049672Z 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:463)
+2026-10-04T14:55:50.5051109Z 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:380)
+2026-10-04T14:55:50.5052567Z 	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+2026-10-04T14:55:50.5054286Z 	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+2026-10-04T14:55:50.5055963Z Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
+2026-10-04T14:55:50.5057563Z 	at org.jetbrains.kotlin.gradle.tasks.TasksUtilsKt.throwExceptionIfCompilationFailed(tasksUtils.kt:20)
+2026-10-04T14:55:50.5059122Z 	at org.jetbrains.kotlin.compilerRunner.GradleKotlinCompilerWork.run(GradleKotlinCompilerWork.kt:141)
+2026-10-04T14:55:50.5061644Z 	at org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction.execute(GradleCompilerRunnerWithWorkers.kt:73)
+2026-10-04T14:55:50.5063660Z 	at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:63)
+2026-10-04T14:55:50.5065332Z 	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:66)
+2026-10-04T14:55:50.5066740Z 	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:62)
+2026-10-04T14:55:50.5068155Z 	at org.gradle.internal.classloader.ClassLoaderUtils.executeInClassloader(ClassLoaderUtils.java:100)
+2026-10-04T14:55:50.5069590Z 	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.lambda$execute$0(NoIsolationWorkerFactory.java:62)
+2026-10-04T14:55:50.5085124Z 	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:44)
+2026-10-04T14:55:50.5086265Z 	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:41)
+2026-10-04T14:55:50.5087694Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:200)
+2026-10-04T14:55:50.5089642Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:195)
+2026-10-04T14:55:50.5091470Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+2026-10-04T14:55:50.5093012Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+2026-10-04T14:55:50.5094877Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:157)
+2026-10-04T14:55:50.5095888Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+2026-10-04T14:55:50.5096741Z 	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+2026-10-04T14:55:50.5097619Z 	at org.gradle.internal.operations.DefaultBuildOperationExecutor.call(DefaultBuildOperationExecutor.java:73)
+2026-10-04T14:55:50.5098490Z 	at org.gradle.workers.internal.AbstractWorker.executeWrappedInBuildOperation(AbstractWorker.java:41)
+2026-10-04T14:55:50.5099269Z 	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.execute(NoIsolationWorkerFactory.java:59)
+2026-10-04T14:55:50.5100034Z 	at org.gradle.workers.internal.DefaultWorkerExecutor.lambda$submitWork$0(DefaultWorkerExecutor.java:174)
+2026-10-04T14:55:50.5100940Z 	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runExecution(DefaultConditionalExecutionQueue.java:187)
+2026-10-04T14:55:50.5101956Z 	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.access$700(DefaultConditionalExecutionQueue.java:120)
+2026-10-04T14:55:50.5102933Z 	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner$1.run(DefaultConditionalExecutionQueue.java:162)
+2026-10-04T14:55:50.5103636Z 	at org.gradle.internal.Factories$1.create(Factories.java:31)
+2026-10-04T14:55:50.5104890Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:264)
+2026-10-04T14:55:50.5106450Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:128)
+2026-10-04T14:55:50.5107956Z 	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:133)
+2026-10-04T14:55:50.5108905Z 	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runBatch(DefaultConditionalExecutionQueue.java:157)
+2026-10-04T14:55:50.5109876Z 	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.run(DefaultConditionalExecutionQueue.java:126)
+2026-10-04T14:55:50.5110484Z 	... 2 more
+2026-10-04T14:55:50.5110603Z 
+2026-10-04T14:55:50.5110609Z 
+2026-10-04T14:55:50.5110899Z BUILD FAILED in 52s
+2026-10-04T14:55:50.9693460Z ##[error]Process completed with exit code 1.

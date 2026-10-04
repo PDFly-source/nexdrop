@@ -1,0 +1,33 @@
+﻿2026-10-04T14:53:17.4936898Z Current runner version: '2.337.0'
+2026-10-04T14:53:17.4962475Z ##[group]Runner Image Provisioner
+2026-10-04T14:53:17.4963420Z Hosted Compute Agent
+2026-10-04T14:53:17.4964340Z Version: 20260901.588
+2026-10-04T14:53:17.4965065Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-04T14:53:17.4965893Z Build Date: 2026-09-01T19:56:44Z
+2026-10-04T14:53:17.4966672Z Worker ID: {27f332ef-7d00-4c1a-a9eb-7f35d6cf925c}
+2026-10-04T14:53:17.4967461Z Azure Region: westus
+2026-10-04T14:53:17.4968130Z ##[endgroup]
+2026-10-04T14:53:17.4969590Z ##[group]Operating System
+2026-10-04T14:53:17.4970324Z Ubuntu
+2026-10-04T14:53:17.4970920Z 24.04.5
+2026-10-04T14:53:17.4971484Z LTS
+2026-10-04T14:53:17.4972101Z ##[endgroup]
+2026-10-04T14:53:17.4972665Z ##[group]Runner Image
+2026-10-04T14:53:17.4973315Z Image: ubuntu-24.04
+2026-10-04T14:53:17.4973948Z Version: 20260927.320.1
+2026-10-04T14:53:17.4975465Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-04T14:53:17.4977363Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+2026-10-04T14:53:17.4978488Z ##[endgroup]
+2026-10-04T14:53:17.4979627Z ##[group]GITHUB_TOKEN Permissions
+2026-10-04T14:53:17.4981529Z Contents: write
+2026-10-04T14:53:17.4982226Z Metadata: read
+2026-10-04T14:53:17.4982895Z ##[endgroup]
+2026-10-04T14:53:17.4985383Z Secret source: Actions
+2026-10-04T14:53:17.4986466Z Cache mode: write
+2026-10-04T14:53:17.4987232Z Prepare workflow directory
+2026-10-04T14:53:17.5322018Z Prepare all required actions
+2026-10-04T14:53:17.5372078Z Getting action download info
+2026-10-04T14:53:17.9072460Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-04T14:53:18.0291656Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
+2026-10-04T14:53:18.5068080Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-04T14:53:18.7372457Z Complete job name: apk
