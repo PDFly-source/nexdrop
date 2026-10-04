@@ -130,10 +130,18 @@ if has_nav:
     if not tabs:
         print("NAV MISSING: no bottom-nav tab labels on a tab screen")
         sys.exit(1)
-    nav_top = min(b[1] for b in tabs)
-    straddle = [b for b in bounds if b[1] < nav_top < b[3]]
-    if straddle:
-        print(f"NAV OVERLAP: {len(straddle)} nodes straddle the nav top edge {nav_top}, e.g. {straddle[:3]}")
+    # nav rect = union of the tab labels; content must not intrude INTO it.
+    nav = (min(b[0] for b in tabs), min(b[1] for b in tabs),
+           max(b[2] for b in tabs), max(b[3] for b in tabs))
+    def inside(b):  return b[0] >= nav[0] and b[1] >= nav[1] and b[2] <= nav[2] and b[3] <= nav[3]
+    def contains(b): return b[0] <= nav[0] and b[1] <= nav[1] and b[2] >= nav[2] and b[3] >= nav[3]
+    def intrudes(b):
+        ix = min(b[2], nav[2]) - max(b[0], nav[0])
+        iy = min(b[3], nav[3]) - max(b[1], nav[1])
+        return ix > 2 and iy > 2
+    bad = [b for b in bounds if intrudes(b) and not inside(b) and not contains(b)]
+    if bad:
+        print(f"NAV OVERLAP: {len(bad)} content nodes intrude into the nav rect {nav}, e.g. {bad[:3]}")
         sys.exit(1)
 print(f"LAYOUT OK: {len(bounds)} nodes within screen, nav clean" if has_nav else f"LAYOUT OK: {len(bounds)} nodes within screen")
 PYA
