@@ -265,8 +265,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          sudo apt-get -yq install apksigner > /dev/null 2>&1 || true
+          sudo apt-get -yq install apksigner aapt > /dev/null 2>&1 || true
+          command -v aapt >/dev/null || { echo "aapt unavailable"; exit 1; }
           APK=NexDrop-release.apk
+          # Real version from the APK itself — never hardcode
+          BADGE=$(aapt dump badging "$APK" 2>/dev/null | head -1)
+          VNAME=$(echo "$BADGE" | grep -oE "versionName='[^']+'" | cut -d"'" -f2)
+          VCODE=$(echo "$BADGE" | grep -oE "versionCode='[0-9]+'" | cut -d"'" -f2)
+          test -n "$VNAME" && test -n "$VCODE"
           SIZE=$(stat -c%s "$APK")
           SHA256=$(sha256sum "$APK" | cut -d' ' -f1)
           CERTS=$(apksigner verify --print-certs "$APK" || true)
@@ -276,7 +282,7 @@ jobs:
             echo "# NexDrop release verification report"
             echo
             echo "- APK filename: $APK"
-            echo "- versionName / versionCode: 1.2.0 / 3"
+            echo "- versionName / versionCode: $VNAME / $VCODE"
             echo "- package / applicationId: com.nexdrop.ndt1"
             echo "- APK size: $SIZE bytes"
             echo "- APK SHA-256 (integrity): $SHA256"
@@ -296,12 +302,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
+          sudo apt-get -yq install aapt > /dev/null 2>&1 || true
+          command -v aapt >/dev/null || { echo "aapt unavailable"; exit 1; }
           TAG="nexdrop-android-v${GITHUB_SHA::7}"
+          BADGE=$(aapt dump badging NexDrop-release.apk 2>/dev/null | head -1)
+          VNAME=$(echo "$BADGE" | grep -oE "versionName='[^']+'" | cut -d"'" -f2)
+          VCODE=$(echo "$BADGE" | grep -oE "versionCode='[0-9]+'" | cut -d"'" -f2)
+          test -n "$VNAME" && test -n "$VCODE"
           if ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
               --title "NexDrop Android $GITHUB_SHA" \
               --notes "Built from $GITHUB_SHA by GitHub Actions.
-          PRODUCTION: NexDrop-release.apk (v1.1.0, code 2) — SIGNED with the dedicated NexDrop release key (certificate SHA-256 fingerprint in RELEASE-VERIFICATION.md). Installs directly on modern Android (v2+v3 signing schemes verified, API 36 emulator install smoke passed).
+          PRODUCTION: NexDrop-release.apk (v$VNAME, code $VCODE) — SIGNED with the dedicated NexDrop release key (certificate SHA-256 fingerprint in RELEASE-VERIFICATION.md). Installs directly on modern Android (v2+v3 signing schemes verified, API 36 emulator install smoke passed).
           ENGINEERING: NexDrop-debug.apk (debug-signed). NexDropTV-debug.apk is the optional receive-only TV client.
           Contains the verified native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, honest telemetry, production UI, and the PWA (WebRTC) fallback. Benchmarks live under Settings → Device Test." \
               --prerelease
