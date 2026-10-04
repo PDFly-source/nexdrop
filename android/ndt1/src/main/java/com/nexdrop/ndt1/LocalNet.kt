@@ -24,7 +24,8 @@ import java.net.NetworkInterface
  *       192.168.0.0/16 > 10.0.0.0/8 > 172.16.0.0/12 (tie-break preference)
  *  2. Never loopback, never link-local 169.254/16, never public.
  *  3. Interface must be a real local network interface:
- *       Wi-Fi (wlan*/swlan*), hotspot AP (ap*/softap*), or ethernet (eth*).
+ *       Wi-Fi (wlan0/swlan0 family), hotspot AP (ap/softap family),
+ *       or ethernet (eth family).
  *     rmnet/ccmni (carrier), tun/tap (VPN), p2p (Wi-Fi Direct), usb, dummy
  *     are rejected outright.
  *  4. The ACTIVE Wi-Fi network's interface (ConnectivityManager
