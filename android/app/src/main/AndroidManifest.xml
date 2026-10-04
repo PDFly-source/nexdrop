@@ -1,20 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- Permission audit (mission 2026-10-04 §15) — minimum set, each justified:
+       INTERNET                 local TCP sockets (no network data leaves the device)
+       ACCESS_NETWORK_STATE     ConnectivityManager/NetworkCapabilities endpoint selection
+       FOREGROUND_SERVICE(_DATA_SYNC)  long transfers survive screen-off
+       POST_NOTIFICATIONS      transfer progress notification (runtime-gated, 13+)
+       CAMERA                   ONE-QR scanner (runtime-gated, only on SEND)
+       REMOVED: NEARBY_WIFI_DEVICES (no Wi-Fi Direct API used), ACCESS_WIFI_STATE,
+       CHANGE_WIFI_MULTICAST_STATE (beacon unused by the app path), location,
+       bluetooth, microphone, contacts, storage (scoped APIs only). -->
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-  <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-  <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-  <!-- Requested only when the user taps Send/Scan (mission §8: no unnecessary permissions) -->
   <uses-permission android:name="android.permission.CAMERA" />
+
   <application
-      android:label="NexDrop Turbo"
-      android:icon="@android:drawable/ic_menu_share"
+      android:label="NexDrop"
+      android:icon="@mipmap/ic_launcher"
       android:theme="@style/AppTheme">
-    <activity android:name=".MainActivity" android:exported="true">
+    <activity
+        android:name=".MainActivity"
+        android:exported="true"
+        android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+        android:launchMode="singleTask">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
@@ -24,5 +35,16 @@
         android:name=".TransferService"
         android:foregroundServiceType="dataSync"
         android:exported="false" />
+    <!-- OPEN FILE on the result screen (mission §10): scoped share of the
+         received file, no broad storage permission needed. -->
+    <provider
+        android:name="androidx.core.content.FileProvider"
+        android:authorities="${applicationId}.fileprovider"
+        android:exported="false"
+        android:grantUriPermissions="true">
+      <meta-data
+          android:name="android.support.FILE_PROVIDER_PATHS"
+          android:resource="@xml/file_paths" />
+    </provider>
   </application>
 </manifest>

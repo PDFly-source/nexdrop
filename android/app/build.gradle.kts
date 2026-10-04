@@ -18,8 +18,20 @@ android {
     applicationId = "com.nexdrop.ndt1"
     minSdk = 26
     targetSdk = 34
-    versionCode = 1
-    versionName = "1.0"
+    // Production release (mission 2026-10-04 §14): production label/icons,
+    // release build in CI. Debug APK stays available for engineering.
+    versionCode = 2
+    versionName = "1.1.0"
+  }
+  buildTypes {
+    release {
+      // Unsigned by design: no keystore in CI. CI ships
+      // NexDrop-release-unsigned.apk; the owner runs the one signing step:
+      //   apksigner sign --ks release.keystore NexDrop-release-unsigned.apk
+      // (minify off: no reflection-sensitive code; keeps the APK debuggable
+      //  in stack traces and avoids an unverifiable R8 pass at this stage)
+      isMinifyEnabled = false
+    }
   }
   compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
   kotlinOptions { jvmTarget = "17" }

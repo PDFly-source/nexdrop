@@ -50,10 +50,12 @@ jobs:
         working-directory: android
         run: ./gradlew --version
 
-      # Routing-fix tests (2026-10-04): ANDROID_NATIVE_LOCAL endpoint
-      # selection incl. the CGNAT 100.71.130.214 regression, plus real NDT1
-      # TCP transfers BOTH directions over the bound endpoint.
-      - name: Unit tests — LocalNet selection + NDT1 TCP both ways
+      # Production regression matrix (2026-10-04): LocalNet selection incl.
+      # the CGNAT regression, NDT1 TCP both ways, telemetry honesty (the
+      # negative-sustainedMBps bug), QR expiry/tamper, and the large-transfer
+      # suite (358 MiB + 1 GiB SHA-verified, wire pause/resume, user cancel
+      # cleanup, disconnect/resume, wrong-session reject, dead endpoint).
+      - name: Unit tests — LocalNet + wire + telemetry + large-transfer regressions
         working-directory: android
         run: ./gradlew --no-daemon --stacktrace :ndt1:testDebugUnitTest
 
@@ -128,10 +130,15 @@ jobs:
           print("startup guard OK: %d components declared, all resolve to real classes" % len(declared))
           PYEOF
 
+      - name: Build :app release APK (unsigned, mission §14)
+        working-directory: android
+        run: ./gradlew --no-daemon --stacktrace :app:assembleRelease
+
       - name: Rename APKs
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk NexDrop-debug.apk
           cp android/tv/build/outputs/apk/debug/tv-debug.apk NexDropTV-debug.apk
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk NexDrop-release-unsigned.apk
 
       - name: Upload NexDrop-debug.apk artifact
         uses: actions/upload-artifact@v4
@@ -145,6 +152,13 @@ jobs:
         with:
           name: NexDropTV-debug.apk
           path: NexDropTV-debug.apk
+          if-no-files-found: error
+
+      - name: Upload NexDrop-release-unsigned.apk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexDrop-release-unsigned.apk
+          path: NexDrop-release-unsigned.apk
           if-no-files-found: error
 
   # Real launch verification (mission §8): the APK must actually start.
@@ -205,20 +219,25 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: NexDropTV-debug.apk
+      - name: Download release APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NexDrop-release-unsigned.apk
 
-      - name: Create GitHub Release with the debug APK (phone-downloadable)
+      - name: Create GitHub Release (debug + unsigned release APKs)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          TAG="nexdrop-android-debug-${GITHUB_SHA::7}"
+          TAG="nexdrop-android-v${GITHUB_SHA::7}"
           if ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
-              --title "NexDrop Android debug APK ($GITHUB_SHA)" \
-              --notes "Debug APK built from $GITHUB_SHA by GitHub Actions.
-          Install on your phone: download NexDrop-debug.apk, allow 'install unknown apps', then install. Contains the real native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, 358 MB + 1 GB benchmarks, and the PWA (WebRTC) fallback.
-          NexDropTV-debug.apk is the optional receive-only TV client." \
+              --title "NexDrop Android $GITHUB_SHA" \
+              --notes "Built from $GITHUB_SHA by GitHub Actions.
+          PRODUCTION: NexDrop-release-unsigned.apk (v1.1.0, code 2) — UNSIGNED: sign before distribution with 'apksigner sign --ks release.keystore NexDrop-release-unsigned.apk', then install.
+          ENGINEERING: NexDrop-debug.apk installs directly (allow 'install unknown apps'). NexDropTV-debug.apk is the optional receive-only TV client.
+          Contains the verified native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, honest telemetry (negative-speed bug fixed), production UI, and the PWA (WebRTC) fallback. Benchmarks live under Settings → Device Test." \
               --prerelease
           fi
-          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" NexDrop-debug.apk NexDropTV-debug.apk --clobber
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" NexDrop-debug.apk NexDropTV-debug.apk NexDrop-release-unsigned.apk --clobber
           echo "RELEASE_URL=https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
