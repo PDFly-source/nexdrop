@@ -18,6 +18,7 @@ import com.nexdrop.ndt1.Handshake
 import com.nexdrop.ndt1.LocalNet
 import com.nexdrop.ndt1.Offer
 import com.nexdrop.ndt1.QrPairing
+import com.nexdrop.ndt1.SpeedFormat
 import com.nexdrop.ndt1.ThroughputSampler
 import com.nexdrop.ndt1.TurboReceiver
 import java.io.File
@@ -131,9 +132,11 @@ class ReceiveActivity : AppCompatActivity(), TurboReceiver.Listener {
   }
 
   override fun onComplete(file: File, sha256: String, stats: ThroughputSampler.Stats) = runOnUiThread {
+    // Honest telemetry (mission 2026-10-04 §8): sustained can be N/A after
+    // the fix that rejects impossible/negative windows — never fabricate it.
     body.text = "TRANSFER COMPLETE\nSHA-256 VERIFIED\n" +
-      "average ${"%.2f".format(stats.averageBps / 1048576.0)} MB/s · " +
-      "sustained ${"%.2f".format(stats.sustainedBps / 1048576.0)} MB/s\n" +
+      "average ${SpeedFormat.speedText(stats.averageBps)} · " +
+      "sustained ${SpeedFormat.speedText(stats.sustainedBps)}\n" +
       "Transport: NATIVE LOCAL (NDT1 TCP)"
   }
 
