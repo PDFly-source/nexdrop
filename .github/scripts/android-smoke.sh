@@ -19,6 +19,42 @@
 set -eu
 PKG=com.nexdrop.ndt1
 
+tap_nav() {
+  # Tap a BOTTOM-NAV tab. Screen content may contain the same word
+  # ('Settings' quick-header on Your NexDrop, 'History' rows, ...), and
+  # tap_by_text picks the first exact match in document order — which can be
+  # content, not the tab. This helper only matches labels inside the bottom
+  # bar (y > 555 on the 320x640 emulator) and never scrolls.
+  local i
+  for i in 1 2 3; do
+    dump_ui
+    if python3 - "$1" <<'PYEOF' > /tmp/navtap.cmd
+import sys, re
+label = sys.argv[1].casefold()
+xml = open('ui.xml', encoding='utf-8').read()
+cands = [(m.group(2), m.group(3), m.group(4), m.group(5))
+         for m in re.finditer(r'text="([^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+         if m.group(1).casefold() == label and int(m.group(3)) > 555]
+if cands:
+    x1, y1, x2, y2 = cands[0]
+    print(f"adb shell input tap {(int(x1)+int(x2))//2} {(int(y1)+int(y2))//2}")
+    sys.exit(0)
+sys.exit(1)
+PYEOF
+    then
+      break
+    fi
+    sleep 1
+  done
+  if [ ! -s /tmp/navtap.cmd ]; then
+    echo "SMOKE FAIL: bottom-nav tab '$1' not found"
+    cat ui.xml
+    exit 1
+  fi
+  cat /tmp/navtap.cmd
+  bash /tmp/navtap.cmd
+}
+
 tap_by_text() {
   # The app is a ScrollView: tall states can push elements off-screen, where
   # uiautomator no longer reports them. Dump, find, tap — scroll and retry.
@@ -264,11 +300,11 @@ grep -qi 'SEND FILES' ui.xml && grep -qi 'LOCAL DIRECT' ui.xml \
 echo 'on-screen Back OK — returned to Home (previous screen)'
 
 # system Back walks the tab history: Home -> Transfer -> Devices -> back=back
-tap_by_text 'Transfer'; sleep 2
+tap_nav 'Transfer'; sleep 2
 adb shell input keyevent 4; sleep 2
 dump_ui
 grep -qi 'SEND FILES' ui.xml || { echo 'SMOKE FAIL: system Back from Send files did not pop to Home'; cat ui.xml; exit 1; }
-tap_by_text 'Devices'; sleep 2
+tap_nav 'Devices'; sleep 2
 adb shell input keyevent 4; sleep 2
 dump_ui
 grep -qi 'SEND FILES' ui.xml || { echo 'SMOKE FAIL: system Back from Devices did not walk history to Home'; cat ui.xml; exit 1; }
@@ -303,7 +339,7 @@ sleep 2
 echo 'Receive OK — ONE QR, truthful transport card + details'
 
 echo '== 4) 08 Your NexDrop + History + Settings via bottom nav =='
-tap_by_text 'Devices'
+tap_nav 'Devices'
 sleep 2
 dump_ui
 grep -qi 'Your NexDrop' ui.xml || { echo 'SMOKE FAIL: Your NexDrop missing'; cat ui.xml; exit 1; }
@@ -311,13 +347,13 @@ grep -qi 'Recent transfers' ui.xml || { echo 'SMOKE FAIL: recent transfers missi
 grep -qi 'SHA-256 verification' ui.xml || { echo 'SMOKE FAIL: settings list missing'; cat ui.xml; exit 1; }
 assert_layout 'devices' 1
 shot 08-devices
-tap_by_text 'History'
+tap_nav 'History'
 sleep 2
 dump_ui
 grep -qi 'History' ui.xml || { echo 'SMOKE FAIL: History tab missing'; cat ui.xml; exit 1; }
 assert_layout 'history' 1
 shot 06-history
-tap_by_text 'Settings'
+tap_nav 'Settings'
 sleep 2
 assert_layout 'settings' 1
 shot 07-settings-top
@@ -454,7 +490,7 @@ if [ "$PHASE_SKIPPED" = "0" ]; then
     || { echo 'SMOKE FAIL: fifth real transfer failed'; adb logcat -d > logcat.txt; exit 1; }
 
   echo '== 7b) populated state: History 5 real transfers, Devices connected =='
-  tap_by_text 'History'
+  tap_nav 'History'
   sleep 2
   dump_ui
   grep -qi '6 transfers' ui.xml || { echo 'SMOKE FAIL: History does not show 6 transfers after real-data pass'; cat ui.xml; exit 1; }
@@ -470,7 +506,7 @@ if [ "$PHASE_SKIPPED" = "0" ]; then
   grep -qi 'nd-probe' ui.xml || { echo 'SMOKE FAIL: History does not scroll to the oldest (1st) transfer'; cat ui.xml; exit 1; }
   assert_layout 'history-populated-scrolled' 1
   shot 17-history-scrolled
-  tap_by_text 'Devices'
+  tap_nav 'Devices'
   sleep 2
   dump_ui
   grep -qi 'Connected' ui.xml || { echo 'SMOKE FAIL: Devices does not show Connected after real transfers'; cat ui.xml; exit 1; }
@@ -478,11 +514,11 @@ if [ "$PHASE_SKIPPED" = "0" ]; then
   shot 18-devices-connected
 
   echo '== 7c) Clear transfer history: back to the real empty state =='
-  tap_by_text 'Settings'
+  tap_nav 'Settings'
   sleep 2
   tap_by_text 'Clear transfer history'
   sleep 2
-  tap_by_text 'History'
+  tap_nav 'History'
   sleep 2
   dump_ui
   grep -qi 'No transfers yet' ui.xml || { echo 'SMOKE FAIL: Clear history did not restore the empty state'; cat ui.xml; exit 1; }
@@ -498,16 +534,16 @@ sleep 3
 echo '== 8) FONT-SCALE 1.3: long-text / large-font layout robustness =='
 adb shell settings put system font_scale 1.3
 sleep 4
-tap_by_text 'Devices';  sleep 2
+tap_nav 'Devices';  sleep 2
 assert_layout 'devices-font130' 1
 shot 20-devices-font130
-tap_by_text 'History';   sleep 2
+tap_nav 'History';   sleep 2
 assert_layout 'history-font130' 1
 shot 21-history-font130
-tap_by_text 'Settings';  sleep 3
+tap_nav 'Settings';  sleep 3
 assert_layout 'settings-font130' 1
 shot 22-settings-font130
-tap_by_text 'Home';     sleep 2
+tap_nav 'Home';     sleep 2
 assert_layout 'home-font130' 1
 shot 23-home-font130
 adb shell settings put system font_scale 1.0
