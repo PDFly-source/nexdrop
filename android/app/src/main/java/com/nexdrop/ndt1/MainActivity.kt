@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -56,6 +57,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private var pendingPairing: QrPairing.Pairing? = null
   private var benchModeMiB: Int? = null
 
+  // ANDROID_NATIVE_LOCAL endpoint state (requirement #12 diagnostics)
+  private var localEndpoint: LocalNet.Endpoint? = null
+  private var peerIp: String? = null
+
   // ---- activity result contracts ----
   private val scanQr = registerForActivityResult(ScanContract()) { result ->
     val content = result.contents
@@ -102,14 +107,24 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   // ================= RECEIVE =================
   private fun startReceiving() {
     if (!hasPermission(Manifest.permission.NEARBY_WIFI_DEVICES)) { askPermission(Manifest.permission.NEARBY_WIFI_DEVICES, REQ_NEARBY); return }
+    val endpoint = LocalNet.select(activeWifiInterface())
+    if (endpoint == null) { showNativeLocalUnavailable(); return }
     val session = Handshake.newSessionToken()
     val dl = File(getExternalFilesDir(null) ?: filesDir, "downloads").apply { mkdirs() }
     receiver = TurboReceiver(session, dl, this)
-    val port = receiver!!.start(0)
-    val qrText = QrPairing.encode(session, localIp(), port, Build.MODEL)
+    val port = try { receiver!!.start(0, endpoint.ip) } catch (e: Exception) {
+      showNativeLocalUnavailable("Cannot bind ${endpoint.ip}: ${e.message}"); return
+    }
+    localEndpoint = endpoint.copy(port = port)
+    peerIp = null
+    // The QR carries the selected local endpoint (requirement #7) — the peer
+    // connects to an address that is actually reachable on the shared
+    // Wi-Fi/hotspot, never a carrier CGNAT address.
+    val qrText = QrPairing.encode(session, endpoint.ip, port, Build.MODEL)
     showQr(qrText)
     status.text = "Receiving — QR ready (single-use, 10 min)"
-    detail.text = "On the other phone: NexDrop Turbo → Send → scan this ONE QR.\nTransport: NATIVE LOCAL (NDT1 TCP)"
+    detail.text = "On the other phone: NexDrop Turbo → Send → scan this ONE QR.\n\n" +
+      LocalNet.diagnostics(localEndpoint!!, reachable = "YES — server bound to ${endpoint.ip}:$port and listening")
     if (Build.VERSION.SDK_INT >= 33 && !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
       askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
     }
@@ -134,6 +149,15 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     return decision
   }
 
+  override fun onPeerConnected(peer: String) {
+    runOnUiThread {
+      peerIp = peer
+      val ep = localEndpoint ?: return@runOnUiThread
+      detail.text = "Peer connected.\n" +
+        LocalNet.diagnostics(ep, reachable = "YES — TCP connection established with peer $peer", peerIp = peer)
+    }
+  }
+
   override fun onProgress(durable: Long, total: Long) {
     runOnUiThread { renderProgress(durable, total) }
   }
@@ -148,7 +172,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     val eta = if (avgMBps > 0.01) "${"%.0f".format((total - durable) / 1048576.0 / avgMBps)} s" else "—"
     detail.text = "durable ${durable / 1048576} / ${total / 1048576} MiB\n" +
       "average ${"%.2f".format(avgMBps)} MB/s (durable bytes / elapsed — never peak burst)\n" +
-      "ETA $eta\nTransport: NATIVE LOCAL (NDT1 TCP)"
+      "ETA $eta\nTransport: ANDROID_NATIVE_LOCAL\n" +
+      "Peer IP: ${peerIp ?: "—"}\nRoute reachable: YES (transferring over NDT1 TCP)"
   }
 
   override fun onComplete(file: File, sha256: String, stats: ThroughputSampler.Stats) {
@@ -164,11 +189,34 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     runOnUiThread {
       hideTransferControls()
       status.text = "Native Local unavailable"
-      detail.text = "$message\n\nFalling back: open the NexDrop PWA (WebRTC path) and pair with the normal QR flow there.\n" +
-        "Resume safety: reconnecting within the 10-min session resumes from the durable offset (never restarts from zero)."
+      detail.text = "$message\n\n$PWA_FALLBACK_NOTE"
       offerPwaFallback()
     }
   }
+
+  /** Requirement #10: no valid local route => honest unavailable + WebRTC. */
+  private fun showNativeLocalUnavailable(reason: String? = null) {
+    hideTransferControls()
+    qrView.visibility = View.GONE
+    status.text = "NATIVE LOCAL UNAVAILABLE"
+    detail.text = (reason?.let { "$it\n\n" } ?: "") + LocalNet.unavailableText()
+    offerPwaFallback()
+  }
+
+  /**
+   * Interface name of the ACTIVE Wi-Fi network (ConnectivityManager
+   * LinkProperties) — the network the peer is actually reachable on.
+   * Hotspot hosts report no active Wi-Fi client network: null.
+   */
+  private fun activeWifiInterface(): String? = try {
+    val cm = getSystemService(ConnectivityManager::class.java)
+    (listOfNotNull(cm.activeNetwork) + cm.allNetworks.toList())
+      .firstNotNullOfOrNull { net ->
+        val caps = cm.getNetworkCapabilities(net) ?: return@firstNotNullOfOrNull null
+        val lp = cm.getLinkProperties(net) ?: return@firstNotNullOfOrNull null
+        if (caps.hasTransport(ConnectivityManager.TRANSPORT_WIFI)) lp.interfaceName else null
+      }
+  } catch (_: Exception) { null }
 
   // ================= SEND =================
   private fun startSending() {
@@ -183,23 +231,35 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     if (size <= 0) return false
     val session = SessionToken(QrPairing.tokenBytesFrom(pairing), pairing.tokenB64, pairing.sessionId)
     beginTransferUi("Sending…")
+    peerIp = null
+    detail.text = "Connecting to the receiver's native endpoint…\n" +
+      "Transport: ANDROID_NATIVE_LOCAL\n" +
+      "Peer IP: ${pairing.ip}\n" +
+      "TCP port: ${pairing.port}\n" +
+      "Route reachable: testing…"
     sender = TurboSender(this).also { s ->
-      s.send(uri, name, size, pairing.ip, pairing.port, session, senderListener(name))
+      s.send(uri, name, size, pairing.ip, pairing.port, session, senderListener(name, pairing))
     }
     return true
   }
 
-  private fun senderListener(name: String) = object : TurboSender.Listener {
+  private fun senderListener(name: String, pairing: QrPairing.Pairing) = object : TurboSender.Listener {
     override fun onProgress(durable: Long, total: Long) = this@MainActivity.onProgress(durable, total)
     override fun onComplete(sha256: String, stats: ThroughputSampler.Stats) {
+      peerIp = pairing.ip
       runOnUiThread {
         hideTransferControls()
         status.text = "COMPLETE — SHA-256 VERIFIED (receiver-authoritative)"
-        detail.text = renderStats(stats, sha256)
+        detail.text = renderStats(stats, sha256, "Peer IP: ${pairing.ip}\nRoute reachable: YES — NDT1 TCP transfer complete")
         shareJson(stats, sha256, name, benchmark = false)
       }
     }
-    override fun onError(message: String) = this@MainActivity.onError(message)
+    override fun onError(message: String) = runOnUiThread {
+      hideTransferControls()
+      status.text = "Native Local unavailable"
+      detail.text = "Route reachable: NO — could not reach ${pairing.ip}:${pairing.port}\n$message\n\n$PWA_FALLBACK_NOTE"
+      offerPwaFallback()
+    }
   }
 
   // ================= BENCHMARK (mission §12/§20) =================
@@ -217,7 +277,14 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       try {
         BenchFile.generate(cacheDir, f.name, mib.toLong() * 1024 * 1024)
         val session = SessionToken(QrPairing.tokenBytesFrom(pairing), pairing.tokenB64, pairing.sessionId)
-        runOnUiThread { beginTransferUi("Sending benchmark…") }
+        runOnUiThread {
+          beginTransferUi("Sending benchmark…")
+          detail.text = "Connecting to the receiver's native endpoint…\n" +
+            "Transport: ANDROID_NATIVE_LOCAL\n" +
+            "Peer IP: ${pairing.ip}\n" +
+            "TCP port: ${pairing.port}\n" +
+            "Route reachable: testing…"
+        }
         // Keep the reference so the on-screen Pause/Resume/Cancel actually
         // control the benchmark sender too (not just normal transfers).
         sender = TurboSender(this)
@@ -230,6 +297,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
                 hideTransferControls()
                 status.text = "NATIVE BENCHMARK COMPLETE ($mib MiB)"
                 detail.text = renderStats(stats, sha256,
+                  "Peer IP: ${pairing.ip}\nRoute reachable: YES — NDT1 TCP benchmark complete\n" +
                   "Compare on the SAME pair: PWA guided WEBRTC-358MB case (Settings → Device Test in the web app).")
                 shareJson(stats, sha256, f.name, benchmark = true)
               }
@@ -250,7 +318,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       "sustained ${"%.2f".format(stats.sustainedBps / 1048576.0)} MB/s · " +
       "peak-sustained ${"%.2f".format(stats.peakSustainedBps / 1048576.0)} MB/s\n" +
       "duration ${"%.1f".format(stats.durationMs / 1000.0)} s · bytes ${stats.bytes}\n" +
-      "SHA-256: $sha256\nTransport: NATIVE LOCAL (NDT1 TCP)\n" +
+      "SHA-256: $sha256\nTransport: ANDROID_NATIVE_LOCAL (NDT1 TCP)\n" +
       "retransmissions: N/A (TCP internal — honest)\n" + extra
 
   private fun beginTransferUi(label: String) {
@@ -345,11 +413,6 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     return -1
   }
 
-  private fun localIp(): String =
-    java.net.NetworkInterface.getNetworkInterfaces().toList()
-      .flatMap { it.inetAddresses.toList() }
-      .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }?.hostAddress ?: "127.0.0.1"
-
   private fun hasPermission(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
   private fun askPermission(p: String, code: Int) { ActivityCompat.requestPermissions(this, arrayOf(p), code) }
   override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -364,6 +427,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   companion object {
     const val PWA_URL = "https://pdfly-source.github.io/nexdrop/"
+    const val PWA_FALLBACK_NOTE = "Falling back: open the NexDrop PWA (WebRTC path) and pair with the normal QR flow there.\n" +
+      "Resume safety: reconnecting within the 10-min session resumes from the durable offset (never restarts from zero)."
     private const val REQ_NEARBY = 1
     private const val REQ_NOTIF = 2
     private const val REQ_CAMERA = 3

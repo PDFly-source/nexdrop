@@ -12,4 +12,8 @@ android {
 // Pure transport library: NDT1 framing, handshake, sender/receiver, durable
 // writer, QR pairing payload, benchmark sampler. No UI, no camera — shared
 // byte-for-byte by :app (phone) and :tv (receiver-only).
-dependencies { }
+dependencies {
+  // ANDROID_NATIVE_LOCAL endpoint-selection tests (routing fix 2026-10-04):
+  // pure JVM — the transport + selection code paths use only java.* APIs.
+  testImplementation("junit:junit:4.13.2")
+}

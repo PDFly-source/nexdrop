@@ -50,6 +50,13 @@ jobs:
         working-directory: android
         run: ./gradlew --version
 
+      # Routing-fix tests (2026-10-04): ANDROID_NATIVE_LOCAL endpoint
+      # selection incl. the CGNAT 100.71.130.214 regression, plus real NDT1
+      # TCP transfers BOTH directions over the bound endpoint.
+      - name: Unit tests — LocalNet selection + NDT1 TCP both ways
+        working-directory: android
+        run: ./gradlew --no-daemon --stacktrace :ndt1:testDebugUnitTest
+
       - name: Build :app debug APK (native NDT1)
         working-directory: android
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug

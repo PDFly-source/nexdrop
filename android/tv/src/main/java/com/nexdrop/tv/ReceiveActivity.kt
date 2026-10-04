@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.nexdrop.ndt1.Handshake
+import com.nexdrop.ndt1.LocalNet
 import com.nexdrop.ndt1.Offer
 import com.nexdrop.ndt1.QrPairing
 import com.nexdrop.ndt1.ThroughputSampler
@@ -36,6 +37,7 @@ class ReceiveActivity : AppCompatActivity(), TurboReceiver.Listener {
   private lateinit var buttons: LinearLayout
   private var pendingOffer: Offer? = null
   private var decision: ((Boolean) -> Unit)? = null
+  private var localEndpoint: LocalNet.Endpoint? = null
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -64,14 +66,34 @@ class ReceiveActivity : AppCompatActivity(), TurboReceiver.Listener {
   }
 
   private fun startReceiving() {
+    // ANDROID_NATIVE_LOCAL endpoint selection (2026-10-04 routing fix):
+    // never advertise a carrier CGNAT (100.64.0.0/10) address — only the
+    // selected RFC 1918 Wi-Fi/hotspot/ethernet local endpoint.
+    val endpoint = LocalNet.select()
+    if (endpoint == null) {
+      runOnUiThread {
+        title.text = "NATIVE LOCAL UNAVAILABLE"
+        body.text = LocalNet.unavailableText() + "\n\nPWA (WebRTC): https://pdfly-source.github.io/nexdrop/"
+      }
+      return
+    }
     val session = Handshake.newSessionToken()
     val dl = File(getExternalFilesDir(null) ?: filesDir, "downloads").apply { mkdirs() }
     val receiver = TurboReceiver(session, dl, this)
-    val port = receiver.start()
-    val qrText = QrPairing.encode(session, localIp(), port, Build.MODEL)
+    val port = try { receiver.start(0, endpoint.ip) } catch (e: Exception) {
+      runOnUiThread {
+        title.text = "NATIVE LOCAL UNAVAILABLE"
+        body.text = "Cannot bind ${endpoint.ip}: ${e.message}\n\n" + LocalNet.unavailableText()
+      }
+      return
+    }
+    val ep = endpoint.copy(port = port)
+    localEndpoint = ep
+    val qrText = QrPairing.encode(session, ep.ip, port, Build.MODEL)
     runOnUiThread {
       title.text = Build.MODEL
-      body.text = "READY TO RECEIVE\n\nScan this QR with the sender phone (NexDrop Turbo → Send)\nWaiting…"
+      body.text = "READY TO RECEIVE\n\nScan this QR with the sender phone (NexDrop Turbo → Send)\n\n" +
+        LocalNet.diagnostics(ep, reachable = "YES — server bound to ${ep.ip}:$port and listening")
     }
     thread(name = "tv-qr") {
       try {
@@ -88,11 +110,6 @@ class ReceiveActivity : AppCompatActivity(), TurboReceiver.Listener {
       }
     }
   }
-
-  private fun localIp(): String =
-    java.net.NetworkInterface.getNetworkInterfaces().toList()
-      .flatMap { it.inetAddresses.toList() }
-      .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }?.hostAddress ?: "127.0.0.1"
 
   // ---- TurboReceiver.Listener ----
   override fun onOffer(offer: Offer): Boolean {
@@ -121,6 +138,12 @@ class ReceiveActivity : AppCompatActivity(), TurboReceiver.Listener {
   }
 
   override fun onError(message: String) = runOnUiThread {
-    body.text = "Error: $message"
+    body.text = "Error: $message\n\nRoute reachable: NO — native local path failed.\nPWA (WebRTC): https://pdfly-source.github.io/nexdrop/"
+  }
+
+  override fun onPeerConnected(peer: String) = runOnUiThread {
+    val ep = localEndpoint ?: return@runOnUiThread
+    body.text = "PEER CONNECTED\n" +
+      LocalNet.diagnostics(ep, reachable = "YES — TCP connection established with peer $peer", peerIp = peer)
   }
 }

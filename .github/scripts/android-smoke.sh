@@ -91,7 +91,15 @@ adb shell pidof "$PKG" > /dev/null || { echo 'SMOKE FAIL: died starting receive'
 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
 adb pull /sdcard/ui.xml ui.xml >/dev/null
 grep -qi 'receiving' ui.xml || { echo 'SMOKE FAIL: receive QR not ready'; cat ui.xml; adb logcat -d > logcat.txt; exit 1; }
-echo 'receive path OK — native receiver bound, no crash'
+# Routing-fix requirement #12: the receive screen must show the chosen
+# endpoint diagnostics and a truthful route-reachable line.
+grep -qi 'ANDROID_NATIVE_LOCAL' ui.xml || { echo 'SMOKE FAIL: transport badge missing'; cat ui.xml; exit 1; }
+grep -qi 'Local IP:' ui.xml || { echo 'SMOKE FAIL: Local IP diagnostic missing'; cat ui.xml; exit 1; }
+grep -qi 'Interface:' ui.xml || { echo 'SMOKE FAIL: Interface diagnostic missing'; cat ui.xml; exit 1; }
+grep -qi 'Network type:' ui.xml || { echo 'SMOKE FAIL: Network type diagnostic missing'; cat ui.xml; exit 1; }
+grep -qi 'TCP port:' ui.xml || { echo 'SMOKE FAIL: TCP port diagnostic missing'; cat ui.xml; exit 1; }
+grep -qi 'Route reachable: YES' ui.xml || { echo 'SMOKE FAIL: route reachable not YES'; cat ui.xml; exit 1; }
+echo 'receive path OK — selected endpoint advertised, diagnostics truthful'
 
 echo '== 5) Benchmark: scanner opens for the native benchmark path =='
 # NOTE: no BACK here — on MainActivity (receive state) BACK backgrounds the

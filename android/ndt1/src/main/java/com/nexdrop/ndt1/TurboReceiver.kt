@@ -34,6 +34,8 @@ class TurboReceiver(
     fun onProgress(durable: Long, total: Long)
     fun onComplete(file: File, sha256: String, stats: ThroughputSampler.Stats)
     fun onError(message: String)
+    /** Peer connected over TCP — real endpoint proof for diagnostics. */
+    fun onPeerConnected(peerIp: String) {}
   }
 
   private var server: ServerSocket? = null
@@ -43,8 +45,16 @@ class TurboReceiver(
   @Volatile private var controlOut: java.io.OutputStream? = null
   @Volatile private var controlFileId: Int = 0
 
-  fun start(port: Int = 0): Int {
-    val ss = ServerSocket(port)
+  /**
+   * Bind the TCP server. bindAddress MUST be the selected local endpoint
+   * (LocalNet.Endpoint.ip) so the server listens exactly where the QR
+   * tells the peer to connect. null keeps wildcard binding for legacy
+   * callers — the advertisement path always passes a selected address.
+   */
+  fun start(port: Int = 0, bindAddress: String? = null): Int {
+    val ss =
+      if (bindAddress != null) ServerSocket(port, 50, java.net.InetAddress.getByName(bindAddress))
+      else ServerSocket(port)
     try { ss.receiveBufferSize = Ndt1Tunables.socketBufferBytes } catch (_: Exception) {}
     server = ss
     thread(name = "ndt1-receiver") { acceptLoop(ss) }
@@ -56,6 +66,7 @@ class TurboReceiver(
   private fun acceptLoop(ss: ServerSocket) {
     while (!stopped.get()) {
       val sock = try { ss.accept() } catch (e: Exception) { return }
+      listener.onPeerConnected(sock.inetAddress?.hostAddress ?: "unknown")
       sock.tcpNoDelay = true
       try { sock.receiveBufferSize = Ndt1Tunables.socketBufferBytes } catch (_: Exception) {}
       try { sock.sendBufferSize = Ndt1Tunables.socketBufferBytes } catch (_: Exception) {}
