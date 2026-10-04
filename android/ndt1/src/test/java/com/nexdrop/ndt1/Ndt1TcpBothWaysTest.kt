@@ -55,7 +55,7 @@ class Ndt1TcpBothWaysTest {
     MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
   /** Protocol-correct NDT1 sender: mirrors TurboSender's wire behavior. */
-  private fun sendFile(host: String, port: Int, session: SessionToken, bytes: ByteArray, name: String, fileId: Int) {
+  private fun sendFile(host: String, port: Int, session: SessionToken, bytes: ByteArray, name: String, fileId: Int, listener: RecordingListener) {
     Socket(host, port).use { sock ->
       sock.tcpNoDelay = true
       val out = sock.getOutputStream()
@@ -67,7 +67,7 @@ class Ndt1TcpBothWaysTest {
       fun nextFrame(): Pair<Int, ByteArray> {
         while (pending.isEmpty()) {
           val n = input.read(readBuf)
-          assertTrue("socket closed by receiver", n > 0)
+          assertTrue("socket closed by receiver (receiver-side error: ${listener.error ?: "none"})", n > 0)
           dec.push(readBuf.copyOf(n)).forEach(pending::addLast)
         }
         return pending.removeFirst()
@@ -132,7 +132,7 @@ class Ndt1TcpBothWaysTest {
     val (receiverB, portB) = newReceiver("phoneB", listener)
     try {
       val payload = ByteArray(1_500_000) { (it % 251).toByte() } // > PROGRESS cadence boundary
-      sendFile("127.0.0.1", portB, tokenFor("phoneB"), payload, "fromA.bin", fileId = 1)
+      sendFile("127.0.0.1", portB, tokenFor("phoneB"), payload, "fromA.bin", fileId = 1, listener)
 
       assertTrue("B never completed", listener.done.await(30, TimeUnit.SECONDS))
       assertNullError(listener)
@@ -150,7 +150,7 @@ class Ndt1TcpBothWaysTest {
     val (receiverA, portA) = newReceiver("phoneA", listener)
     try {
       val payload = ByteArray(900_000) { ((it * 13) % 253).toByte() }
-      sendFile("127.0.0.1", portA, tokenFor("phoneA"), payload, "fromB.bin", fileId = 7)
+      sendFile("127.0.0.1", portA, tokenFor("phoneA"), payload, "fromB.bin", fileId = 7, listener)
 
       assertTrue("A never completed", listener.done.await(30, TimeUnit.SECONDS))
       assertNullError(listener)
