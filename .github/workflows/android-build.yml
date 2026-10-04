@@ -57,6 +57,14 @@ jobs:
         working-directory: android
         run: ./gradlew --no-daemon --stacktrace :ndt1:testDebugUnitTest
 
+      - name: Upload ndt1 test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ndt1-test-report
+          path: android/ndt1/build/reports/tests/
+          if-no-files-found: ignore
+
       - name: Build :app debug APK (native NDT1)
         working-directory: android
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug

@@ -8,6 +8,14 @@ android {
   defaultConfig { minSdk = 26 }
   compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
   kotlinOptions { jvmTarget = "17" }
+  testOptions {
+    unitTests.all {
+      it.testLogging {
+        showStandardStreams = true
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+      }
+    }
+  }
 }
 // Pure transport library: NDT1 framing, handshake, sender/receiver, durable
 // writer, QR pairing payload, benchmark sampler. No UI, no camera — shared

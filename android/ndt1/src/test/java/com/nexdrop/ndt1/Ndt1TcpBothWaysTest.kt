@@ -39,7 +39,7 @@ class Ndt1TcpBothWaysTest {
     override fun onComplete(file: File, sha256: String, stats: ThroughputSampler.Stats) {
       completedFile = file; completedSha = sha256; done.countDown()
     }
-    override fun onError(message: String) { error = message; done.countDown() }
+    override fun onError(message: String) { error = message; println("RECEIVER ERROR: \$message"); done.countDown() }
     override fun onPeerConnected(peerIp: String) { peerSeen = peerIp }
   }
 
