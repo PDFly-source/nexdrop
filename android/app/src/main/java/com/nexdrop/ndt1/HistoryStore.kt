@@ -45,6 +45,11 @@ object HistoryStore {
     }
   } catch (_: Exception) { emptyList() }
 
+  /** Real action from Settings: remove all stored history (disk truth). */
+  fun clear(context: Context) {
+    try { file(context).delete() } catch (_: Exception) {}
+  }
+
   fun record(context: Context, e: Entry) {
     try {
       val f = file(context)

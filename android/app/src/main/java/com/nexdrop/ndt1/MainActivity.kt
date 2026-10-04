@@ -17,6 +17,7 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Space
@@ -89,6 +90,46 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private var screen = Screen.HOME
   private var role = Role.NONE
 
+  // ---- navigation stack (real Back history; tab hops + sub-screens all push) ----
+  // Back NEVER cancels an active transfer; the engine callbacks (TRANSFER ->
+  // RESULT/FAILED) clear the stack because the flow is finished.
+  private val backStack = java.util.ArrayDeque<Screen>()
+
+  /** Navigate forward, pushing the current screen onto the Back history. */
+  private fun go(to: Screen) {
+    backStack.addLast(screen)
+    while (backStack.size > 32) backStack.removeFirst()
+    screen = to; render()
+  }
+
+  /** Terminal/reset navigation (welcome done, transfer finished, back-to-home). */
+  private fun goRoot(to: Screen) { backStack.clear(); screen = to; render() }
+
+  /** Pop Back history; fall back to the hub (Home) when history is empty. */
+  private fun goBack() {
+    when (screen) {
+      Screen.TRANSFER -> toast("Transfer in progress — use CANCEL to stop")
+      Screen.RECEIVE -> { stopReceiving(); popOrHome() }
+      else -> popOrHome()
+    }
+  }
+
+  private fun popOrHome() {
+    val prev = if (backStack.isEmpty()) null else backStack.removeLast()
+    if (prev != null) { screen = prev; render() }
+    else when (screen) {
+      Screen.HOME, Screen.WELCOME -> { /* no history: system decides (exit) */ }
+      else -> { screen = Screen.HOME; render() }
+    }
+  }
+
+  /** Explicit "back to X" buttons: pop if history exists (real previous
+   *  screen), otherwise reset to X. */
+  private fun backOr(to: Screen) {
+    val prev = if (backStack.isEmpty()) null else backStack.removeLast()
+    if (prev != null) { screen = prev; render() } else goRoot(to)
+  }
+
   // ---- root views ----
   private lateinit var root: FrameLayout
   private lateinit var content: LinearLayout
@@ -112,6 +153,16 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   // ---- send screen pick (real user selection) ----
   private var pendingUri: Uri? = null
+  // ---- keep-screen-awake (real window flag, user preference) ----
+  @Volatile private var transferActive = false
+
+  private fun keepAwakePref(): Boolean =
+    getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_KEEP_AWAKE, true)
+
+  private fun applyKeepAwake() {
+    if (transferActive && keepAwakePref()) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+  }
   private var qrExpiresAtMs: Long = 0
   private val ui = Handler(Looper.getMainLooper())
   private var ticker: Runnable? = null
@@ -154,18 +205,15 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     screen = if (welcomed) Screen.HOME else Screen.WELCOME
     // Mockup navigation: BACK returns to Home from any sub-screen (Android
     // convention for a hub activity); it never loses an active transfer.
+    // System Back follows the SAME stack as the on-screen back affordance:
+    // history pop first, Home as the hub fallback, exit only from Home.
     onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
       override fun handleOnBackPressed() {
-        when (screen) {
-          Screen.HOME, Screen.WELCOME -> {
-            isEnabled = false
-            onBackPressedDispatcher.onBackPressed()
-            isEnabled = true
-          }
-          Screen.TRANSFER -> toast("Transfer in progress — use CANCEL to stop")
-          Screen.RECEIVE -> { stopReceiving(); screen = Screen.HOME; render() }
-          else -> { screen = Screen.HOME; render() }
-        }
+        if (backStack.isEmpty() && (screen == Screen.HOME || screen == Screen.WELCOME)) {
+          isEnabled = false
+          onBackPressedDispatcher.onBackPressed()
+          isEnabled = true
+        } else goBack()
       }
     })
     render()
@@ -213,14 +261,13 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         orientation = LinearLayout.VERTICAL
         addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         addView(bottomNav(active) { tab ->
-          screen = when (tab) {
+          go(when (tab) {
             0 -> Screen.HOME
             1 -> Screen.SEND
             2 -> Screen.DEVICES
             3 -> Screen.HISTORY
             else -> Screen.SETTINGS
-          }
-          render()
+          })
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
       }
     } ?: scroll
@@ -232,6 +279,37 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     content.addView(h2(text).apply {
       val mt = dp(8); layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = mt }
     })
+  }
+
+  /** Top-left Back affordance: [ <- ] Title — 44dp touch target, follows the
+   *  real Back stack (identical to system Back; never cancels a transfer). */
+  private fun backHeader(title: String) {
+    val r = row().apply {
+      gravity = Gravity.CENTER_VERTICAL
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(6); bottomMargin = dp(4) }
+    }
+    val back = LinearLayout(this).apply {
+      gravity = Gravity.CENTER
+      layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+      setOnClickListener { goBack() }
+      background = android.graphics.drawable.GradientDrawable().apply {
+        cornerRadius = dp(14).toFloat()
+        setColor(D.argb(26, D.PRIMARY))
+        setStroke(dp(1), D.argb(64, D.PRIMARY))
+      }
+      addView(ImageView(this@MainActivity).apply {
+        setImageResource(R.drawable.ic_back)
+        imageTintList = android.content.res.ColorStateList.valueOf(D.TEXT)
+        layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+        contentDescription = "Back"
+      })
+    }
+    r.addView(back)
+    r.addView(h2(title).apply {
+      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+      setPadding(dp(12), 0, 0, 0)
+    })
+    content.addView(r)
   }
 
   /** Which bottom-nav tab is active on this screen (null = no nav bar). */
@@ -271,7 +349,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0).apply { weight = 1f } })
     content.addView(btn("GET STARTED", "primary", height = 50) {
       getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_WELCOMED, true).apply()
-      screen = Screen.HOME; render()
+      goRoot(Screen.HOME)
     }.apply {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50))
     })
@@ -381,7 +459,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         addView(sm("Ready").apply { setTextColor(D.OK); setPadding(dp(6), 0, 0, 0) })
       } else {
         addView(pill("NATIVE LOCAL UNAVAILABLE", tint = D.AMBER))
-        setOnClickListener { screen = Screen.UNAVAILABLE; render() }
+        setOnClickListener { go(Screen.UNAVAILABLE) }
       }
     }
     content.addView(status)
@@ -412,8 +490,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   // ================= 03 SEND FILES =================
   private fun startSendFlow() {
     benchModeMiB = null
-    screen = Screen.SEND
-    render()
+    go(Screen.SEND)
   }
 
   private fun onFilePicked(uri: Uri) {
@@ -427,7 +504,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   }
 
   private fun renderSend() {
-    screenTitle("Send files")
+    backHeader("Send files")
     content.addView(sub("Choose what you want to transfer."))
 
     // dashed drop zone
@@ -525,6 +602,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
       t.addView(textView(name, 13f, D.TEXT, 700).apply {
         layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(2) }
+        maxLines = 2
+        ellipsize = android.text.TextUtils.TruncateAt.END
       })
       t.addView(sm(size))
       addView(t)
@@ -733,8 +812,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         }
       })
       addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
-      val t = col()
-      t.addView(textView(offer.name, 13f, D.TEXT, 700))
+      val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
+      t.addView(textView(offer.name, 13f, D.TEXT, 700).apply {
+        maxLines = 2
+        ellipsize = android.text.TextUtils.TruncateAt.END
+      })
       t.addView(bigText(SpeedFormat.bytesText(offer.sizeBytes), 22f).apply {
         setPadding(0, dp(3), 0, 0)
       })
@@ -769,11 +851,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     btns.addView(btn("ACCEPT", "primary", weight = 1.4f) { decide(true) })
     sheet.addView(btns)
 
-    val sheetParams = FrameLayout.LayoutParams(
-      ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
+    // Sheet bottom-anchored INSIDE a ScrollView: when a long filename / large
+    // font scale makes the sheet taller than the screen, it scrolls instead of
+    // clipping the offer details off the top. Accept/Decline stay reachable.
+    val sheetScroll = ScrollView(this).apply {
+      isVerticalScrollBarEnabled = false
+      addView(sheet, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    }
     root.addView(dim, FrameLayout.LayoutParams(
       ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-    root.addView(sheet, sheetParams)
+    root.addView(sheetScroll, FrameLayout.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
   }
 
   private fun GlassSurface(): android.graphics.drawable.GradientDrawable =
@@ -984,7 +1072,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     if (f != null) btns.addView(btn("OPEN FILE", "outline") { openFile(f) })
     else btns.addView(btn("OPEN FILE", "outline") { toast("Nothing to open on this device") })
     btns.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
-    btns.addView(btn("DONE", "primary") { screen = Screen.HOME; render() })
+    btns.addView(btn("DONE", "primary") { goRoot(Screen.HOME) })
     content.addView(btns)
     content.addView(btn(if (role == Role.SEND) "KEEP SENDING" else "KEEP RECEIVING", "text", height = 36) {
       screen = if (role == Role.SEND) Screen.SEND else { startReceiving(); return@btn }
@@ -1052,14 +1140,14 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         addView(r)
         addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(7)) })
       }
-      setting(R.drawable.ic_wifi, "Native Local", if (localOk) "On" else "Unavailable") { screen = if (localOk) Screen.DEVICES else Screen.UNAVAILABLE; render() }
+      setting(R.drawable.ic_wifi, "Native Local", if (localOk) "On" else "Unavailable") { if (localOk) go(Screen.DEVICES) else go(Screen.UNAVAILABLE) }
       setting(R.drawable.ic_swap, "PWA fallback", "Auto") { openPwa() }
       setting(R.drawable.ic_shield, "SHA-256 verification", "On")
       setting(R.drawable.ic_bell, "Notifications", if (Build.VERSION.SDK_INT >= 33 && hasPermission(Manifest.permission.POST_NOTIFICATIONS)) "On" else "Tap to allow") {
         if (Build.VERSION.SDK_INT >= 33) askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
       }
       setting(R.drawable.ic_sun, "Appearance", "Dark")
-      setting(R.drawable.ic_spd, "Diagnostics", "Open") { screen = Screen.DEVICE_TEST; render() }
+      setting(R.drawable.ic_spd, "Diagnostics", "Open") { go(Screen.DEVICE_TEST) }
     })
     nav(2)
   }
@@ -1074,6 +1162,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     r.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(8), 1) })
     r.addView(textView(e.name, 13f, D.TEXT, 700).apply {
       layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+      maxLines = 2
+      ellipsize = android.text.TextUtils.TruncateAt.END
     })
     val right = col().apply { gravity = Gravity.END }
     right.addView(textView(SpeedFormat.bytesText(e.bytes), 12f, D.TEXT, 600).apply { gravity = Gravity.END })
@@ -1105,24 +1195,122 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     nav(3)
   }
 
+  /** Settings row INSIDE a glass card: icon + label + live value (+ optional action). */
+  private fun srow(card: LinearLayout, icon: Int, label: String, value: String, action: (() -> Unit)? = null) {
+    val r = row().apply { setPadding(0, dp(2), 0, dp(2)) }
+    r.addView(ImageView(this).apply {
+      setImageResource(icon)
+      imageTintList = android.content.res.ColorStateList.valueOf(D.PRIMARY)
+      layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+    })
+    r.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(8), 1) })
+    r.addView(textView(label, 12.5f, D.TEXT, 500).apply {
+      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+    })
+    r.addView(sm(value).apply { gravity = Gravity.END })
+    action?.let { a -> r.setOnClickListener { a() } }
+    card.addView(r)
+    card.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(7)) })
+  }
+
   // ================= SETTINGS (tab, engineering behind Device Test) =================
   private fun renderSettings() {
     screenTitle("Settings")
-    content.addView(glassCard().apply {
-      val v = try { packageManager.getPackageInfo(packageName, 0) } catch (e: Exception) { null }
-      addView(textView("NexDrop ${v?.versionName ?: ""} (build ${v?.let { it.versionCode.toString() } ?: ""})", 13f, D.TEXT, 700, 1))
-      addView(sm("Local-first, end-to-end. Files transfer directly between devices on your network — no cloud, no accounts, no tracking.").apply {
-        setPadding(0, dp(4), 0, 0)
+    val localOk = LocalNet.select(activeWifiInterface()) != null
+    val notifOn = Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+
+    fun section(label: String) {
+      content.addView(sm(label).apply {
+        setTextColor(D.MUTED)
+        letterSpacing = 0.10f
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(14); bottomMargin = dp(6) }
       })
+    }
+
+    section("CONNECTION")
+    content.addView(glassCard(pad = 12f).apply {
+      srow(this, R.drawable.ic_wifi, "Native Local", if (localOk) "On" else "Unavailable") { if (localOk) go(Screen.DEVICES) else go(Screen.UNAVAILABLE) }
+      srow(this, R.drawable.ic_swap, "PWA fallback", "Auto") { openPwa() }
+      srow(this, R.drawable.ic_swap, "Preferred transport", "Auto — NDT1 → PWA")
+      srow(this, R.drawable.ic_dev, "Connection status", if (peerIp != null) "Connected" else "Not connected")
     })
-    content.addView(btn("Device Test (Advanced)", "outline", height = 46) { screen = Screen.DEVICE_TEST; render() }.apply {
-      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)).apply { topMargin = dp(10) }
+
+    section("TRANSFER")
+    content.addView(glassCard(pad = 12f).apply {
+      srow(this, R.drawable.ic_shield, "SHA-256 verification", "On — streamed + verified")
+      srow(this, R.drawable.ic_hist, "Automatic resume", "On — durable offset, 10-min session")
+      srow(this, R.drawable.ic_swap, "Pause / resume", "Supported")
+      srow(this, R.drawable.ic_sun, "Keep screen awake", if (keepAwakePref()) "On" else "Off") {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_KEEP_AWAKE, !keepAwakePref()).apply()
+        applyKeepAwake(); render()
+      }
+      srow(this, R.drawable.ic_bell, "Transfer notifications", if (notifOn) "On" else "Tap to allow") {
+        if (Build.VERSION.SDK_INT >= 33) askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
+      }
     })
-    content.addView(btn("Open NexDrop Web (PWA, WebRTC)", "outline", height = 46) { openPwa() }.apply {
-      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)).apply { topMargin = dp(10) }
+
+    section("STORAGE")
+    val dl = File(getExternalFilesDir(null) ?: filesDir, "downloads").apply { mkdirs() }
+    val stat = try { android.os.StatFs(dl.path) } catch (_: Exception) { null }
+    val received = dl.listFiles { f -> f.isFile && !f.name.endsWith(".ndtpart") } ?: emptyArray()
+    val partFiles = dl.listFiles { f -> f.isFile && f.name.endsWith(".ndtpart") } ?: emptyArray()
+    content.addView(glassCard(pad = 12f).apply {
+      srow(this, R.drawable.ic_file, "Receive location", "App storage · downloads")
+      srow(this, R.drawable.ic_spd, "Storage available",
+        stat?.let { SpeedFormat.bytesText(it.availableBytes) } ?: "Unknown")
+      srow(this, R.drawable.ic_file, "Received files",
+        if (received.isEmpty()) "None yet" else "${received.size} · " + SpeedFormat.bytesText(received.sumOf { it.length() }))
+      srow(this, R.drawable.ic_check, "Temporary transfer data", if (partFiles.isEmpty()) "None" else SpeedFormat.bytesText(partFiles.sumOf { it.length() })) {
+        val n = partFiles.size; val bytes = partFiles.sumOf { it.length() }
+        partFiles.forEach { it.delete() }
+        toast(if (n > 0) "Cleared $n partial file(s), ${SpeedFormat.bytesText(bytes)}" else "Nothing to clear")
+        render()
+      }
+      srow(this, R.drawable.ic_hist, "Clear transfer history", "Clear") {
+        HistoryStore.clear(this@MainActivity)
+        toast("History cleared"); render()
+      }
     })
-    content.addView(sm(PWA_FALLBACK_NOTE).apply {
-      setPadding(dp(4), dp(10), dp(4), 0)
+    content.addView(sm(dl.absolutePath).apply {
+      setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 9.5f)
+      setPadding(dp(4), dp(4), dp(4), 0)
+    })
+
+    section("PRIVACY & SECURITY")
+    content.addView(glassCard(pad = 12f).apply {
+      srow(this, R.drawable.ic_shield, "Direct device-to-device", "On — local network only")
+      srow(this, R.drawable.ic_shield, "SHA-256 verification", "On")
+      srow(this, R.drawable.ic_dev, "Cloud upload", "None")
+      srow(this, R.drawable.ic_dev, "Accounts", "Not required")
+      srow(this, R.drawable.ic_swap, "Clear session data", "Clear") {
+        stopReceiving(); peerIp = null; localEndpoint = null
+        toast("Session data cleared"); render()
+      }
+    })
+
+    section("APPEARANCE")
+    content.addView(glassCard(pad = 12f).apply {
+      srow(this, R.drawable.ic_sun, "Theme", "Dark — NexDrop premium")
+    })
+
+    section("DIAGNOSTICS")
+    content.addView(glassCard(pad = 12f).apply {
+      srow(this, R.drawable.ic_spd, "Device Test (Advanced)", "Open") { go(Screen.DEVICE_TEST) }
+    })
+
+    section("ABOUT")
+    val v = try { packageManager.getPackageInfo(packageName, 0) } catch (e: Exception) { null }
+    content.addView(glassCard(pad = 12f).apply {
+      srow(this, R.drawable.ic_check, "NexDrop version", v?.versionName ?: "")
+      srow(this, R.drawable.ic_check, "Build", v?.let { it.versionCode.toString() } ?: "")
+      srow(this, R.drawable.ic_swap, "NDT1 protocol", "v" + Ndt1.VERSION + " — native TCP")
+      srow(this, R.drawable.ic_dev, "Project", "GitHub") {
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/PDFly-source/nexdrop"))) } catch (_: Exception) {}
+      }
+      srow(this, R.drawable.ic_shield, "Privacy", "Open") {
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PWA_URL + "privacy"))) } catch (_: Exception) {}
+      }
+      addView(sm(PWA_FALLBACK_NOTE).apply { setPadding(0, dp(2), 0, 0) })
     })
     nav(4)
   }
@@ -1145,7 +1333,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         setTextColor(D.TEXT); setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
       })
     })
-    content.addView(btn("Back to Settings", "text", height = 36) { screen = Screen.SETTINGS; render() }.apply {
+    content.addView(btn("Back to Settings", "text", height = 36) { backOr(Screen.SETTINGS) }.apply {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36))
     })
   }
@@ -1167,7 +1355,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       screen = Screen.HOME; render()
       if (role == Role.RECEIVE) startReceiving() else startSendingLegacyScan()
     }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)) })
-    content.addView(btn("Back to Home", "text", height = 36) { screen = Screen.HOME; render() }.apply {
+    content.addView(btn("Back to Home", "text", height = 36) { goRoot(Screen.HOME) }.apply {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36))
     })
   }
@@ -1186,7 +1374,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(10) }
     })
     content.addView(sm(PWA_FALLBACK_NOTE).apply { setPadding(dp(4), dp(10), dp(4), 0) })
-    content.addView(btn("Back to Home", "text", height = 36) { screen = Screen.HOME; render() }.apply {
+    content.addView(btn("Back to Home", "text", height = 36) { goRoot(Screen.HOME) }.apply {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36))
     })
   }
@@ -1258,7 +1446,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         completedStats = stats
         hideTransferUi()
         recordHistory(name, stats.averageBps, stats.durationMs, sha256, verified = true)
-        screen = Screen.RESULT
+        backStack.clear(); screen = Screen.RESULT }
         render()
         TransferService.stop(this@MainActivity)
       }
@@ -1276,20 +1464,26 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private fun transferFailed(message: String) {
     hideTransferUi()
     failedMessage = message
-    screen = Screen.FAILED
+    backStack.clear(); screen = Screen.FAILED }
     render()
     TransferService.stop(this)
   }
 
   @Volatile private var failedMessage: String? = null
 
-  private fun hideTransferUi() { sender = null; receiver = null }
+  private fun hideTransferUi() { sender = null; receiver = null; setTransferActive(false) }
+
+  private fun setTransferActive(on: Boolean) {
+    transferActive = on
+    applyKeepAwake()
+  }
 
   private fun beginTransfer() {
+    setTransferActive(true)
     transferStartNanos = System.nanoTime()
     paused = false
     transferGotFirstProgress = false
-    screen = Screen.TRANSFER
+    backStack.clear(); screen = Screen.TRANSFER }
     render()
   }
 
@@ -1339,7 +1533,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       currentFile = file
       hideTransferUi()
       recordHistory(file.name, stats.averageBps, stats.durationMs, sha256, verified = true)
-      screen = Screen.RESULT
+      backStack.clear(); screen = Screen.RESULT }
       render()
       TransferService.stop(this)
     }
@@ -1393,7 +1587,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
                 completedSha = sha256
                 completedStats = stats
                 currentName = f.name
-                screen = Screen.RESULT
+                backStack.clear(); screen = Screen.RESULT }
                 render()
                 TransferService.stop(this@MainActivity)
                 shareRunJson(stats, sha256, f.name) // Device Test only
@@ -1512,6 +1706,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       "The PWA (WebRTC path) pairs with the normal QR flow there. Resume safety: reconnecting within the 10-minute session resumes from the durable offset — never from zero."
     private const val PREFS = "nd_ui"
     private const val KEY_WELCOMED = "welcomed"
+  private const val KEY_KEEP_AWAKE = "keep_awake"
     private const val REQ_NOTIF = 2
     private const val REQ_CAMERA = 3
   }

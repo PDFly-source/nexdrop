@@ -219,6 +219,14 @@ jobs:
       - name: Grant KVM access
         run: sudo chmod 666 /dev/kvm || true
 
+      # Real-data pass tooling: zxing-cpp decodes the receiver QR from the
+      # screenshot; tsx runs companion/src/cli.ts (zero npm deps) as the
+      # sender through the emulator tunnel.
+      - name: Install QR-decode + TS runner tools
+        run: |
+          pip3 install --quiet zxing-cpp pillow
+          npx --yes tsx --version
+
       - name: Boot Android 16 (API 36) emulator and run the startup smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:

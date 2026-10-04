@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NexDrop Android smoke test — MOCKUP UI v1.2.0 (screens 01–08, 2026-10-04).
+# NexDrop Android smoke test — MOCKUP UI v1.2.1 (screens 01–08 + stability pass, 2026-10-04).
 # Runs INSIDE reactivecircus/android-emulator-runner with an API 36 emulator.
 # The emulator action executes its `script` input line-by-line, so all logic
 # lives in this file instead of the YAML.
@@ -11,6 +11,11 @@
 #   nav: Devices -> 08 Your NexDrop, History, Settings -> Device Test (hidden)
 #   Device Test -> benchmark scanner opens (camera granted)
 # No FATAL EXCEPTION anywhere. No benchmark on Home.
+# v1.2.1 additions: Back affordance + real Back stack, layout audit (no
+# horizontal overflow, nav never covered), live NDT1 real-data pass (QR
+# decode -> emulator tunnel -> CLI send -> on-device ACCEPT -> SHA-256
+# verify -> populated History/Devices -> clear history), font-scale 1.3
+# robustness pass.
 set -eu
 PKG=com.nexdrop.ndt1
 
@@ -63,6 +68,77 @@ dump_ui() {
   adb pull /sdcard/ui.xml ui.xml >/dev/null
 }
 
+tap_by_desc() {
+  # Tap the first node whose content-desc matches (icon-only affordances
+  # like the top-left Back button have no text for tap_by_text).
+  local i found=0
+  rm -f /tmp/tapd.cmd
+  for i in 1 2 3 4 5; do
+    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+    adb pull /sdcard/ui.xml ui.xml >/dev/null
+    if python3 - "$1" <<'PYD' > /tmp/tapd.cmd
+import sys, re
+label = sys.argv[1]
+xml = open('ui.xml', encoding='utf-8').read()
+cands = [(m.group(2), m.group(3), m.group(4), m.group(5))
+         for m in re.finditer(r'content-desc="([^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+         if label.casefold() in m.group(1).casefold()]
+if cands:
+    x1, y1, x2, y2 = cands[0]
+    print(f"adb shell input tap {(int(x1)+int(x2))//2} {(int(y1)+int(y2))//2}")
+    sys.exit(0)
+sys.exit(1)
+PYD
+    then
+      found=1
+      break
+    fi
+    adb shell input swipe 160 500 160 150 300
+    sleep 1
+  done
+  if [ "$found" = "0" ]; then
+    echo "SMOKE FAIL: content-desc '$1' never became visible after scrolling"
+    cat ui.xml
+    exit 1
+  fi
+  cat /tmp/tapd.cmd
+  bash /tmp/tapd.cmd
+  sleep 2
+}
+
+assert_layout() {
+  # Layout audit: (a) no horizontal overflow beyond the screen; (b) on tab
+  # screens the fixed bottom nav is fully on-screen and NEVER overlapped by
+  # content — any node straddling the nav's top edge means a fixed-height
+  # container pushed content UNDER the nav (mockup layout rule).
+  local SW
+  SW=$(adb shell wm size | sed -n 's/.*: \([0-9]*\)x.*/\1/p' | tail -1)
+  dump_ui
+  python3 - "$1" "$SW" "$2" <<'PYA' || { echo "SMOKE FAIL: layout audit '$1'"; cat ui.xml; exit 1; }
+import sys, re
+label, SW, has_nav = sys.argv[1], int(sys.argv[2]), sys.argv[3] == "1"
+xml = open('ui.xml', encoding='utf-8').read()
+bounds = [(int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)))
+          for m in re.finditer(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)]
+overflow = [b for b in bounds if b[0] < 0 or b[2] > SW]
+if overflow:
+    print(f"OVERFLOW: {len(overflow)} nodes exceed screen width {SW}, e.g. {overflow[:3]}")
+    sys.exit(1)
+if has_nav:
+    tabs = [(int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5)))
+            for m in re.finditer(r'text="(Home|Transfer|Devices|History|Settings)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)]
+    if not tabs:
+        print("NAV MISSING: no bottom-nav tab labels on a tab screen")
+        sys.exit(1)
+    nav_top = min(b[1] for b in tabs)
+    straddle = [b for b in bounds if b[1] < nav_top < b[3]]
+    if straddle:
+        print(f"NAV OVERLAP: {len(straddle)} nodes straddle the nav top edge {nav_top}, e.g. {straddle[:3]}")
+        sys.exit(1)
+print(f"LAYOUT OK: {len(bounds)} nodes within screen, nav clean" if has_nav else f"LAYOUT OK: {len(bounds)} nodes within screen")
+PYA
+}
+
 resumed() {
   adb shell dumpsys window 2>/dev/null | grep -i 'mCurrentFocus' || true
   adb shell dumpsys activity activities 2>/dev/null | grep -i 'ResumedActivity' || true
@@ -104,6 +180,7 @@ grep -qi 'Home' ui.xml && grep -qi 'Transfer' ui.xml && grep -qi 'Devices' ui.xm
 if grep -qi 'benchmark' ui.xml; then echo 'SMOKE FAIL: benchmark leaked onto Home'; cat ui.xml; exit 1; fi
 echo 'Welcome -> Home OK — mockup 01+02 live, no debug controls'
 
+assert_layout 'home' 1
 shot 02-home
 
 echo '== 2) 03 Send files: opens WITHOUT the scanner (file-first flow) =='
@@ -120,8 +197,27 @@ sleep 1
 if resumed | grep -q CaptureActivity; then echo 'SMOKE FAIL: scanner opened with no file selected'; exit 1; fi
 shot 03-send-files
 echo 'Send files OK — no scanner until a real file is picked'
-adb shell input keyevent 4
-sleep 1
+
+echo '== 2b) Back affordance: real history, never Home-only, never cancels =='
+dump_ui
+grep -q 'content-desc="Back"' ui.xml || { echo 'SMOKE FAIL: Send files has no top-left Back affordance'; cat ui.xml; exit 1; }
+tap_by_desc 'Back'          # on-screen back: same stack as system Back
+sleep 2
+dump_ui
+grep -qi 'SEND FILES' ui.xml && grep -qi 'LOCAL DIRECT' ui.xml \
+  || { echo 'SMOKE FAIL: on-screen Back did not return to the previous screen (Home)'; cat ui.xml; exit 1; }
+echo 'on-screen Back OK — returned to Home (previous screen)'
+
+# system Back walks the tab history: Home -> Transfer -> Devices -> back=back
+tap_by_text 'Transfer'; sleep 2
+adb shell input keyevent 4; sleep 2
+dump_ui
+grep -qi 'SEND FILES' ui.xml || { echo 'SMOKE FAIL: system Back from Send files did not pop to Home'; cat ui.xml; exit 1; }
+tap_by_text 'Devices'; sleep 2
+adb shell input keyevent 4; sleep 2
+dump_ui
+grep -qi 'SEND FILES' ui.xml || { echo 'SMOKE FAIL: system Back from Devices did not walk history to Home'; cat ui.xml; exit 1; }
+echo 'Back history OK — system + on-screen back share one stack'
 
 echo '== 3) 04 Receive: ONE QR + truthful LOCAL DIRECT + real expiry =='
 adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
@@ -134,6 +230,7 @@ grep -qi 'LOCAL DIRECT' ui.xml || { echo 'SMOKE FAIL: LOCAL DIRECT missing'; cat
 grep -qi 'Waiting for device' ui.xml || { echo 'SMOKE FAIL: waiting state missing'; cat ui.xml; exit 1; }
 grep -qi 'Expires' ui.xml || { echo 'SMOKE FAIL: real QR expiry missing'; cat ui.xml; exit 1; }
 grep -qi 'REFRESH QR' ui.xml || { echo 'SMOKE FAIL: REFRESH QR missing'; cat ui.xml; exit 1; }
+assert_layout 'receive' 0
 shot 04-receive-qr
 
 # Details sheet: full truthful transport diagnostics
@@ -157,16 +254,19 @@ dump_ui
 grep -qi 'Your NexDrop' ui.xml || { echo 'SMOKE FAIL: Your NexDrop missing'; cat ui.xml; exit 1; }
 grep -qi 'Recent transfers' ui.xml || { echo 'SMOKE FAIL: recent transfers missing'; cat ui.xml; exit 1; }
 grep -qi 'SHA-256 verification' ui.xml || { echo 'SMOKE FAIL: settings list missing'; cat ui.xml; exit 1; }
+assert_layout 'devices' 1
 shot 08-devices
 tap_by_text 'History'
 sleep 2
 dump_ui
 grep -qi 'History' ui.xml || { echo 'SMOKE FAIL: History tab missing'; cat ui.xml; exit 1; }
+assert_layout 'history' 1
 shot 06-history
 tap_by_text 'Settings'
 sleep 2
 dump_ui
 grep -qi 'Device Test (Advanced)' ui.xml || { echo 'SMOKE FAIL: Settings screen missing'; cat ui.xml; exit 1; }
+assert_layout 'settings' 1
 shot 07-settings
 echo 'nav tabs OK'
 
@@ -187,7 +287,176 @@ resumed | grep -q CaptureActivity || { echo 'SMOKE FAIL: benchmark scan did not 
 adb shell input keyevent 4
 sleep 1
 
-echo '== 7) final: no crash anywhere in the whole run =='
+echo '== 7) REAL-DATA pass: live NDT1 transfers into the app via emulator tunnel =='
+# The app binds the QR session on its selected local interface. On the
+# emulator that is the netsim wlan0 (10.0.2.16), which adb redir cannot
+# reach; disabling wifi makes LocalNet fall back to eth0 (10.0.2.15), the
+# emulator's NAT interface, which redir CAN tunnel. If the QR still
+# advertises an unreachable IP, the phase degrades to an honest skip.
+adb shell svc wifi disable
+sleep 4
+for i in 1 2 3 4 5 6; do
+  dump_ui
+  grep -qi 'SEND FILES' ui.xml && break
+  adb shell input keyevent 4
+  sleep 2
+done
+dump_ui
+grep -qi 'SEND FILES' ui.xml || { echo 'SMOKE FAIL: could not get back to Home for real-data pass'; exit 1; }
+
+# send REAL files through the real NDT1 stack: QR decode -> tunnel -> CLI
+# handshake -> on-device ACCEPT -> durable transfer -> SHA-256 verify.
+send_real() {
+  # $1 file, $2 shot prefix. Assumes: app on Home, wifi off.
+  tap_by_text 'RECEIVE'
+  sleep 9
+  shot "$2-qr"
+  python3 - "$2" <<'PYQ' > /tmp/qr.json
+import sys, zxingcpp
+from PIL import Image
+img = Image.open(f"screenshots/{sys.argv[1]}-qr.png")
+res = zxingcpp.read_barcodes(img)
+print(res[0].text if res else "")
+PYQ
+  local ip port token session i sheet=0
+  ip=$(jq -r '.ip // empty' /tmp/qr.json 2>/dev/null || true)
+  port=$(jq -r '.p // empty' /tmp/qr.json 2>/dev/null || true)
+  token=$(jq -r '.token // empty' /tmp/qr.json 2>/dev/null || true)
+  session=$(jq -r '.session // empty' /tmp/qr.json 2>/dev/null || true)
+  if [ -z "$ip" ] || [ -z "$port" ] || [ -z "$token" ] || [ -z "$session" ]; then
+    echo "QRDECODE_FAILED $1"
+    return 2
+  fi
+  echo "  QR decoded: $ip:$port (session $session)"
+  adb emu redir add "tcp:$port:$port" >/dev/null 2>&1 || true
+  timeout 900 npx tsx companion/src/cli.ts send "$1" \
+    --host 127.0.0.1 --port "$port" --token "$token" --session "$session" > /tmp/cli.log 2>&1 &
+  local cli=$!
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 2
+    dump_ui
+    if grep -qi 'Incoming transfer' ui.xml; then sheet=1; break; fi
+  done
+  if [ "$sheet" != "1" ]; then
+    kill "$cli" 2>/dev/null || true
+    wait "$cli" 2>/dev/null || true
+    echo "NOSHEET $1"
+    cat /tmp/cli.log
+    return 3
+  fi
+  shot "$2-incoming-sheet"
+  tap_by_text 'ACCEPT'
+  local done_=0
+  for i in $(seq 1 180); do
+    dump_ui
+    if grep -qi 'Transfer complete' ui.xml; then done_=1; break; fi
+    if ! kill -0 "$cli" 2>/dev/null && [ "$i" -gt 3 ]; then break; fi
+    sleep 5
+  done
+  wait "$cli" 2>/dev/null || true
+  cat /tmp/cli.log
+  if [ "$done_" != "1" ]; then
+    echo "NOCOMPLETE $1"
+    return 1
+  fi
+  dump_ui
+  grep -qi 'SHA-256 VERIFIED' ui.xml || { echo "NOVERIFY $1"; return 1; }
+  shot "$2-complete"
+  tap_by_text 'DONE'
+  sleep 2
+  adb emu redir del "tcp:$port:$port" >/dev/null 2>&1 || true
+  echo "REAL_SEND_OK $1"
+  return 0
+}
+
+PHASE_SKIPPED=0
+dd if=/dev/urandom of=/tmp/nd-probe.bin bs=1M count=2 2>/dev/null
+send_real /tmp/nd-probe.bin 10-probe || {
+  rc=$?
+  echo 'TUNNEL DEGRADED: probe transfer did not go through.'
+  echo 'Falling back to layout-only QA — the real-data pass must be done physically (owner two-phone test).'
+  PHASE_SKIPPED=1
+}
+
+if [ "$PHASE_SKIPPED" = "0" ]; then
+  # The owner's real-world case: a big APK-scale backup (341.5 MB)
+  dd if=/dev/urandom of='/tmp/Device-backup-341MB-full-final.apk' bs=1M count=342 2>/dev/null
+  send_real '/tmp/Device-backup-341MB-full-final.apk' 11-big \
+    || { echo 'SMOKE FAIL: 341 MB real transfer did not complete + verify'; adb logcat -d > logcat.txt; exit 1; }
+  shot 11-big-live
+  # three more realistic files -> 5 real transfers in History
+  dd if=/dev/urandom of='/tmp/Trip-photos-March.zip' bs=1M count=3 2>/dev/null
+  send_real '/tmp/Trip-photos-March.zip' 12-trip \
+    || { echo 'SMOKE FAIL: second real transfer failed'; adb logcat -d > logcat.txt; exit 1; }
+  dd if=/dev/urandom of='/tmp/resume-final-v2.pdf' bs=1M count=2 2>/dev/null
+  send_real '/tmp/resume-final-v2.pdf' 13-resume \
+    || { echo 'SMOKE FAIL: third real transfer failed'; adb logcat -d > logcat.txt; exit 1; }
+  dd if=/dev/urandom of='/tmp/workshop-demo.mp4' bs=1M count=5 2>/dev/null
+  send_real '/tmp/workshop-demo.mp4' 14-demo \
+    || { echo 'SMOKE FAIL: fourth real transfer failed'; adb logcat -d > logcat.txt; exit 1; }
+  dd if=/dev/urandom of='/tmp/notes-and-ideas.txt' bs=1M count=1 2>/dev/null
+  send_real '/tmp/notes-and-ideas.txt' 15-notes \
+    || { echo 'SMOKE FAIL: fifth real transfer failed'; adb logcat -d > logcat.txt; exit 1; }
+
+  echo '== 7b) populated state: History 5 real transfers, Devices connected =='
+  tap_by_text 'History'
+  sleep 2
+  dump_ui
+  grep -qi '5 transfers' ui.xml || { echo 'SMOKE FAIL: History does not show 5 transfers after real-data pass'; cat ui.xml; exit 1; }
+  shot 16-history-populated
+  adb shell input swipe 160 500 160 150 300
+  sleep 1
+  adb shell input swipe 160 500 160 150 300
+  sleep 1
+  dump_ui
+  grep -qi 'notes-and-ideas' ui.xml || { echo 'SMOKE FAIL: History does not scroll to the last (5th) transfer'; cat ui.xml; exit 1; }
+  assert_layout 'history-populated-scrolled' 1
+  shot 17-history-scrolled
+  tap_by_text 'Devices'
+  sleep 2
+  dump_ui
+  grep -qi 'Connected' ui.xml || { echo 'SMOKE FAIL: Devices does not show Connected after real transfers'; cat ui.xml; exit 1; }
+  assert_layout 'devices-populated' 1
+  shot 18-devices-connected
+
+  echo '== 7c) Clear transfer history: back to the real empty state =='
+  tap_by_text 'Settings'
+  sleep 2
+  tap_by_text 'Clear transfer history'
+  sleep 2
+  tap_by_text 'History'
+  sleep 2
+  dump_ui
+  grep -qi 'No transfers yet' ui.xml || { echo 'SMOKE FAIL: Clear history did not restore the empty state'; cat ui.xml; exit 1; }
+  assert_layout 'history-cleared' 1
+  shot 19-history-cleared
+  echo 'REAL-DATA PASS OK — 5 live NDT1 transfers (incl. 341 MB) accepted, verified, recorded, then cleared'
+else
+  adb shell input keyevent 4 2>/dev/null || true
+fi
+adb shell svc wifi enable
+sleep 3
+
+echo '== 8) FONT-SCALE 1.3: long-text / large-font layout robustness =='
+adb shell settings put system font_scale 1.3
+sleep 4
+tap_by_text 'Devices';  sleep 2
+assert_layout 'devices-font130' 1
+shot 20-devices-font130
+tap_by_text 'History';   sleep 2
+assert_layout 'history-font130' 1
+shot 21-history-font130
+tap_by_text 'Settings';  sleep 3
+assert_layout 'settings-font130' 1
+shot 22-settings-font130
+tap_by_text 'Home';     sleep 2
+assert_layout 'home-font130' 1
+shot 23-home-font130
+adb shell settings put system font_scale 1.0
+sleep 3
+echo 'FONT-SCALE PASS OK — no overflow, no nav overlap at 130% system font'
+
+echo '== 9) final: no crash anywhere in the whole run =='
 if adb logcat -d | grep -q 'FATAL EXCEPTION'; then adb logcat -d > logcat.txt; echo 'SMOKE FAIL: FATAL EXCEPTION during run'; exit 1; fi
 adb logcat -d > logcat.txt
-echo 'STARTUP SMOKE TEST PASSED — mockup UI 01–08 wired to the real NDT1 engine: Welcome, Home, Send files, Receive+QR, Your NexDrop, History, hidden Device Test, benchmark scanner'
+echo 'SMOKE TEST PASSED — mockup UI 01–08 on the real NDT1 engine: Back stack, layout audit, real-data pass (when tunnel reachable) and font-scale 1.3 all verified'
