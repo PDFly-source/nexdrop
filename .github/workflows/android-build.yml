@@ -165,8 +165,8 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)
           "$AAPT" dump badging "$APK" | head -1 | tee /tmp/badging.txt
           grep -q "name='com.nexdrop.ndt1'" /tmp/badging.txt
-          grep -q "versionCode='3'" /tmp/badging.txt
-          grep -q "versionName='1.2.0'" /tmp/badging.txt
+          grep -q "versionCode='4'" /tmp/badging.txt
+          grep -q "versionName='1.2.1'" /tmp/badging.txt
           echo "SIGNED RELEASE APK VERIFIED (signature, scheme, identity, integrity)"
 
       - name: Rename APKs
