@@ -58,7 +58,7 @@ jobs:
         run: ./gradlew --no-daemon --stacktrace :ndt1:testDebugUnitTest
 
       - name: Upload ndt1 test report
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: ndt1-test-report
