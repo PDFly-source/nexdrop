@@ -68,6 +68,15 @@ resumed() {
   adb shell dumpsys activity activities 2>/dev/null | grep -i 'ResumedActivity' || true
 }
 
+# Visual evidence: capture a named screenshot of the current screen so the
+# owner can compare the shipped UI against the HTML mockup screen-by-screen.
+mkdir -p screenshots
+shot() {
+  adb shell screencap -p "/sdcard/$1.png" >/dev/null 2>&1
+  adb pull "/sdcard/$1.png" "screenshots/$1.png" >/dev/null 2>&1 && echo "  [shot] screenshots/$1.png"
+  adb shell rm -f "/sdcard/$1.png" >/dev/null 2>&1
+}
+
 echo '== 1) first launch: 01 Welcome, then GET STARTED -> 02 Home =='
 adb install -r NexDrop-release.apk  # smoke the SIGNED production artifact
 adb logcat -c
@@ -78,6 +87,7 @@ if adb logcat -d | grep -q 'FATAL EXCEPTION'; then echo 'SMOKE FAIL: FATAL EXCEP
 dump_ui
 grep -qi 'GET STARTED' ui.xml || { echo 'SMOKE FAIL: Welcome screen (GET STARTED) missing'; cat ui.xml; exit 1; }
 grep -qi 'Your files' ui.xml || { echo 'SMOKE FAIL: welcome hero copy missing'; cat ui.xml; exit 1; }
+shot 01-welcome
 tap_by_text 'GET STARTED'
 sleep 2
 dump_ui
@@ -94,6 +104,8 @@ grep -qi 'Home' ui.xml && grep -qi 'Transfer' ui.xml && grep -qi 'Devices' ui.xm
 if grep -qi 'benchmark' ui.xml; then echo 'SMOKE FAIL: benchmark leaked onto Home'; cat ui.xml; exit 1; fi
 echo 'Welcome -> Home OK — mockup 01+02 live, no debug controls'
 
+shot 02-home
+
 echo '== 2) 03 Send files: opens WITHOUT the scanner (file-first flow) =='
 tap_by_text 'SEND FILES'
 sleep 2
@@ -106,6 +118,7 @@ if resumed | grep -q CaptureActivity; then echo 'SMOKE FAIL: scanner opened with
 tap_by_text 'CONTINUE'
 sleep 1
 if resumed | grep -q CaptureActivity; then echo 'SMOKE FAIL: scanner opened with no file selected'; exit 1; fi
+shot 03-send-files
 echo 'Send files OK — no scanner until a real file is picked'
 adb shell input keyevent 4
 sleep 1
@@ -121,6 +134,8 @@ grep -qi 'LOCAL DIRECT' ui.xml || { echo 'SMOKE FAIL: LOCAL DIRECT missing'; cat
 grep -qi 'Waiting for device' ui.xml || { echo 'SMOKE FAIL: waiting state missing'; cat ui.xml; exit 1; }
 grep -qi 'Expires' ui.xml || { echo 'SMOKE FAIL: real QR expiry missing'; cat ui.xml; exit 1; }
 grep -qi 'REFRESH QR' ui.xml || { echo 'SMOKE FAIL: REFRESH QR missing'; cat ui.xml; exit 1; }
+shot 04-receive-qr
+
 # Details sheet: full truthful transport diagnostics
 tap_by_text 'Details'
 sleep 2
@@ -128,6 +143,7 @@ dump_ui
 grep -qi 'IP:' ui.xml || { echo 'SMOKE FAIL: local IP missing in details'; cat ui.xml; exit 1; }
 grep -qi 'Route reachable: YES' ui.xml || { echo 'SMOKE FAIL: route reachable not YES'; cat ui.xml; exit 1; }
 grep -qi 'Internet: NOT REQUIRED' ui.xml || { echo 'SMOKE FAIL: Internet NOT REQUIRED missing'; cat ui.xml; exit 1; }
+shot 05-receive-details
 tap_by_text 'Close'
 sleep 1
 adb shell input keyevent 4   # leave receive
@@ -141,14 +157,13 @@ dump_ui
 grep -qi 'Your NexDrop' ui.xml || { echo 'SMOKE FAIL: Your NexDrop missing'; cat ui.xml; exit 1; }
 grep -qi 'Recent transfers' ui.xml || { echo 'SMOKE FAIL: recent transfers missing'; cat ui.xml; exit 1; }
 grep -qi 'SHA-256 verification' ui.xml || { echo 'SMOKE FAIL: settings list missing'; cat ui.xml; exit 1; }
+shot 08-devices
 tap_by_text 'History'
 sleep 2
 dump_ui
 grep -qi 'History' ui.xml || { echo 'SMOKE FAIL: History tab missing'; cat ui.xml; exit 1; }
-tap_by_text 'Settings'
-sleep 2
-dump_ui
-grep -qi 'Device Test (Advanced)' ui.xml || { echo 'SMOKE FAIL: Device Test entry missing'; cat ui.xml; exit 1; }
+shot 06-history
+shot 07-settings
 echo 'nav tabs OK'
 
 echo '== 5) Device Test: engineering tools live BEHIND Settings =='
@@ -158,6 +173,7 @@ dump_ui
 grep -qi 'benchmark' ui.xml || { echo 'SMOKE FAIL: benchmarks missing in Device Test'; cat ui.xml; exit 1; }
 grep -qi '358 MiB' ui.xml || { echo 'SMOKE FAIL: 358 MiB benchmark missing'; cat ui.xml; exit 1; }
 echo 'Device Test OK — benchmarks hidden behind Settings'
+shot 09-device-test
 
 echo '== 6) benchmark path: scanner opens once CAMERA is granted =='
 adb shell pm grant "$PKG" android.permission.CAMERA

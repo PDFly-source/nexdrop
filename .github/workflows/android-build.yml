@@ -241,6 +241,16 @@ jobs:
             ui.xml
           if-no-files-found: ignore
 
+      # Screen-by-screen emulator captures of the shipped mockup UI, so the
+      # owner can compare against the HTML mockup without a local emulator.
+      - name: Upload screen-by-screen mockup comparison screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+
   release:
     needs: [apk, startup-smoke]
     runs-on: ubuntu-latest
