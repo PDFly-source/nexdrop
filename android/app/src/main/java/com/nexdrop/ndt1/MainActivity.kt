@@ -577,7 +577,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       layoutParams = LinearLayout.LayoutParams(dp(7), dp(7))
     })
     localRow.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
-    val lt = col()
+    val lt = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
     lt.addView(textView("LOCAL DIRECT", 12f, D.TEXT, 700, 1))
     lt.addView(sm(if (ep != null) "Native transfer available" else "No local network — see PWA fallback"))
     localRow.addView(lt)
@@ -704,7 +704,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     }
     localRow.addView(icBox(R.drawable.ic_wifi))
     localRow.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
-    val lt = col()
+    val lt = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
     lt.addView(textView("LOCAL DIRECT", 13f, D.TEXT, 700, 1))
     lt.addView(sm("Native Android · Wi-Fi / Hotspot"))
     localRow.addView(lt)
@@ -967,7 +967,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     val infoRow = row().apply {
       layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(4) }
     }
-    val left = col()
+    val left = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
     left.addView(textView("LOCAL DIRECT", 12.5f, D.TEXT, 700, 1))
     left.addView(sm("Native NDT1 TCP"))
     infoRow.addView(left)
@@ -978,7 +978,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
     })
     infoRow.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(6), 1) })
-    val right = col()
+    val right = col().apply { gravity = Gravity.END; layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT) }
     right.addView(textView("SHA-256", 12f, D.TEXT, 700))
     right.addView(sm("Verifying"))
     infoRow.addView(right)
@@ -1048,7 +1048,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
           layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
         })
         r.addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(6), 1) })
-        val t = col()
+        val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
         t.addView(main)
         t.addView(subView)
         r.addView(t)
@@ -1165,7 +1165,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       maxLines = 2
       ellipsize = android.text.TextUtils.TruncateAt.END
     })
-    val right = col().apply { gravity = Gravity.END }
+    val right = col().apply { gravity = Gravity.END; layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT) }
     right.addView(textView(SpeedFormat.bytesText(e.bytes), 12f, D.TEXT, 600).apply { gravity = Gravity.END })
     right.addView(sm(HistoryStore.dayLabel(e.atMs)).apply {
       gravity = Gravity.END; setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f)

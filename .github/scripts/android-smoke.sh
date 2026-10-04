@@ -457,14 +457,17 @@ if [ "$PHASE_SKIPPED" = "0" ]; then
   tap_by_text 'History'
   sleep 2
   dump_ui
-  grep -qi '5 transfers' ui.xml || { echo 'SMOKE FAIL: History does not show 5 transfers after real-data pass'; cat ui.xml; exit 1; }
+  grep -qi '6 transfers' ui.xml || { echo 'SMOKE FAIL: History does not show 6 transfers after real-data pass'; cat ui.xml; exit 1; }
+  # newest first: the last-sent file must be the TOP row, with its NAME visible
+  # (regression: the right column once squeezed the weighted name to zero width)
+  grep -qi 'notes-and-ideas' ui.xml || { echo 'SMOKE FAIL: History top row does not show the newest transfer name'; cat ui.xml; exit 1; }
   shot 16-history-populated
   adb shell input swipe 160 500 160 150 300
   sleep 1
   adb shell input swipe 160 500 160 150 300
   sleep 1
   dump_ui
-  grep -qi 'notes-and-ideas' ui.xml || { echo 'SMOKE FAIL: History does not scroll to the last (5th) transfer'; cat ui.xml; exit 1; }
+  grep -qi 'nd-probe' ui.xml || { echo 'SMOKE FAIL: History does not scroll to the oldest (1st) transfer'; cat ui.xml; exit 1; }
   assert_layout 'history-populated-scrolled' 1
   shot 17-history-scrolled
   tap_by_text 'Devices'
@@ -485,7 +488,7 @@ if [ "$PHASE_SKIPPED" = "0" ]; then
   grep -qi 'No transfers yet' ui.xml || { echo 'SMOKE FAIL: Clear history did not restore the empty state'; cat ui.xml; exit 1; }
   assert_layout 'history-cleared' 1
   shot 19-history-cleared
-  echo 'REAL-DATA PASS OK — 5 live NDT1 transfers (incl. 341 MB) accepted, verified, recorded, then cleared'
+  echo 'REAL-DATA PASS OK — 6 live NDT1 transfers (incl. 341 MB) accepted, verified, recorded, then cleared'
 else
   adb shell input keyevent 4 2>/dev/null || true
 fi
