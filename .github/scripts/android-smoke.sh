@@ -401,7 +401,8 @@ grep -qi 'SEND FILES' ui.xml || { echo 'SMOKE FAIL: could not get back to Home f
 # send REAL files through the real NDT1 stack: QR decode -> tunnel -> CLI
 # handshake -> on-device ACCEPT -> durable transfer -> SHA-256 verify.
 send_real() {
-  # $1 file, $2 shot prefix. Assumes: app on Home, wifi off.
+  # $1 file, $2 shot prefix, [$3 drop-at bytes (resume drill).]
+  # Assumes: app on Home, wifi off.
   tap_by_text 'RECEIVE'
   sleep 9
   shot "$2-qr"
@@ -423,8 +424,10 @@ PYQ
   fi
   echo "  QR decoded: $ip:$port (session $session)"
   adb emu redir add "tcp:$port:$port" >/dev/null 2>&1 || true
+  local drop_args=""
+  if [ -n "$3" ] && [ "$3" -gt 0 ] 2>/dev/null; then drop_args="--drop-at $3"; fi
   timeout 900 npx tsx companion/src/cli.ts send "$1" \
-    --host 127.0.0.1 --port "$port" --token "$token" --session "$session" > /tmp/cli.log 2>&1 &
+    --host 127.0.0.1 --port "$port" --token "$token" --session "$session" $drop_args > /tmp/cli.log 2>&1 &
   local cli=$!
   for i in 1 2 3 4 5 6 7 8 9 10; do
     sleep 2
@@ -492,14 +495,38 @@ if [ "$PHASE_SKIPPED" = "0" ]; then
   send_real '/tmp/notes-and-ideas.txt' 15-notes \
     || { echo 'SMOKE FAIL: fifth real transfer failed'; adb logcat -d > logcat.txt; exit 1; }
 
-  echo '== 7b) populated state: History 5 real transfers, Devices connected =='
+  # RESUME DRILL (mission Phase 3): the sender socket is KILLED mid-transfer
+  # (at 1.5 MB of a 5 MB file) and reconnects with the same session. The app
+  # must auto-accept the repeat OFFER (consent already given, same session),
+  # resume from the durable offset, and finish SHA-256 verified — no second
+  # Incoming sheet (nobody would be there to tap it).
+  echo '== 7a) RESUME DRILL: mid-transfer socket drop -> durable-offset resume =='
+  dd if=/dev/urandom of='/tmp/resume-drill-final.mp4' bs=1M count=5 2>/dev/null
+  send_real '/tmp/resume-drill-final.mp4' 16-drill 1500000 \
+    || { echo 'SMOKE FAIL: drop-resume drill did not complete + verify'; adb logcat -d > logcat.txt; exit 1; }
+  grep -qi 'durable offset' /tmp/cli.log \
+    || { echo 'SMOKE FAIL: CLI did not actually resume from a durable offset'; cat /tmp/cli.log; exit 1; }
+  echo 'RESUME DRILL OK — socket killed mid-transfer, resumed from durable offset, SHA-256 verified'
+
+  echo '== 7b) populated state: History 7 real transfers, Devices connected =='
   tap_nav 'History'
   sleep 2
   dump_ui
-  grep -qi '6 transfers' ui.xml || { echo 'SMOKE FAIL: History does not show 6 transfers after real-data pass'; cat ui.xml; exit 1; }
+  grep -qi '7 completed' ui.xml || { echo 'SMOKE FAIL: History does not show 7 completed after real-data pass'; cat ui.xml; exit 1; }
+  # HISTORY ACTIONS (mission §7): tap the newest row -> real record detail +
+  # OPEN / SHARE / DELETE actions from the real received file
+  tap_by_text 'resume-drill-final.mp4'
+  sleep 2
+  dump_ui
+  grep -qi 'SHA-256: VERIFIED' ui.xml || { echo 'SMOKE FAIL: history detail does not show SHA-256 VERIFIED'; cat ui.xml; exit 1; }
+  grep -qi 'Delete record' ui.xml || { echo 'SMOKE FAIL: history actions missing'; cat ui.xml; exit 1; }
+  shot 16b-history-actions
+  tap_by_text 'Close'
+  sleep 1
   # newest first: the last-sent file must be the TOP row, with its NAME visible
   # (regression: the right column once squeezed the weighted name to zero width)
-  grep -qi 'notes-and-ideas' ui.xml || { echo 'SMOKE FAIL: History top row does not show the newest transfer name'; cat ui.xml; exit 1; }
+  dump_ui
+  grep -qi 'resume-drill-final' ui.xml || { echo 'SMOKE FAIL: History top row does not show the newest transfer name'; cat ui.xml; exit 1; }
   shot 16-history-populated
   adb shell input swipe 160 500 160 150 300
   sleep 1
@@ -527,7 +554,7 @@ if [ "$PHASE_SKIPPED" = "0" ]; then
   grep -qi 'No transfers yet' ui.xml || { echo 'SMOKE FAIL: Clear history did not restore the empty state'; cat ui.xml; exit 1; }
   assert_layout 'history-cleared' 1
   shot 19-history-cleared
-  echo 'REAL-DATA PASS OK — 6 live NDT1 transfers (incl. 341 MB) accepted, verified, recorded, then cleared'
+  echo 'REAL-DATA PASS OK — 7 live NDT1 transfers (incl. 341 MB + a drop-resume drill) accepted, verified, recorded, then cleared'
 else
   adb shell input keyevent 4 2>/dev/null || true
 fi

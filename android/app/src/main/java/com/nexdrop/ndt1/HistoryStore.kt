@@ -21,6 +21,8 @@ object HistoryStore {
     val verified: Boolean,
     val speedBps: Double,
     val durationMs: Long,
+    val status: String = "Done", // Done | Failed (real outcomes only)
+    val reason: String = "",    // failure reason when status=Failed
   )
 
   private const val FILE = "transfer-history.json"
@@ -37,10 +39,12 @@ object HistoryStore {
         bytes = j.getLong("bytes"),
         sent = j.getBoolean("sent"),
         atMs = j.getLong("at"),
-        sha256 = j.getString("sha"),
-        verified = j.getBoolean("ok"),
+        sha256 = j.optString("sha"),
+        verified = j.optBoolean("ok"),
         speedBps = j.optDouble("bps"),
         durationMs = j.optLong("dur"),
+        status = j.optString("status", if (j.optBoolean("ok")) "Done" else "Failed"),
+        reason = j.optString("reason", ""),
       )
     }
   } catch (_: Exception) { emptyList() }
@@ -48,6 +52,21 @@ object HistoryStore {
   /** Real action from Settings: remove all stored history (disk truth). */
   fun clear(context: Context) {
     try { file(context).delete() } catch (_: Exception) {}
+  }
+
+  /** DELETE one real record (History action §7) — matched on atMs+name. */
+  fun delete(context: Context, atMs: Long, name: String) {
+    try {
+      val f = file(context)
+      val arr = try { JSONArray(f.readText()) } catch (_: Exception) { return }
+      val kept = JSONArray()
+      for (i in 0 until arr.length()) {
+        val j = arr.getJSONObject(i)
+        if (j.getLong("at") == atMs && j.getString("name") == name) continue
+        kept.put(j)
+      }
+      f.writeText(kept.toString())
+    } catch (_: Exception) {}
   }
 
   fun record(context: Context, e: Entry) {
@@ -58,6 +77,7 @@ object HistoryStore {
         put("name", e.name); put("bytes", e.bytes); put("sent", e.sent)
         put("at", e.atMs); put("sha", e.sha256); put("ok", e.verified)
         put("bps", e.speedBps); put("dur", e.durationMs)
+        put("status", e.status); put("reason", e.reason)
       })
       // bound: keep the newest MAX records
       val trimmed = JSONArray()

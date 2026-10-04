@@ -68,6 +68,8 @@ dependencies {
   implementation("androidx.core:core-ktx:1.13.1")
   implementation("androidx.appcompat:appcompat:1.7.0")
   implementation("androidx.activity:activity-ktx:1.9.2")
+  // SAF folder → recursive file queue (PRIORITY 1, no storage permission)
+  implementation("androidx.documentfile:documentfile:1.0.1")
   // QR: pure-Java encoder (companion QR) + embedded scanner (ONE QR scan UX)
   implementation("com.google.zxing:core:3.5.3")
   implementation("com.journeyapps:zxing-android-embedded:4.3.0")

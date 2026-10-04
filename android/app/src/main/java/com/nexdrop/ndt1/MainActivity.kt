@@ -35,6 +35,7 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import androidx.documentfile.provider.DocumentFile
 import com.nexdrop.ndt1.ui.BgView
 import com.nexdrop.ndt1.ui.CheckCircleView
 import com.nexdrop.ndt1.ui.D
@@ -151,8 +152,60 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private var completedStats: ThroughputSampler.Stats? = null
   private var transferGotFirstProgress = false
 
-  // ---- send screen pick (real user selection) ----
-  private var pendingUri: Uri? = null
+  // ---- SEND QUEUE (PRIORITY 1): N files or a whole folder, one pairing,
+  //      sequential independent NDT1 streams. Nothing is faked: each file
+  //      goes through the full OFFER/accept/SHA flow on the receiver. ----
+  private class QItem(val uri: Uri, val name: String, val size: Long) {
+    @Volatile var state = "Ready" // Ready | Sending | Done
+  }
+  private val sendQueue = ArrayList<QItem>()
+  private var queueIndex = -1
+  private var queueBytesDone = 0L
+  private var activePairing: QrPairing.Pairing? = null
+  private var resumeAttempts = 0
+  @Volatile private var reconnecting = false
+  @Volatile private var acceptedOfferKey: String? = null
+
+  private fun queueTotalBytes(): Long = sendQueue.sumOf { it.size }
+
+  private fun addToQueue(uri: Uri, displayOverride: String?) {
+    val name = displayOverride ?: pendingName(uri) ?: return
+    val size = pendingSize(uri)
+    if (size <= 0) { toast("Cannot read $name"); return }
+    if (sendQueue.any { it.uri.toString() == uri.toString() }) { toast("$name already in queue"); return }
+    sendQueue.add(QItem(uri, name, size))
+  }
+
+  /** SAF folder → real recursive file queue (streamed, bounded RAM). */
+  private fun queueFolder(tree: Uri) {
+    thread {
+      try {
+        val root = DocumentFile.fromTreeUri(this, tree) ?: return@thread
+        val items = ArrayList<QItem>()
+        fun walk(dir: DocumentFile, path: String) {
+          dir.listFiles().forEach { d ->
+            val rel = if (path.isEmpty()) d.name ?: "?" else "$path/${d.name ?: "?"}"
+            if (d.isDirectory) walk(d, rel)
+            else if (d.isFile && (d.name ?: "").isNotEmpty() && d.length() > 0) {
+              items.add(QItem(d.uri, rel, d.length()))
+            }
+          }
+        }
+        walk(root, "")
+        runOnUiThread {
+          if (items.isEmpty()) { toast("No files in that folder"); return@runOnUiThread }
+          items.forEach { it2 -> sendQueue.add(it2) }
+          toast("Folder queued — ${items.size} files, ${SpeedFormat.bytesText(items.sumOf { it.size })}")
+          if (screen == Screen.SEND) render() else { screen = Screen.SEND; render() }
+        }
+      } catch (e: Exception) {
+        runOnUiThread { toast("Could not read folder: ${e.message}") }
+      }
+    }
+  }
+
+  private fun autoResumePref(): Boolean =
+    getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_AUTO_RESUME, true)
   // ---- keep-screen-awake (real window flag, user preference) ----
   @Volatile private var transferActive = false
 
@@ -174,6 +227,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private var speedView: GradientTextView? = null
   private var speedUnitView: TextView? = null
   private var etaView: TextView? = null
+  private var overallView: TextView? = null
   private var pauseBtn: View? = null
 
   // ---- activity result contracts (unchanged engine flow) ----
@@ -184,17 +238,30 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       ?: run { toast("Not a NexDrop QR"); return@registerForActivityResult }
     if (pairing.expired) { toast("QR expired — ask for a new one"); return@registerForActivityResult }
     val bench = benchModeMiB
-    if (bench != null) runBenchmark(pairing, bench) else {
-      val uri = pendingUri ?: run { toast("Pick a file first"); return@registerForActivityResult }
-      sendPickedFile(uri, pairing)
+    if (bench != null) runBenchmark(pairing, bench) else sendQueueStart(pairing)
+  }
+  // Multiple-file picker (PRIORITY 1): every selected file enters the SEND
+  // QUEUE. Content URIs stream through the engine — nothing is loaded to RAM.
+  private val pickFile = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri>? ->
+    if (uris.isNullOrEmpty()) return@registerForActivityResult
+    var added = 0
+    uris.forEach { uri ->
+      try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+      addToQueue(uri, null)
+      added++
+    }
+    if (added > 0) {
+      toast("$added file(s) added — ${sendQueue.size} in queue")
+      if (screen == Screen.SEND) render() else { screen = Screen.SEND; render() }
     }
   }
-  private val pickFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+  // Folder picker (PRIORITY 1): SAF tree — queued RECURSIVELY as individual
+  // streamed files. No Android API lets a native app enumerate arbitrary
+  // paths outside SAF; this is the honest maximum.
+  private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
     if (uri == null) return@registerForActivityResult
-    try {
-      contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    } catch (_: Exception) { /* one-shot send doesn't need persistence */ }
-    onFilePicked(uri)
+    try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+    queueFolder(uri)
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -487,20 +554,65 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     }
   }
 
-  // ================= 03 SEND FILES =================
+  // ================= 03 SEND FILES (QUEUE) =================
   private fun startSendFlow() {
     benchModeMiB = null
     go(Screen.SEND)
   }
 
-  private fun onFilePicked(uri: Uri) {
-    val name = queryName(uri) ?: "file"
-    val size = querySize(uri)
-    if (size <= 0) { toast("Cannot read that file"); return }
-    pendingUri = uri
-    currentName = name
-    currentSize = size
-    if (screen == Screen.SEND) render() else { screen = Screen.SEND; render() }
+  /** Per-queue-item row: icon, name+size, state pill, remove, tap = actions. */
+  private fun queueRow(item: QItem, index: Int): View {
+    val r = glassCard(pad = 12f).apply {
+      orientation = LinearLayout.HORIZONTAL
+      gravity = Gravity.CENTER_VERTICAL
+      addView(icBox(R.drawable.ic_file))
+      addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
+      val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
+      t.addView(textView(item.name, 13f, D.TEXT, 700).apply {
+        maxLines = 2
+        ellipsize = android.text.TextUtils.TruncateAt.END
+      })
+      t.addView(sm("${SpeedFormat.bytesText(item.size)}  ·  #${index + 1}"))
+      addView(t)
+      if (item.state != "Sending") {
+        addView(ImageView(this@MainActivity).apply {
+          setImageResource(R.drawable.ic_x)
+          imageTintList = android.content.res.ColorStateList.valueOf(D.MUTED)
+          layoutParams = LinearLayout.LayoutParams(dp(36), dp(36))
+          setPadding(dp(8), dp(8), dp(8), dp(8))
+          contentDescription = "Remove ${item.name}"
+          setOnClickListener {
+            sendQueue.removeAt(index)
+            toast("Removed from queue")
+            render()
+          }
+        })
+      }
+      addView(pill(item.state, tint = when (item.state) { "Done" -> D.OK; "Sending" -> D.PRIMARY; else -> D.BLUE }))
+      setOnClickListener { queueItemActions(item) }
+    }
+    return r
+  }
+
+  /** Tap a queued file: reorder / remove — real queue management. */
+  private fun queueItemActions(item: QItem) {
+    val opts = ArrayList<String>()
+    if (sendQueue.indexOf(item) > 0) opts.add("Move up")
+    if (sendQueue.indexOf(item) < sendQueue.size - 1) opts.add("Move down")
+    opts.add("Remove")
+    AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+      .setTitle(item.name)
+      .setItems(opts.toTypedArray()) { _, which ->
+        val i = sendQueue.indexOf(item)
+        when (val chosen = opts[which]) {
+          "Move up" -> { if (i > 0) { sendQueue.removeAt(i); sendQueue.add(i - 1, item) } }
+          "Move down" -> { if (i >= 0 && i < sendQueue.size - 1) { sendQueue.removeAt(i); sendQueue.add(i + 1, item) } }
+          "Remove" -> { if (i >= 0) sendQueue.removeAt(i) }
+        }
+        render()
+      }
+      .setNegativeButton("Close", null)
+      .show()
   }
 
   private fun renderSend() {
@@ -528,7 +640,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       }
       addView(cir)
       addView(textView("Select files", 14f, D.TEXT, 700, 1).apply { setPadding(0, dp(8), 0, 0) })
-      addView(sm("Browse your device"))
+      addView(sm("Pick one, several, or a folder"))
       setOnClickListener { pickFile.launch(arrayOf("*/*")) }
     })
 
@@ -559,13 +671,30 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     }
     content.addView(chips)
 
-    // real selection state
-    val sel = pendingUri
-    content.addView(sm(if (sel != null) "1 file selected" else "No file selected").apply {
+    // SEND QUEUE (PRIORITY 1): real totals, per-item states, add/remove/reorder
+    val queued = sendQueue.toList()
+    content.addView(sm(if (queued.isEmpty()) "No files selected"
+      else "${queued.size} file(s) · ${SpeedFormat.bytesText(queueTotalBytes())} total").apply {
       layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
     })
-    if (sel != null) {
-      content.addView(fileCard(currentName ?: "file", SpeedFormat.bytesText(currentSize), "Ready"))
+    queued.forEachIndexed { i, item ->
+      content.addView(queueRow(item, i).apply {
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
+          if (i > 0) topMargin = dp(6)
+        }
+      })
+    }
+    if (sendQueue.any { it.state == "Done" }) {
+      content.addView(sm("${sendQueue.count { it.state == "Done" }} already sent this session").apply {
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(8) }
+      })
+    }
+    if (sendQueue.isNotEmpty()) {
+      content.addView(btn("CLEAR QUEUE", "text", height = 36) {
+        sendQueue.clear(); queueBytesDone = 0
+        toast("Queue cleared")
+        render()
+      }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36)).apply { topMargin = dp(6) } })
     }
 
     // LOCAL DIRECT row (real)
@@ -583,32 +712,18 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     localRow.addView(lt)
     content.addView(localRow)
 
-    // fill + CONTINUE
+    // ADD FOLDER (SAF tree — queued recursively)
+    content.addView(btn("ADD FOLDER", "outline", icon = R.drawable.ic_plus, height = 40) {
+      pickFolder.launch(null)
+    }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(40)).apply { topMargin = dp(6) } })
+
+    // fill + SEND ALL
     content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0).apply { weight = 1f } })
-    content.addView(btn("CONTINUE", "primary") {
-      val uri = pendingUri
-      if (uri == null) { toast("Select a file first"); return@btn }
+    content.addView(btn(if (sendQueue.size > 1) "SEND ALL (${sendQueue.size})" else "CONTINUE", "primary") {
+      if (sendQueue.isEmpty()) { toast("Select a file first"); return@btn }
       if (!hasPermission(Manifest.permission.CAMERA)) { askPermission(Manifest.permission.CAMERA, REQ_CAMERA); return@btn }
       launchScan("Scan the receiver's NexDrop QR")
     }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)) })
-  }
-
-  private fun fileCard(name: String, size: String, statusLabel: String): View {
-    return glassCard(pad = 14f).apply {
-      orientation = LinearLayout.HORIZONTAL
-      gravity = Gravity.CENTER_VERTICAL
-      addView(icBox(R.drawable.ic_file))
-      addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
-      val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
-      t.addView(textView(name, 13f, D.TEXT, 700).apply {
-        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(2) }
-        maxLines = 2
-        ellipsize = android.text.TextUtils.TruncateAt.END
-      })
-      t.addView(sm(size))
-      addView(t)
-      addView(pill(statusLabel, tint = if (statusLabel == "Ready") D.OK else D.PRIMARY))
-    }
   }
 
   // ================= 04 RECEIVE + QR =================
@@ -623,6 +738,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     }
     localEndpoint = endpoint.copy(port = port)
     peerIp = null
+    acceptedOfferKey = null
     role = Role.RECEIVE
     qrExpiresAtMs = System.currentTimeMillis() + Ndt1.AUTH_TTL_MS
     screen = Screen.RECEIVE
@@ -892,6 +1008,12 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     })
     content.addView(headRow)
     content.addView(sm(currentName ?: "file").apply { setPadding(0, dp(4), 0, 0) })
+    // Queue context (PRIORITY 1): "File 2 of 3 — overall 45%" — real bytes
+    if (role == Role.SEND && sendQueue.size > 1) {
+      val done = sendQueue.count { it.state == "Done" }
+      overallView = sm("File ${done + 1} of ${sendQueue.size} — overall —").apply { setPadding(0, dp(2), 0, 0) }
+      content.addView(overallView!!)
+    } else overallView = null
 
     // ring + center stats
     val ringWrap = FrameLayout(this).apply {
@@ -995,10 +1117,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     controls.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
     controls.addView(btn("CANCEL", "outline", icon = R.drawable.ic_x, tintText = D.DANGER) {
       receiver?.cancel(); sender?.cancel()
+      // Queue: only the in-flight file is cancelled; Done stays done, the
+      // rest stay Ready — the user returns to the queue, not a dead end.
+      if (role == Role.SEND) {
+        sendQueue.getOrNull(queueIndex)?.let { if (it.state == "Sending") it.state = "Ready" }
+        activePairing = null
+      }
       hideTransferUi()
       TransferService.stop(this)
       toast("Transfer cancelled")
-      screen = Screen.HOME; render()
+      if (role == Role.SEND && sendQueue.isNotEmpty()) { screen = Screen.SEND; render() }
+      else { screen = Screen.HOME; render() }
     })
     content.addView(controls)
   }
@@ -1015,6 +1144,15 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     head.addView(textView(currentName ?: "file", 13f, D.TEXT, 700).apply {
       gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0)
     })
+    // Queue summary (PRIORITY 1): honest — only files the engine verified
+    if (role == Role.SEND && sendQueue.isNotEmpty()) {
+      val done = sendQueue.count { it.state == "Done" }
+      if (done > 1) {
+        head.addView(sm("Queue complete — $done file(s) · ${SpeedFormat.bytesText(sendQueue.filter { it.state == "Done" }.sumOf { it.size })}").apply {
+          gravity = Gravity.CENTER; setPadding(0, dp(4), 0, 0)
+        })
+      }
+    }
     val bytes = currentFile?.length() ?: currentSize
     head.addView(sm(if (bytes > 0) "${SpeedFormat.bytesText(bytes)} transferred" else "").apply { gravity = Gravity.CENTER })
     content.addView(head)
@@ -1112,7 +1250,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       if (history.isEmpty()) {
         addView(sm("No transfers yet"))
       } else history.take(3).forEachIndexed { i, e ->
-        addView(historyRow(e))
+        addView(historyRow(e) { entry -> historyActions(entry) })
         if (i < 2 && i < history.size - 1) addView(
           Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(6)) })
       }
@@ -1152,13 +1290,14 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     nav(2)
   }
 
-  private fun historyRow(e: HistoryStore.Entry): View {
+  private fun historyRow(e: HistoryStore.Entry, onTap: ((HistoryStore.Entry) -> Unit)? = null): View {
     val r = row()
     r.addView(ImageView(this).apply {
-      setImageResource(R.drawable.ic_check)
-      imageTintList = android.content.res.ColorStateList.valueOf(D.OK)
+      setImageResource(if (e.status == "Failed") R.drawable.ic_x else R.drawable.ic_check)
+      imageTintList = android.content.res.ColorStateList.valueOf(if (e.status == "Failed") D.DANGER else D.OK)
       layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
     })
+    onTap?.let { r.setOnClickListener { it(e) } }
     r.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(8), 1) })
     r.addView(textView(e.name, 13f, D.TEXT, 700).apply {
       layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
@@ -1177,9 +1316,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   // ================= HISTORY (tab) =================
   private fun renderHistory() {
     screenTitle("History")
-    content.addView(sub("Completed transfers on this device."))
+    content.addView(sub("Real transfer records — tap a row for actions."))
     val history = HistoryStore.list(this).sortedByDescending { it.atMs }
-    content.addView(sm(if (history.isEmpty()) "No transfers yet" else "${history.size} transfers").apply {
+    val done = history.count { it.status != "Failed" }
+    content.addView(sm(if (history.isEmpty()) "No transfers yet"
+      else "$done completed · ${history.size - done} failed").apply {
       layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(12); bottomMargin = dp(6) }
     })
     if (history.isEmpty()) {
@@ -1187,7 +1328,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     } else {
       content.addView(glassCard(pad = 12f).apply {
         history.forEachIndexed { i, e ->
-          addView(historyRow(e))
+          addView(historyRow(e) { entry -> historyActions(entry) })
           if (i < history.size - 1) addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(7)) })
         }
       })
@@ -1238,8 +1379,15 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     section("TRANSFER")
     content.addView(glassCard(pad = 12f).apply {
       srow(this, R.drawable.ic_shield, "SHA-256 verification", "On — streamed + verified")
-      srow(this, R.drawable.ic_hist, "Automatic resume", "On — durable offset, 10-min session")
+      srow(this, R.drawable.ic_hist, "Automatic resume", if (autoResumePref()) "On — durable offset, 5 tries" else "Off") {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_AUTO_RESUME, !autoResumePref()).apply()
+        toast(if (autoResumePref()) "Automatic resume on" else "Automatic resume off")
+        render()
+      }
       srow(this, R.drawable.ic_swap, "Pause / resume", "Supported")
+      srow(this, R.drawable.ic_plus, "Multiple file queue", "Supported — SEND ALL")
+      srow(this, R.drawable.ic_file, "Folder transfer", "Supported — SAF folder picker")
+      srow(this, R.drawable.ic_check, "Preview before accept", "On — accept sheet per file")
       srow(this, R.drawable.ic_sun, "Keep screen awake", if (keepAwakePref()) "On" else "Off") {
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_KEEP_AWAKE, !keepAwakePref()).apply()
         applyKeepAwake(); render()
@@ -1283,7 +1431,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       srow(this, R.drawable.ic_dev, "Cloud upload", "None")
       srow(this, R.drawable.ic_dev, "Accounts", "Not required")
       srow(this, R.drawable.ic_swap, "Clear session data", "Clear") {
-        stopReceiving(); peerIp = null; localEndpoint = null
+        stopReceiving(); peerIp = null; localEndpoint = null; acceptedOfferKey = null
         toast("Session data cleared"); render()
       }
     })
@@ -1404,7 +1552,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         if (text.isBlank()) { toast("Nothing to send"); return@setPositiveButton }
         val f = File(cacheDir, "nexdrop-text-${System.currentTimeMillis()}.txt")
         f.writeText(text)
-        onFilePicked(Uri.fromFile(f))
+        addToQueue(Uri.fromFile(f), f.name)
+        if (screen == Screen.SEND) render() else { screen = Screen.SEND; render() }
       }
       .setNegativeButton("Cancel", null)
       .show()
@@ -1416,42 +1565,96 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     launchScan("Scan the receiver's NexDrop QR")
   }
 
-  private fun sendPickedFile(uri: Uri, pairing: QrPairing.Pairing) {
-    val name = pendingName(uri) ?: "file"
-    val size = pendingSize(uri)
-    if (size <= 0) { toast("Cannot read that file"); return }
-    val session = SessionToken(QrPairing.tokenBytesFrom(pairing), pairing.tokenB64, pairing.sessionId)
+  /**
+   * SEND QUEUE runner (PRIORITY 1): one pairing, N sequential independent
+   * NDT1 connections. Each file re-OFFERs — the receiver consents to every
+   * file. The engine is untouched: this is pure orchestration on top of
+   * TurboSender.send.
+   */
+  private fun sendQueueStart(pairing: QrPairing.Pairing) {
+    if (sendQueue.isEmpty()) { toast("Select files first"); return }
+    if (sendQueue.none { it.state == "Ready" } && sendQueue.any { it.state == "Sending" }) return
+    activePairing = pairing
+    sendQueue.forEach { if (it.state == "Sending") it.state = "Ready" }
+    queueBytesDone = sendQueue.filter { it.state == "Done" }.sumOf { it.size }
+    sendNextInQueue()
+  }
+
+  private fun sendNextInQueue() {
+    val pairing = activePairing ?: return
+    val idx = sendQueue.indexOfFirst { it.state == "Ready" }
+    if (idx < 0) { // whole queue verified-complete
+      runOnUiThread {
+        hideTransferUi()
+        TransferService.stop(this)
+        backStack.clear(); screen = Screen.RESULT; render()
+      }
+      return
+    }
+    val item = sendQueue[idx]
+    item.state = "Sending"
+    queueIndex = idx
+    resumeAttempts = 0
+    reconnecting = false
     role = Role.SEND
-    currentName = name
-    currentSize = size
+    currentName = item.name
+    currentSize = item.size
     currentFile = null
     transferGotFirstProgress = false
-    beginTransfer()
     peerIp = pairing.ip
+    beginTransfer()
+    sendItem(item, pairing)
+  }
+
+  private fun sendItem(item: QItem, pairing: QrPairing.Pairing) {
     if (Build.VERSION.SDK_INT >= 33 && !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
       askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
     }
-    TransferService.start(this, "Sending $name…")
+    TransferService.start(this, "Sending ${item.name}…")
+    val session = SessionToken(QrPairing.tokenBytesFrom(pairing), pairing.tokenB64, pairing.sessionId)
     sender = TurboSender(this).also { s ->
-      s.send(uri, name, size, pairing.ip, pairing.port, session, senderListener(name, pairing))
+      s.send(item.uri, item.name, item.size, pairing.ip, pairing.port, session, senderListener(item, pairing))
     }
   }
 
-  private fun senderListener(name: String, pairing: QrPairing.Pairing) = object : TurboSender.Listener {
+  private fun senderListener(item: QItem, pairing: QrPairing.Pairing) = object : TurboSender.Listener {
     override fun onProgress(durable: Long, total: Long) = this@MainActivity.onProgress(durable, total)
     override fun onComplete(sha256: String, stats: ThroughputSampler.Stats) {
+      item.state = "Done"
+      queueBytesDone += item.size
       peerIp = pairing.ip
       runOnUiThread {
         completedSha = sha256
         completedStats = stats
-        hideTransferUi()
-        recordHistory(name, stats.averageBps, stats.durationMs, sha256, verified = true)
-        backStack.clear(); screen = Screen.RESULT
-        render()
-        TransferService.stop(this@MainActivity)
+        recordHistory(item.name, stats.averageBps, stats.durationMs, sha256, verified = true)
+        sendNextInQueue() // advances to the next file or shows RESULT
       }
     }
-    override fun onError(message: String) = runOnUiThread { transferFailed("Could not reach ${pairing.ip}:${pairing.port}\n$message") }
+    override fun onError(message: String) = runOnUiThread { onSendError(item, pairing, message) }
+  }
+
+  /**
+   * AUTO-RESUME (Phase 3): a mid-transfer drop does NOT restart from zero.
+   * The receiver retains the .ndtpart and its durable offset; we reconnect
+   * with the same session and resume from READY(durableOffset). Retries are
+   * bounded (5, backoff 1s..8s) and stop the moment the QR session (10 min)
+   * can no longer authorize us — then the honest FAILED screen. The user
+   * can disable this in Settings → TRANSFER → Automatic resume.
+   */
+  private fun onSendError(item: QItem, pairing: QrPairing.Pairing, message: String) {
+    if (transferGotFirstProgress && autoResumePref() && resumeAttempts < 5 && item.state == "Sending") {
+      resumeAttempts++
+      sender = null
+      transferGotFirstProgress = false
+      reconnecting = true
+      if (screen == Screen.TRANSFER) etaView?.text = "Connection lost — reconnecting (attempt $resumeAttempts)…"
+      val wait = minOf(1000L shl (resumeAttempts - 1), 8000L)
+      ui.postDelayed({
+        if (item.state == "Sending" && activePairing == pairing) sendItem(item, pairing)
+      }, wait)
+      return
+    }
+    transferFailed("Could not reach ${pairing.ip}:${pairing.port}\n$message")
   }
 
   private fun recordHistory(name: String, bps: Double?, durMs: Long?, sha: String, verified: Boolean) {
@@ -1462,6 +1665,15 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   }
 
   private fun transferFailed(message: String) {
+    // Real failed-transfer record (never for benchmarks, never for user
+    // cancels — cancel has its own path). status="Failed" + reason.
+    if (benchModeMiB == null && currentName != null && role != Role.NONE) {
+      HistoryStore.record(this, HistoryStore.Entry(
+        name = currentName!!, bytes = currentSize, sent = role == Role.SEND,
+        atMs = System.currentTimeMillis(), sha256 = "", verified = false,
+        speedBps = 0.0, durationMs = 0L,
+        status = "Failed", reason = message.lineSequence().firstOrNull()?.take(120) ?: "failed"))
+    }
     hideTransferUi()
     failedMessage = message
     backStack.clear(); screen = Screen.FAILED
@@ -1488,6 +1700,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   }
 
   override fun onProgress(durable: Long, total: Long) {
+    reconnecting = false
     runOnUiThread {
       if (screen != Screen.TRANSFER) return@runOnUiThread
       currentSize = total
@@ -1502,7 +1715,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       val numeric = !sp.startsWith("N/A")
       speedView?.text = if (numeric) sp.substringBefore(" ") else "N/A"
       speedUnitView?.visibility = if (numeric) View.VISIBLE else View.GONE
-      etaView?.text = if (paused) "PAUSED — connection kept alive" else "ETA ${UiSpeed.etaText(total - durable, bps)}"
+      etaView?.text = if (paused) "PAUSED — connection kept alive"
+        else if (reconnecting) "Reconnecting…"
+        else "ETA ${UiSpeed.etaText(total - durable, bps)}"
+      // Queue overall (PRIORITY 1): real bytes across the whole queue
+      if (role == Role.SEND && sendQueue.size > 1) {
+        val totQ = queueTotalBytes()
+        val doneQ = queueBytesDone + durable
+        val opct = if (totQ > 0) (doneQ * 100 / totQ).toInt() else 0
+        val pos = maxOf(sendQueue.indexOfFirst { it.state == "Sending" }, 0)
+        overallView?.text = "File ${pos + 1} of ${sendQueue.size} — overall $opct%"
+      }
       // Truthful foreground notification (same math as the JSON export)
       currentName?.let { TransferService.notifyProgress(this, it, durable, total, bps) }
     }
@@ -1510,11 +1733,30 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   // ---- receiver callbacks (transfer continues even on other screens) ----
   override fun onOffer(offer: Offer): Boolean {
+    // RESUME (Phase 3): a REPEAT OFFER of the same file+size within the SAME
+    // receiver session is the sender reconnecting after a connection drop.
+    // The session token already authenticated this exact sender at HELLO,
+    // and the user already accepted this exact file — resume without a
+    // second consent prompt. Unknown/new files ALWAYS ask.
+    val key = "${offer.name}|${offer.sizeBytes}"
+    if (key == acceptedOfferKey && receiver != null && localEndpoint != null) {
+      runOnUiThread {
+        currentName = offer.name
+        currentSize = offer.sizeBytes
+        transferGotFirstProgress = false
+        beginTransfer()
+        toast("Resuming ${offer.name} from durable offset")
+      }
+      return true
+    }
     val queue = ArrayBlockingQueue<Boolean>(1)
     runOnUiThread {
       currentName = offer.name
       currentSize = offer.sizeBytes
-      onOfferUi(offer) { decision -> queue.offer(decision); runOnUiThread { render() } }
+      onOfferUi(offer) { decision ->
+        if (decision) acceptedOfferKey = key
+        queue.offer(decision); runOnUiThread { render() }
+      }
     }
     val decision = queue.poll(60, TimeUnit.SECONDS) ?: false
     if (decision) runOnUiThread { transferGotFirstProgress = false; beginTransfer() }
@@ -1541,6 +1783,65 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   override fun onError(message: String) {
     runOnUiThread { transferFailed(message) }
+  }
+
+  /**
+   * History actions (§7): detail + OPEN / SHARE / DELETE / RETRY — every
+   * action gated on REAL state (file on disk, real failure record).
+   */
+  private fun historyActions(e: HistoryStore.Entry) {
+    val f = File(File(getExternalFilesDir(null) ?: filesDir, "downloads"), e.name)
+    val details = buildString {
+      append(SpeedFormat.bytesText(e.bytes)).append(if (e.sent) "  ·  Sent" else "  ·  Received")
+      append("  ·  ").append(HistoryStore.dayLabel(e.atMs))
+      if (e.status != "Failed") {
+        append("\n").append(UiSpeed.speedText(e.speedBps)).append("  ·  ")
+          .append(UiSpeed.durationText(e.durationMs))
+        append("\nSHA-256: ").append(if (e.verified) "VERIFIED" else "unverified")
+      } else {
+        append("\nStatus: FAILED")
+        if (e.reason.isNotEmpty()) append("\n").append(e.reason)
+      }
+    }
+    val opts = ArrayList<String>()
+    val actions = ArrayList<() -> Unit>()
+    if (!e.sent && e.status != "Failed" && f.exists()) {
+      opts.add("Open"); actions.add { openFile(f) }
+      opts.add("Share"); actions.add { shareFile(f) }
+    }
+    if (e.status == "Failed") {
+      opts.add(if (e.sent) "Retry — send again" else "Retry — receive again")
+      actions.add {
+        if (e.sent) { screen = Screen.SEND; render(); toast("Re-select the file(s), then scan the receiver's QR") }
+        else startReceiving()
+      }
+    }
+    opts.add("Delete record"); actions.add {
+      HistoryStore.delete(this, e.atMs, e.name)
+      toast("Record deleted")
+      render()
+    }
+    AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+      .setTitle(e.name)
+      .setMessage(details)
+      .setItems(opts.toTypedArray()) { _, which -> actions[which]() }
+      .setNegativeButton("Close", null)
+      .show()
+  }
+
+  /** Real SHARE of a received file via FileProvider (never a copy to RAM). */
+  private fun shareFile(f: File) {
+    try {
+      val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", f)
+      val ext = f.extension.lowercase()
+      val mime = android.webkit.MimeTypeMap.getSingleton()
+        .getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+      startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+        type = mime
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      }, "Share ${f.name}"))
+    } catch (_: Exception) { toast("No app can share this file type") }
   }
 
   private fun openFile(f: File) {
@@ -1693,7 +1994,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
       when (requestCode) {
         REQ_CAMERA -> if (benchModeMiB != null) startBenchmark(benchModeMiB!!) else {
-          if (pendingUri != null) launchScan("Scan the receiver's NexDrop QR") else { screen = Screen.SEND; render() }
+          if (sendQueue.isNotEmpty()) launchScan("Scan the receiver's NexDrop QR") else { screen = Screen.SEND; render() }
         }
       }
     } else toast("Permission required for this mode")
@@ -1707,6 +2008,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     private const val PREFS = "nd_ui"
     private const val KEY_WELCOMED = "welcomed"
   private const val KEY_KEEP_AWAKE = "keep_awake"
+    private const val KEY_AUTO_RESUME = "auto_resume"
     private const val REQ_NOTIF = 2
     private const val REQ_CAMERA = 3
   }

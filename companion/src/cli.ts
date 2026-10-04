@@ -122,11 +122,48 @@ async function cmdSend(file: string): Promise<void> {
     exit(1);
   }
   const tokenBytes = Buffer.from(useToken, 'base64url');
-  const client = new TurboTcpClient();
-  await client.connect(host, port, tokenBytes, useSession);
+  const meta = { fileId: 1, name: basename(path), sizeBytes: size, sha256 };
+
+  // Resume drill (mission Phase 3 test): --drop-at <bytes> aborts the socket
+  // mid-stream exactly once, then reconnects with the SAME session token and
+  // resumes from the receiver's durable offset — proving the .ndtpart /
+  // READY(durableOffset) path end-to-end. The receiver must consent to the
+  // re-OFFER only through its repeat-offer auto-accept rule.
+  const dropAt = arg('--drop-at') ? Number(arg('--drop-at')) : 0;
+
+  const connectOnce = async (): Promise<TurboTcpClient> => {
+    const c = new TurboTcpClient();
+    await c.connect(host!, port!, tokenBytes!, useSession!);
+    return c;
+  };
+
+  const client = await connectOnce();
   console.log(`Connected to ${host}:${port} — streaming...`);
-  const reader = await openReader(path);
-  const outcome = await client.sendFile({ fileId: 1, name: basename(path), sizeBytes: size, sha256 }, reader.chunks());
+  let dropped = false;
+  async function* dropOnce(source: AsyncGenerator<{ offset: number; bytes: Buffer }>) {
+    for await (const part of source) {
+      if (dropAt > 0 && !dropped && part.offset + part.bytes.length >= dropAt) {
+        dropped = true;
+        client.close(); // destroy the socket: receiver sees EOF, keeps the .ndtpart
+        throw new Error('SIMULATED_DROP');
+      }
+      yield part;
+    }
+  }
+
+  let outcome;
+  try {
+    const reader = await openReader(path);
+    outcome = await client.sendFile(meta, dropOnce(reader.chunks()));
+  } catch (e: any) {
+    if (e?.message !== 'SIMULATED_DROP') throw e;
+    console.log(`Socket dropped at ${dropAt} bytes — reconnecting with the same session to RESUME...`);
+    client.close();
+    const client2 = await connectOnce();
+    console.log('Reconnected — receiver answers READY with the durable offset; resuming.');
+    const reader2 = await openReader(path);
+    outcome = await client2.sendFile(meta, reader2.chunks());
+  }
   const avg = size / (outcome.elapsedMs / 1000) / MB;
   console.log(
     `Done in ${(outcome.elapsedMs / 1000).toFixed(1)}s — average ${avg.toFixed(1)} MB/s — integrity ${outcome.integrity.toUpperCase()}`
