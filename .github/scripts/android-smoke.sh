@@ -23,8 +23,8 @@ tap_nav() {
   # Tap a BOTTOM-NAV tab. Screen content may contain the same word
   # ('Settings' quick-header on Your NexDrop, 'History' rows, ...), and
   # tap_by_text picks the first exact match in document order — which can be
-  # content, not the tab. This helper only matches labels inside the bottom
-  # bar (y > 555 on the 320x640 emulator) and never scrolls.
+  # content, not the tab. This helper picks the bottom-most exact match
+  # (the nav) and never scrolls.
   local i
   for i in 1 2 3; do
     dump_ui
@@ -34,9 +34,12 @@ label = sys.argv[1].casefold()
 xml = open('ui.xml', encoding='utf-8').read()
 cands = [(m.group(2), m.group(3), m.group(4), m.group(5))
          for m in re.finditer(r'text="([^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
-         if m.group(1).casefold() == label and int(m.group(3)) > 555]
+         if m.group(1).casefold() == label]
+# The bottom nav is the bottom-most exact match on screen (content items
+# with the same word, e.g. the 'Settings' quick-header, always sit above it).
+# Font-scale changes shift the nav's y position, so never hardcode it.
 if cands:
-    x1, y1, x2, y2 = cands[0]
+    x1, y1, x2, y2 = max(cands, key=lambda c: int(c[1]))
     print(f"adb shell input tap {(int(x1)+int(x2))//2} {(int(y1)+int(y2))//2}")
     sys.exit(0)
 sys.exit(1)
