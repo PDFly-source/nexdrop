@@ -108,45 +108,75 @@ PYD
 
 assert_layout() {
   # Layout audit: (a) no horizontal overflow beyond the screen; (b) on tab
-  # screens the fixed bottom nav is fully on-screen and NEVER overlapped by
-  # content — any node straddling the nav's top edge means a fixed-height
-  # container pushed content UNDER the nav (mockup layout rule).
-  local SW
-  SW=$(adb shell wm size | sed -n 's/.*: \([0-9]*\)x.*/\1/p' | tail -1)
+  # screens the fixed bottom nav is never covered by content. The nav bar
+  # is the deepest common ancestor of the bottom-area tab labels in the
+  # accessibility tree; any node that is neither INSIDE the nav subtree nor
+  # a tree ANCESTOR of it, yet intersects its rect, means content was pushed
+  # under the nav (rect containment alone cannot tell ancestor from sibling
+  # covering the nav — only the tree can).
+  local SIZE SW SH
+  SIZE=$(adb shell wm size | sed -n 's/.*: \([0-9]*\)x\([0-9]*\)/\1 \2/p' | tail -1)
+  SW=$(echo "$SIZE" | cut -d' ' -f1)
+  SH=$(echo "$SIZE" | cut -d' ' -f2)
   dump_ui
-  python3 - "$1" "$SW" "$2" <<'PYA' || { echo "SMOKE FAIL: layout audit '$1'"; cat ui.xml; exit 1; }
+  python3 - "$1" "$SW" "$SH" "$2" <<'PYA' || { echo "SMOKE FAIL: layout audit '$1'"; cat ui.xml; exit 1; }
 import sys, re
-label, SW, has_nav = sys.argv[1], int(sys.argv[2]), sys.argv[3] == "1"
-xml = open('ui.xml', encoding='utf-8').read()
-bounds = [(int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)))
-          for m in re.finditer(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)]
-overflow = [b for b in bounds if b[0] < 0 or b[2] > SW]
+import xml.etree.ElementTree as ET
+label, SW, SH, has_nav = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4] == "1"
+root = ET.parse("ui.xml").getroot()
+def bnd(n):
+    m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", n.get("bounds", ""))
+    return tuple(map(int, m.groups())) if m else None
+nodes = [n for n in root.iter("node")]
+rects = [b for b in (bnd(n) for n in nodes) if b]
+overflow = [b for b in rects if b[0] < 0 or b[2] > SW]
 if overflow:
     print(f"OVERFLOW: {len(overflow)} nodes exceed screen width {SW}, e.g. {overflow[:3]}")
     sys.exit(1)
 if has_nav:
-    tabs = [(int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5)))
-            for m in re.finditer(r'text="(Home|Transfer|Devices|History|Settings)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)]
-    if not tabs:
+    # only bottom-area labels count as nav tabs (screen titles share texts)
+    labels = [n for n in nodes
+              if n.get("text") in ("Home", "Transfer", "Devices", "History", "Settings")
+              and (b := bnd(n)) and b[1] >= 0.70 * SH]
+    if not labels:
         print("NAV MISSING: no bottom-nav tab labels on a tab screen")
         sys.exit(1)
-    # nav rect = union of the tab labels; content must not intrude INTO it.
-    nav = (min(b[0] for b in tabs), min(b[1] for b in tabs),
-           max(b[2] for b in tabs), max(b[3] for b in tabs))
-    def inside(b):  return b[0] >= nav[0] and b[1] >= nav[1] and b[2] <= nav[2] and b[3] <= nav[3]
-    def contains(b): return b[0] <= nav[0] and b[1] <= nav[1] and b[2] >= nav[2] and b[3] >= nav[3]
-    def intrudes(b):
+    parent = {c: p for p in root.iter() for c in p}
+    def chain(n):
+        out = []
+        cur = parent.get(n)
+        while cur is not None:
+            out.append(cur); cur = parent.get(cur)
+        return out
+    chains = [chain(l) for l in labels]
+    common = set(map(id, chains[0]))
+    for c in chains[1:]:
+        common &= set(map(id, c))
+    lca = next(n for n in chains[0] if id(n) in common)
+    nav = bnd(lca)
+    if nav is None or (nav[3] - nav[1]) > 0.30 * SH:
+        print(f"NAV AMBIGUOUS: label LCA rect {nav} is not a slim bottom bar")
+        sys.exit(1)
+    sub = {id(n) for n in lca.iter("node")}
+    anc = {id(n) for n in chain(lca)}
+    def decorative(n):
+        # childless, label-less background scrims draw behind the UI; only
+        # real content containers matter for the covered-nav rule
+        return len(n) == 0 and not n.get("text") and not n.get("content-desc")
+    bad = []
+    for n in nodes:
+        if id(n) in sub or id(n) in anc: continue
+        b = bnd(n)
+        if not b or decorative(n): continue
         ix = min(b[2], nav[2]) - max(b[0], nav[0])
         iy = min(b[3], nav[3]) - max(b[1], nav[1])
-        return ix > 2 and iy > 2
-    bad = [b for b in bounds if intrudes(b) and not inside(b) and not contains(b)]
+        if ix > 2 and iy > 2: bad.append(b)
     if bad:
-        print(f"NAV OVERLAP: {len(bad)} content nodes intrude into the nav rect {nav}, e.g. {bad[:3]}")
+        print(f"NAV OVERLAP: {len(bad)} nodes outside the nav tree intrude into nav rect {nav}, e.g. {bad[:3]}")
         sys.exit(1)
-print(f"LAYOUT OK: {len(bounds)} nodes within screen, nav clean" if has_nav else f"LAYOUT OK: {len(bounds)} nodes within screen")
+print(f"LAYOUT OK: {len(rects)} nodes within screen, nav clean" if has_nav else f"LAYOUT OK: {len(rects)} nodes within screen")
 PYA
 }
-
 resumed() {
   adb shell dumpsys window 2>/dev/null | grep -i 'mCurrentFocus' || true
   adb shell dumpsys activity activities 2>/dev/null | grep -i 'ResumedActivity' || true
