@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -214,7 +215,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       .firstNotNullOfOrNull { net ->
         val caps = cm.getNetworkCapabilities(net) ?: return@firstNotNullOfOrNull null
         val lp = cm.getLinkProperties(net) ?: return@firstNotNullOfOrNull null
-        if (caps.hasTransport(ConnectivityManager.TRANSPORT_WIFI)) lp.interfaceName else null
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) lp.interfaceName else null
       }
   } catch (_: Exception) { null }
 
