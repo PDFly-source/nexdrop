@@ -1,3 +1,11 @@
 <resources>
-  <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar" />
+  <!-- Dark mockup theme: chrome matches the #070A10 app background. -->
+  <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+    <item name="android:windowBackground">@color/ndBg</item>
+    <item name="android:statusBarColor">@color/ndBg</item>
+    <item name="android:navigationBarColor">@color/ndBg</item>
+    <item name="android:windowLightStatusBar">false</item>
+    <item name="colorAccent">@color/ndPrimary</item>
+    <item name="android:textColorPrimary">@color/ndText</item>
+  </style>
 </resources>

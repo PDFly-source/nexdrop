@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <color name="ic_launcher_background">#0F172A</color>
+  <!-- NexDrop mockup palette (single source of truth: NexDrop — Android App Mockup.html) -->
+  <color name="ndBg">#070A10</color>
+  <color name="ndSurface">#101722</color>
+  <color name="ndElevated">#151E2B</color>
+  <color name="ndPrimary">#18D6C5</color>
+  <color name="ndPrimaryLight">#34F0DE</color>
+  <color name="ndBlue">#4C8DFF</color>
+  <color name="ndBlueLight">#3F86F7</color>
+  <color name="ndOk">#35D07F</color>
+  <color name="ndText">#F5F7FA</color>
+  <color name="ndMuted">#9AA6B2</color>
+  <color name="ndNavIdle">#6B7785</color>
+  <color name="ndBtnText">#021A1A</color>
+  <color name="ndDanger">#FF7A7A</color>
+  <color name="ndAmber">#D97706</color>
+  <color name="ndRed">#B91C1C</color>
+  <color name="ndQrDark">#0B1220</color>
 </resources>
