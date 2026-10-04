@@ -424,8 +424,8 @@ PYQ
   fi
   echo "  QR decoded: $ip:$port (session $session)"
   adb emu redir add "tcp:$port:$port" >/dev/null 2>&1 || true
-  local drop_args=""
-  if [ -n "$3" ] && [ "$3" -gt 0 ] 2>/dev/null; then drop_args="--drop-at $3"; fi
+  local drop_args="" drop_at="${3:-}"
+  if [ -n "$drop_at" ] && [ "$drop_at" -gt 0 ] 2>/dev/null; then drop_args="--drop-at $drop_at"; fi
   timeout 900 npx tsx companion/src/cli.ts send "$1" \
     --host 127.0.0.1 --port "$port" --token "$token" --session "$session" $drop_args > /tmp/cli.log 2>&1 &
   local cli=$!
