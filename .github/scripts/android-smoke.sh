@@ -106,6 +106,23 @@ PYD
   sleep 2
 }
 
+require_text() {
+  # Assert a text is visible, scrolling the screen up to 5 times to find it
+  # (sectioned Settings pushes deep rows below the fold).
+  local i found=0
+  for i in 1 2 3 4 5; do
+    dump_ui
+    if grep -qi -- "$1" ui.xml; then found=1; break; fi
+    adb shell input swipe 160 500 160 150 300
+    sleep 1
+  done
+  if [ "$found" = "0" ]; then
+    echo "SMOKE FAIL: '$1' never became visible after scrolling"
+    cat ui.xml
+    exit 1
+  fi
+}
+
 assert_layout() {
   # Layout audit: (a) no horizontal overflow beyond the screen; (b) on tab
   # screens the fixed bottom nav is never covered by content. The nav bar
@@ -302,9 +319,9 @@ assert_layout 'history' 1
 shot 06-history
 tap_by_text 'Settings'
 sleep 2
-dump_ui
-grep -qi 'Device Test (Advanced)' ui.xml || { echo 'SMOKE FAIL: Settings screen missing'; cat ui.xml; exit 1; }
 assert_layout 'settings' 1
+shot 07-settings-top
+require_text 'Device Test (Advanced)'
 shot 07-settings
 echo 'nav tabs OK'
 
