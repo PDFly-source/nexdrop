@@ -102,10 +102,10 @@ class Ndt1TcpBothWaysTest {
       // Drain PROGRESS/CREDIT frames queued during the DATA pump first.
       out.write(encodeHeader(FrameType.COMPLETE, encodeComplete(fileId, sha).size) + encodeComplete(fileId, sha))
       var verifyType = -1
-      repeat(128) {
+      while (true) {
         val (t, p) = nextFrame()
         when (t) {
-          FrameType.VERIFY_OK -> { verifyType = t; return@repeat }
+          FrameType.VERIFY_OK -> { verifyType = t; break }
           FrameType.VERIFY_FAIL -> throw AssertionError("VERIFY_FAIL: ${String(p, Charsets.US_ASCII)}")
           FrameType.PROGRESS, FrameType.CREDIT -> { /* mid-transfer cadence — keep draining */ }
           else -> throw AssertionError("unexpected frame 0x${t.toString(16)} before VERIFY_OK")
