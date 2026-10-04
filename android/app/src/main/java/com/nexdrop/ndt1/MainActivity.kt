@@ -39,6 +39,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.nexdrop.ndt1.ui.BgView
 import com.nexdrop.ndt1.ui.CheckCircleView
 import com.nexdrop.ndt1.ui.D
+import com.nexdrop.ndt1.ui.Fonts
 import com.nexdrop.ndt1.ui.DashLineView
 import com.nexdrop.ndt1.ui.GradientTextView
 import com.nexdrop.ndt1.ui.HeroView
@@ -1803,30 +1804,57 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         if (e.reason.isNotEmpty()) append("\n").append(e.reason)
       }
     }
-    val opts = ArrayList<String>()
-    val actions = ArrayList<() -> Unit>()
+    // NOTE: appcompat's AlertDialog silently drops the item list when a
+    // message is also set (verified live: title+message rendered, items
+    // didn't), so the action list is a custom view in the app's own style.
+    val box = col().apply { setPadding(dp(6), dp(14), dp(6), dp(4)) }
+    box.addView(textView(e.name, 17f, D.TEXT, 700, 1).apply {
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    })
+    box.addView(textView(details, 12.5f, D.MUTED, 500).apply {
+      setPadding(0, dp(8), 0, dp(4))
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    })
+    val dlg = AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+      .setView(box)
+      .setPositiveButton("Close", null)
+      .create()
+    fun act(label: String, fn: () -> Unit) {
+      box.addView(TextView(this).apply {
+        text = label
+        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13.5f)
+        typeface = Fonts.sora(this@MainActivity, 600)
+        letterSpacing = 0.04f
+        setTextColor(D.PRIMARY)
+        gravity = Gravity.CENTER
+        includeFontPadding = false
+        isClickable = true
+        background = android.graphics.drawable.GradientDrawable().apply {
+          setStroke(dp(1), D.argb(64, D.PRIMARY))
+          cornerRadius = dp(12).toFloat()
+        }
+        setOnClickListener { dlg.dismiss(); fn() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply {
+          topMargin = dp(8)
+        }
+      })
+    }
     if (!e.sent && e.status != "Failed" && f.exists()) {
-      opts.add("Open"); actions.add { openFile(f) }
-      opts.add("Share"); actions.add { shareFile(f) }
+      act("Open file") { openFile(f) }
+      act("Share") { shareFile(f) }
     }
     if (e.status == "Failed") {
-      opts.add(if (e.sent) "Retry — send again" else "Retry — receive again")
-      actions.add {
+      act(if (e.sent) "Retry — send again" else "Retry — receive again") {
         if (e.sent) { screen = Screen.SEND; render(); toast("Re-select the file(s), then scan the receiver's QR") }
         else startReceiving()
       }
     }
-    opts.add("Delete record"); actions.add {
+    act("Delete record") {
       HistoryStore.delete(this, e.atMs, e.name)
       toast("Record deleted")
       render()
     }
-    AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
-      .setTitle(e.name)
-      .setMessage(details)
-      .setItems(opts.toTypedArray()) { _, which -> actions[which]() }
-      .setNegativeButton("Close", null)
-      .show()
+    dlg.show()
   }
 
   /** Real SHARE of a received file via FileProvider (never a copy to RAM). */
