@@ -163,6 +163,10 @@ sleep 2
 dump_ui
 grep -qi 'History' ui.xml || { echo 'SMOKE FAIL: History tab missing'; cat ui.xml; exit 1; }
 shot 06-history
+tap_by_text 'Settings'
+sleep 2
+dump_ui
+grep -qi 'Device Test (Advanced)' ui.xml || { echo 'SMOKE FAIL: Settings screen missing'; cat ui.xml; exit 1; }
 shot 07-settings
 echo 'nav tabs OK'
 
