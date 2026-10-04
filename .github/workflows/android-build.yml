@@ -167,8 +167,8 @@ jobs:
           grep -q "name='com.nexdrop.ndt1'" /tmp/badging.txt
           # Expected version comes from the gradle file — never a hardcoded pin
           # (a pin silently broke this gate on the first version bump).
-          VEXP_CODE=$(grep -oE 'versionCode = [0-9]+' android/app/build.gradle.kts | grep -oE '[0-9]+')
-          VEXP_NAME=$(grep -oE 'versionName = "[^"]+"' android/app/build.gradle.kts | cut -d'"' -f2)
+          VEXP_CODE=$(grep -oE 'versionCode = [0-9]+' app/build.gradle.kts | grep -oE '[0-9]+')
+          VEXP_NAME=$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | cut -d'"' -f2)
           test -n "$VEXP_CODE" && test -n "$VEXP_NAME"
           grep -q "versionCode='$VEXP_CODE'" /tmp/badging.txt
           grep -q "versionName='$VEXP_NAME'" /tmp/badging.txt
