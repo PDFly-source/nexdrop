@@ -654,7 +654,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   private fun showReceiveDetails() {
     val ep = localEndpoint ?: return
-    val text = LocalNet.diagnostics(ep, reachable = "YES — LocalNet selector", peerIp = peerIp)
+    val text = LocalNet.diagnostics(ep, reachable = "YES — LocalNet selector", peerIp = peerIp) +
+      "\nInternet: NOT REQUIRED — your files never leave this network"
     val box = col().apply { setPadding(dp(16), dp(16), dp(16), dp(16)) }
     box.addView(body("LOCAL DIRECT — pairing details"))
     box.addView(sm(text).apply { setPadding(0, dp(8), 0, 0) })
