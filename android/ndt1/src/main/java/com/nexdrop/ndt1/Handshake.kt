@@ -3,7 +3,6 @@ package com.nexdrop.ndt1
 import java.security.SecureRandom
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import android.util.Base64
 
 /**
  * Ephemeral session authentication — mirrors companion/src/handshake.ts.
@@ -16,7 +15,8 @@ object Handshake {
   fun newSessionToken(): SessionToken {
     val tokenBytes = ByteArray(32).also(rng::nextBytes)
     val sessionId = ByteArray(4).also(rng::nextBytes).joinToString("") { "%02x".format(it) }
-    return SessionToken(tokenBytes, Base64.encodeToString(tokenBytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP), sessionId)
+    val b64 = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes)
+    return SessionToken(tokenBytes, b64, sessionId)
   }
 
   /** Client proof for HELLO: HMAC-SHA256(token, nonce_be4 || "ndt1-hello") */

@@ -40,6 +40,8 @@ class TurboReceiver(
 
   private var server: ServerSocket? = null
   private val stopped = AtomicBoolean(false)
+  @Volatile private var activePart: File? = null
+  @Volatile private var activeWriter: DurableWriter? = null
 
   /** Current connection's control writer (wire PAUSE/RESUME/CANCEL). */
   @Volatile private var controlOut: java.io.OutputStream? = null
@@ -79,10 +81,20 @@ class TurboReceiver(
     server?.close()
   }
 
-  // ---- UI controls (mission §16: pause/resume/cancel over the wire) ----
+  // ---- UI controls (mission §5/§16: pause/resume/cancel over the wire) ----
+  private val userCancelled = AtomicBoolean(false)
+
   fun pause() { writeControl(FrameType.PAUSE) }
   fun resume() { writeControl(FrameType.RESUME) }
-  fun cancel() { writeControl(FrameType.CANCEL) }
+
+  /**
+   * User-initiated cancel (mission §5): tell the sender over the wire AND,
+   * unlike a mere connection drop, remove our incomplete part file once
+   * the connection ends — a user who cancels does not want the residue.
+   * Connection DROPS (EOF without cancel) still retain the part for the
+   * durable-offset resume — that policy is unchanged.
+   */
+  fun cancel() { userCancelled.set(true); writeControl(FrameType.CANCEL) }
 
   private fun writeControl(type: Int) {
     val out = controlOut ?: return
@@ -96,6 +108,7 @@ class TurboReceiver(
   }
 
   private fun handleConnection(sock: Socket) {
+    userCancelled.set(false)
     try {
       sock.use { s ->
         val out = s.getOutputStream()
@@ -115,8 +128,8 @@ class TurboReceiver(
         }
 
         // ---- HELLO (single-use token, 10-min TTL, replay-bound nonce) ----
-        var frame = readFrame() ?: return
-        if (frame.first != FrameType.HELLO) return sendReject(out, RejectReason.BAD_TOKEN)
+        var frame: Pair<Int, ByteArray>? = readFrame() ?: return
+        if (frame!!.first != FrameType.HELLO) return sendReject(out, RejectReason.BAD_TOKEN)
         val (sessionId, proof, nonce) = decodeHello(frame.second)
         if (sessionId != session.sessionId) return sendReject(out, RejectReason.UNKNOWN_SESSION)
         if (!Handshake.verifyHelloProof(session.tokenBytes, nonce, proof)) return sendReject(out, RejectReason.BAD_TOKEN)
@@ -136,17 +149,20 @@ class TurboReceiver(
         }
         val partFile = File(downloadDir, offer.name + ".ndtpart")
         val writer = DurableWriter(partFile, offer.sizeBytes)
-        val sampler = ThroughputSampler(System.currentTimeMillis())
+        activePart = partFile
+        activeWriter = writer
+        val sampler = ThroughputSampler()
         var lastNotify = 0L
         synchronized(out) { out.write(encodeHeader(FrameType.READY, 12) + encodeOffset(offer.fileId, writer.durableOffset)) }
 
         // ---- DATA* with PROGRESS at 512 KiB + CREDIT to keep the window open ----
         var sinceProgress = 0L
         loop@ while (true) {
-          frame = readFrame() ?: break
-          when (frame.first) {
+          frame = readFrame()
+          if (frame == null) break@loop // EOF (finally decides part-file policy)
+          when (frame!!.first) {
             FrameType.DATA -> {
-              val d = decodeData(frame.second)
+              val d = decodeData(frame!!.second)
               if (d.fileId != offer.fileId) continue@loop
               writer.write(d.offset, d.bytes, d.bytes.size)
               sinceProgress += d.bytes.size
@@ -198,6 +214,15 @@ class TurboReceiver(
       listener.onError(e.message ?: "receiver error")
     } finally {
       controlOut = null
+      // Mission §5: a USER cancel removes the incomplete part file on EVERY
+      // exit path (EOF, IO error, wire CANCEL) — a connection drop alone
+      // (no cancel) still retains the part for durable-offset resume.
+      if (userCancelled.get()) {
+        activeWriter?.close()
+        activePart?.delete()
+        activeWriter = null
+        activePart = null
+      }
     }
   }
 

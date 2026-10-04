@@ -24,4 +24,7 @@ dependencies {
   // ANDROID_NATIVE_LOCAL endpoint-selection tests (routing fix 2026-10-04):
   // pure JVM — the transport + selection code paths use only java.* APIs.
   testImplementation("junit:junit:4.13.2")
+  // Real org.json on the JVM test classpath (Android ships it at runtime;
+  // the android.jar unit-test stub throws) — enables QR-pairing tests.
+  testImplementation("org.json:json:20240303")
 }

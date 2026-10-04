@@ -104,7 +104,7 @@ class TurboSender(private val context: Context) {
           val startOffset = decodeOffset(readyFrame.second).second
           if (startOffset < 0 || startOffset > sizeBytes) throw Ndt1Exception("bad durable offset $startOffset")
 
-          val sampler = ThroughputSampler(System.currentTimeMillis())
+          val sampler = ThroughputSampler()
           var lastNotify = 0L
 
           // ---- windowed DATA pump: sent - durable <= 8 MiB, 512 KiB frames ----

@@ -29,5 +29,5 @@ object QrPairing {
   } catch (e: Exception) { null }
 
   fun tokenBytesFrom(pairing: Pairing): ByteArray =
-    android.util.Base64.decode(pairing.tokenB64, android.util.Base64.URL_SAFE)
+    java.util.Base64.getUrlDecoder().decode(pairing.tokenB64)
 }
