@@ -40,7 +40,6 @@ import com.nexdrop.ndt1.ui.D
 import com.nexdrop.ndt1.ui.DashLineView
 import com.nexdrop.ndt1.ui.GradientTextView
 import com.nexdrop.ndt1.ui.HeroView
-import com.nexdrop.ndt1.ui.LogoView
 import com.nexdrop.ndt1.ui.PulseDotView
 import com.nexdrop.ndt1.ui.RingView
 import com.nexdrop.ndt1.ui.UiSpeed
@@ -241,11 +240,21 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   // ================= 01 WELCOME =================
   private fun renderWelcome() {
+    // Mockup Welcome screen stacks TWO marks: the small device-relay SVG
+    // (unchanged — HeroView is a 1:1 port of that inline <svg>), then the
+    // brand's actual glyph+wordmark+tagline art full-width underneath it
+    // (<img src="${FULL}">in the mockup) — not a redrawn icon.
     content.addView(HeroView(this).apply {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(90))
     })
-    content.addView(LogoView(this).apply {
-      layoutParams = LinearLayout.LayoutParams(dp(120), dp(40))
+    content.addView(android.widget.ImageView(this).apply {
+      setImageResource(R.drawable.welcome_hero)
+      adjustViewBounds = true
+      scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+        topMargin = -dp(2)
+      }
+      contentDescription = "NexDrop — Private, Direct, Fast"
     })
     val title = col().apply { gravity = Gravity.CENTER_HORIZONTAL }
     listOf("Your files.", "Your devices.", "Directly.").forEach { line ->
@@ -274,7 +283,14 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   // ================= 02 HOME =================
   private fun renderHome() {
     val top = row()
-    top.addView(LogoView(this).apply { layoutParams = LinearLayout.LayoutParams(dp(48), dp(24)) })
+    // Mockup Home header uses LOGO(24) -> the actual brand glyph image, not
+    // a redrawn vector mark.
+    top.addView(android.widget.ImageView(this).apply {
+      setImageResource(R.drawable.logo_mark)
+      adjustViewBounds = true
+      scaleType = android.widget.ImageView.ScaleType.FIT_START
+      layoutParams = LinearLayout.LayoutParams(dp(48), dp(24))
+    })
     top.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(0, 1).apply { weight = 1f } })
     top.addView(statusPill(LocalNet.select(activeWifiInterface()) != null))
     content.addView(top.apply {
@@ -589,7 +605,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
             setStroke(dp(3), Color.WHITE)
           }
           clipToOutline = true
-          addView(LogoView(this@MainActivity).apply {
+          // Mockup QR center badge uses LOGO(18) -> same brand glyph image.
+          addView(android.widget.ImageView(this@MainActivity).apply {
+            setImageResource(R.drawable.logo_mark)
+            adjustViewBounds = true
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
             layoutParams = FrameLayout.LayoutParams(dp(18), dp(18), Gravity.CENTER)
           })
         }
