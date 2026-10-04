@@ -22,6 +22,7 @@ import android.widget.ScrollView
 import android.widget.Space
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -152,6 +153,22 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     window.navigationBarColor = D.BG
     val welcomed = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_WELCOMED, false)
     screen = if (welcomed) Screen.HOME else Screen.WELCOME
+    // Mockup navigation: BACK returns to Home from any sub-screen (Android
+    // convention for a hub activity); it never loses an active transfer.
+    onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+      override fun handleOnBackPressed() {
+        when (screen) {
+          Screen.HOME, Screen.WELCOME -> {
+            isEnabled = false
+            onBackPressedDispatcher.onBackPressed()
+            isEnabled = true
+          }
+          Screen.TRANSFER -> toast("Transfer in progress — use CANCEL to stop")
+          Screen.RECEIVE -> { stopReceiving(); screen = Screen.HOME; render() }
+          else -> { screen = Screen.HOME; render() }
+        }
+      }
+    })
     render()
   }
 
