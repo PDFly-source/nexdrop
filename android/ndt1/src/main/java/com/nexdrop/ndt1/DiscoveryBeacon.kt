@@ -127,7 +127,17 @@ class DiscoveryBeacon(
     if (readU32(pkt, 0) != 0x4E444431) return null
     if (pkt[4].toInt() != 1) return null
     val port = readU16(pkt, 6)
-    if (crc32(pkt, 0, pkt.size) != readU32(pkt, 8)) return null
+    // v1.4.0 BUG (root cause of the physical "Sender identity not seen"):
+    // the check recomputed CRC32 over the WHOLE packet INCLUDING the stored
+    // CRC bytes — which can never equal the stored value (mathematically),
+    // so every incoming beacon was silently dropped and discovery/trust
+    // never resolved on Android. The stored CRC is computed over bytes
+    // 0..7 + body with the CRC field ZEROED (same in buildBeacon below and
+    // companion/src/discovery.ts), so the verifier must zero it too.
+    // Caught by DiscoveryBeaconIdentityTest (loopback, real packets).
+    val check = pkt.copyOf()
+    check[8] = 0; check[9] = 0; check[10] = 0; check[11] = 0
+    if (crc32(check, 0, check.size) != readU32(pkt, 8)) return null
     val body = JSONObject(String(pkt, 12, pkt.size - 12, Charsets.UTF_8))
     return DiscoveredDevice(
       from, port, body.optString("deviceName"), body.optString("deviceType"),
