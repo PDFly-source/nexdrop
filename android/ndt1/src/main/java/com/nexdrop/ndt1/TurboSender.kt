@@ -47,11 +47,18 @@ class TurboSender(private val context: Context) {
     @Volatile var windowWaits = 0; internal set
     @Volatile var windowWaitMs = 0.0; internal set
     @Volatile var frames = 0; internal set
+    // v1.4.2-rc4 Phase C: REAL kernel-applied socket config + link state +
+    // post-COMPLETE PING->PONG RTT. Never the configured value — what the
+    // kernel actually granted, read back off the live socket.
+    @Volatile var linkText = ""; internal set
+    @Volatile var verifyRttMs = 0.0; internal set
     // v1.4.2-rc2 UNITS FIX: counters are MILLISECONDS; the summary divides
     // by 1000 — displayed values are true seconds (measurements untouched).
     fun textSummary(): String =
       "TX — pre-hash SHA ${"%.2f".format(preHashMs / 1000.0)}s · file read ${"%.2f".format(readMs / 1000.0)}s · " +
-        "socket write ${"%.2f".format(writeMs / 1000.0)}s · window waits $windowWaits× ${"%.2f".format(windowWaitMs / 1000.0)}s (avg ${"%.0f".format(if (windowWaits > 0) windowWaitMs / windowWaits else 0.0)} ms) · $frames frames"
+        "socket write ${"%.2f".format(writeMs / 1000.0)}s · window waits $windowWaits× ${"%.2f".format(windowWaitMs / 1000.0)}s (avg ${"%.0f".format(if (windowWaits > 0) windowWaitMs / windowWaits else 0.0)} ms) · $frames frames" +
+        (if (linkText.isNotEmpty()) " · $linkText" else "") +
+        (if (verifyRttMs > 0) " · VERIFY RTT ${"%.0f".format(verifyRttMs)} ms" else "")
   }
 
   @Volatile var lastProfile = SenderProfile(); private set
@@ -83,6 +90,9 @@ class TurboSender(private val context: Context) {
           try { sock.receiveBufferSize = Ndt1Tunables.socketBufferBytes } catch (_: Exception) {}
           try { sock.sendBufferSize = Ndt1Tunables.socketBufferBytes } catch (_: Exception) {}
           sock.connect(InetSocketAddress(host, port), 8000)
+          // Phase C: the REAL socket config the kernel granted (read back,
+          // never the requested value) + best-effort Wi-Fi link state.
+          lastProfile.linkText = "link — sndbuf ${sock.sendBufferSize / 1024} KiB · rcvbuf ${sock.receiveBufferSize / 1024} KiB · NODELAY ${sock.tcpNoDelay} · wifi ${wifiSummary()}"
           val out = sock.getOutputStream()
           val input = sock.getInputStream()
           val decoder = FrameDecoder()
@@ -184,10 +194,19 @@ class TurboSender(private val context: Context) {
           }
 
           // ---- COMPLETE + VERIFY_OK handshake ----
+          // Phase C RTT probe: one PING under load, sent BEFORE COMPLETE so
+          // the receiver's data loop still answers it (PONG is protocol-
+          // legal on the data plane). The VERIFY loop records the returned
+          // PONG and treats it as an unknown frame — wire unchanged.
+          val rtt0 = System.nanoTime()
+          out.write(encodeHeader(FrameType.PING, 4) + byteArrayOf(0, 0, 0, 0))
           val complete = encodeComplete(fileId, shaHex)
           out.write(encodeHeader(FrameType.COMPLETE, complete.size) + complete)
           while (true) {
             val f = nextFrame(decoder, input, readBuf) ?: throw Ndt1Exception("closed before VERIFY")
+            if (f.first == FrameType.PONG && lastProfile.verifyRttMs <= 0) {
+              lastProfile.verifyRttMs = (System.nanoTime() - rtt0) / 1e6
+            }
             when (f.first) {
               FrameType.VERIFY_OK -> {
                 listener.onComplete(shaHex, sampler.stats(sizeBytes - startOffset))
@@ -209,6 +228,20 @@ class TurboSender(private val context: Context) {
       }
     }
   }
+
+  /** Phase C: best-effort Wi-Fi link state (Android may restrict without
+   * location permission — then we report unavailable, never a guess). */
+  private fun wifiSummary(): String = try {
+    val wm = context.getSystemService(android.content.Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+    val wi = wm.connectionInfo
+    val freq = wi.frequency
+    val band = when {
+      freq >= 4900 -> "5 GHz"
+      freq > 0 -> "2.4 GHz"
+      else -> "band n/a"
+    }
+    "${if (wi.linkSpeed > 0) "${wi.linkSpeed} Mbps" else "rate n/a"} · $band"
+  } catch (e: Exception) { "unavailable" }
 
   @Volatile private var localPaused = false
 

@@ -47,6 +47,9 @@ class TurboReceiver(
     @Volatile var frames = 0; internal set
     @Volatile var bytesIn = 0L; internal set
     @Volatile var readBlockMs = 0.0; internal set
+    // v1.4.2-rc4 Phase C: REAL kernel-applied socket config (read back off
+    // the accepted socket, never the requested value) + link state.
+    @Volatile var linkText = ""; internal set
     @Volatile var fsyncCount = 0; internal set
     @Volatile var fsyncTotalMs = 0.0; internal set
     @Volatile var fsyncMaxMs = 0.0; internal set
@@ -58,7 +61,8 @@ class TurboReceiver(
     // "storage-paced vs network-paced" for the physical matrix.
     fun textSummary(): String =
       "RX — $frames frames · fsync $fsyncCount× ${"%.2f".format(fsyncTotalMs / 1000.0)}s (avg ${"%.0f".format(if (fsyncCount > 0) fsyncTotalMs / fsyncCount else 0.0)} ms, max ${"%.0f".format(fsyncMaxMs)} ms) · " +
-        "disk write ${"%.2f".format(writeTotalMs / 1000.0)}s · SHA ${"%.2f".format(hashTotalMs / 1000.0)}s · socket read-wait ${"%.2f".format(readBlockMs / 1000.0)}s"
+        "disk write ${"%.2f".format(writeTotalMs / 1000.0)}s · SHA ${"%.2f".format(hashTotalMs / 1000.0)}s · socket read-wait ${"%.2f".format(readBlockMs / 1000.0)}s" +
+        (if (linkText.isNotEmpty()) " · $linkText" else "")
   }
 
   @Volatile var lastProfile = ReceiverProfile(); private set
@@ -137,6 +141,9 @@ class TurboReceiver(
     lastProfile = ReceiverProfile()
     try {
       sock.use { s ->
+        // Phase C: the REAL socket config the kernel granted this accepted
+        // connection — read back, never the requested value.
+        lastProfile.linkText = "link — sndbuf ${s.sendBufferSize / 1024} KiB · rcvbuf ${s.receiveBufferSize / 1024} KiB · NODELAY ${s.tcpNoDelay}"
         val out = s.getOutputStream()
         controlOut = out
         val input = s.getInputStream()
