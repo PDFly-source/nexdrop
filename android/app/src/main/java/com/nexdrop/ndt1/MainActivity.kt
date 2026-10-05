@@ -940,6 +940,13 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
     // fill + SEND ALL
     content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0).apply { weight = 1f } })
+    content.addView(btn(if (sendQueue.size > 1) "SEND ALL (${sendQueue.size})" else "CONTINUE", "primary") {
+      if (sendQueue.isEmpty()) { toast("Select a file first"); return@btn }
+      if (!hasPermission(Manifest.permission.CAMERA)) { askPermission(Manifest.permission.CAMERA, REQ_CAMERA); return@btn }
+      launchScan("Scan the receiver's NexDrop QR")
+    }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)) })
+    // Secondary path BELOW the primary action: the QR flow is the
+    // guaranteed route; nearby discovery is a convenience below the fold.
     // NEARBY DEVICES (v1.4): real NDD1 discovery — receivers running on this
     // network appear here automatically. No peers = honest empty state, and
     // QR pairing always remains. No radar rings: Android exposes no honest
@@ -982,11 +989,6 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       }
     })
 
-    content.addView(btn(if (sendQueue.size > 1) "SEND ALL (${sendQueue.size})" else "CONTINUE", "primary") {
-      if (sendQueue.isEmpty()) { toast("Select a file first"); return@btn }
-      if (!hasPermission(Manifest.permission.CAMERA)) { askPermission(Manifest.permission.CAMERA, REQ_CAMERA); return@btn }
-      launchScan("Scan the receiver's NexDrop QR")
-    }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)) })
   }
 
   // ================= 04 RECEIVE + QR =================
