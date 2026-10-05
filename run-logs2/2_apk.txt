@@ -1,0 +1,678 @@
+﻿2026-10-04T15:00:00.9763312Z Current runner version: '2.337.0'
+2026-10-04T15:00:00.9784944Z ##[group]Runner Image Provisioner
+2026-10-04T15:00:00.9785804Z Hosted Compute Agent
+2026-10-04T15:00:00.9786316Z Version: 20260901.588
+2026-10-04T15:00:00.9786917Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-04T15:00:00.9787529Z Build Date: 2026-09-01T19:56:44Z
+2026-10-04T15:00:00.9788076Z Worker ID: {52ca9fcd-c0bb-4a65-98d8-6d5549abb19e}
+2026-10-04T15:00:00.9788761Z Azure Region: centralus
+2026-10-04T15:00:00.9789233Z ##[endgroup]
+2026-10-04T15:00:00.9790302Z ##[group]Operating System
+2026-10-04T15:00:00.9790848Z Ubuntu
+2026-10-04T15:00:00.9791316Z 24.04.5
+2026-10-04T15:00:00.9791754Z LTS
+2026-10-04T15:00:00.9792166Z ##[endgroup]
+2026-10-04T15:00:00.9792628Z ##[group]Runner Image
+2026-10-04T15:00:00.9793163Z Image: ubuntu-24.04
+2026-10-04T15:00:00.9793665Z Version: 20260927.320.1
+2026-10-04T15:00:00.9795127Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-04T15:00:00.9796515Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+2026-10-04T15:00:00.9797405Z ##[endgroup]
+2026-10-04T15:00:00.9798564Z ##[group]GITHUB_TOKEN Permissions
+2026-10-04T15:00:00.9800484Z Contents: write
+2026-10-04T15:00:00.9800982Z Metadata: read
+2026-10-04T15:00:00.9801426Z ##[endgroup]
+2026-10-04T15:00:00.9803041Z Secret source: Actions
+2026-10-04T15:00:00.9803821Z Cache mode: write
+2026-10-04T15:00:00.9804602Z Prepare workflow directory
+2026-10-04T15:00:01.0072948Z Prepare all required actions
+2026-10-04T15:00:01.0115620Z Getting action download info
+2026-10-04T15:00:01.2636751Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-04T15:00:01.3327438Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
+2026-10-04T15:00:01.9528665Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-04T15:00:02.2611514Z Complete job name: apk
+2026-10-04T15:00:02.3486261Z ##[group]Run actions/checkout@v4
+2026-10-04T15:00:02.3487447Z with:
+2026-10-04T15:00:02.3488268Z   repository: PDFly-source/nexdrop
+2026-10-04T15:00:02.3495759Z   token: ***
+2026-10-04T15:00:02.3496547Z   ssh-strict: true
+2026-10-04T15:00:02.3497381Z   ssh-user: git
+2026-10-04T15:00:02.3498230Z   persist-credentials: true
+2026-10-04T15:00:02.3499079Z   clean: true
+2026-10-04T15:00:02.3499881Z   sparse-checkout-cone-mode: true
+2026-10-04T15:00:02.3500907Z   fetch-depth: 1
+2026-10-04T15:00:02.3501703Z   fetch-tags: false
+2026-10-04T15:00:02.3502528Z   show-progress: true
+2026-10-04T15:00:02.3503345Z   lfs: false
+2026-10-04T15:00:02.3504273Z   submodules: false
+2026-10-04T15:00:02.3505116Z   set-safe-directory: true
+2026-10-04T15:00:02.3506334Z   allow-unsafe-pr-checkout: false
+2026-10-04T15:00:02.3507566Z ##[endgroup]
+2026-10-04T15:00:02.4441913Z Syncing repository: PDFly-source/nexdrop
+2026-10-04T15:00:02.4445148Z ##[group]Getting Git version info
+2026-10-04T15:00:02.4446940Z Working directory is '/home/runner/work/nexdrop/nexdrop'
+2026-10-04T15:00:02.4449181Z [command]/usr/bin/git version
+2026-10-04T15:00:02.4450497Z git version 2.55.0
+2026-10-04T15:00:02.4464393Z ##[endgroup]
+2026-10-04T15:00:02.4472907Z Temporarily overriding HOME='/home/runner/work/_temp/70cd2f23-7052-4d84-9176-5424f057c1a9' before making global git config changes
+2026-10-04T15:00:02.4476415Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-04T15:00:02.4478715Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/nexdrop/nexdrop
+2026-10-04T15:00:02.4527162Z Deleting the contents of '/home/runner/work/nexdrop/nexdrop'
+2026-10-04T15:00:02.4531104Z ##[group]Initializing the repository
+2026-10-04T15:00:02.4533264Z [command]/usr/bin/git init /home/runner/work/nexdrop/nexdrop
+2026-10-04T15:00:02.4618518Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-04T15:00:02.4621330Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-04T15:00:02.4624494Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-04T15:00:02.4626807Z hint: call:
+2026-10-04T15:00:02.4627901Z hint:
+2026-10-04T15:00:02.4629388Z hint: 	git config --global init.defaultBranch <name>
+2026-10-04T15:00:02.4631507Z hint:
+2026-10-04T15:00:02.4632964Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-04T15:00:02.4635377Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-04T15:00:02.4637019Z hint:
+2026-10-04T15:00:02.4637950Z hint: 	git branch -m <name>
+2026-10-04T15:00:02.4639080Z hint:
+2026-10-04T15:00:02.4640458Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-04T15:00:02.4642592Z Initialized empty Git repository in /home/runner/work/nexdrop/nexdrop/.git/
+2026-10-04T15:00:02.4648180Z [command]/usr/bin/git remote add origin https://github.com/PDFly-source/nexdrop
+2026-10-04T15:00:02.4672627Z ##[endgroup]
+2026-10-04T15:00:02.4675168Z ##[group]Disabling automatic garbage collection
+2026-10-04T15:00:02.4677096Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-04T15:00:02.4702705Z ##[endgroup]
+2026-10-04T15:00:02.4704986Z ##[group]Setting up auth
+2026-10-04T15:00:02.4706687Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-04T15:00:02.4730512Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-04T15:00:02.5051857Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-04T15:00:02.5081099Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-04T15:00:02.5223773Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-04T15:00:02.5245853Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-04T15:00:02.5395408Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-04T15:00:02.5429241Z ##[endgroup]
+2026-10-04T15:00:02.5430764Z ##[group]Fetching the repository
+2026-10-04T15:00:02.5438985Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +b204bb53a23a941fa9862597311945a31ca457cf:refs/remotes/origin/main
+2026-10-04T15:00:03.2479192Z From https://github.com/PDFly-source/nexdrop
+2026-10-04T15:00:03.2480041Z  * [new ref]         b204bb53a23a941fa9862597311945a31ca457cf -> origin/main
+2026-10-04T15:00:03.2491457Z ##[endgroup]
+2026-10-04T15:00:03.2492292Z ##[group]Determining the checkout info
+2026-10-04T15:00:03.2493249Z ##[endgroup]
+2026-10-04T15:00:03.2495829Z [command]/usr/bin/git sparse-checkout disable
+2026-10-04T15:00:03.2544144Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-04T15:00:03.2570634Z ##[group]Checking out the ref
+2026-10-04T15:00:03.2582646Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-10-04T15:00:03.2793784Z Switched to a new branch 'main'
+2026-10-04T15:00:03.2797629Z branch 'main' set up to track 'origin/main'.
+2026-10-04T15:00:03.2800692Z ##[endgroup]
+2026-10-04T15:00:03.2832690Z [command]/usr/bin/git log -1 --format=%H
+2026-10-04T15:00:03.2851039Z b204bb53a23a941fa9862597311945a31ca457cf
+2026-10-04T15:00:03.3097721Z ##[group]Run actions/setup-java@v4
+2026-10-04T15:00:03.3098073Z with:
+2026-10-04T15:00:03.3098341Z   distribution: temurin
+2026-10-04T15:00:03.3098617Z   java-version: 17
+2026-10-04T15:00:03.3098996Z   java-package: jdk
+2026-10-04T15:00:03.3099262Z   check-latest: false
+2026-10-04T15:00:03.3099566Z   server-id: github
+2026-10-04T15:00:03.3099965Z   server-username: GITHUB_ACTOR
+2026-10-04T15:00:03.3100332Z   server-password: GITHUB_TOKEN
+2026-10-04T15:00:03.3100679Z   overwrite-settings: true
+2026-10-04T15:00:03.3100963Z   job-status: success
+2026-10-04T15:00:03.3103091Z   token: ***
+2026-10-04T15:00:03.3103356Z ##[endgroup]
+2026-10-04T15:00:03.4387842Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+2026-10-04T15:00:03.4393817Z ##[group]Installed distributions
+2026-10-04T15:00:03.4520482Z Resolved Java 17.0.20+1 from tool-cache
+2026-10-04T15:00:03.4521099Z Setting Java 17.0.20+1 as the default
+2026-10-04T15:00:03.4528057Z (node:2140) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T15:00:03.4528815Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T15:00:03.4530647Z Creating toolchains.xml for JDK version 17 from temurin
+2026-10-04T15:00:03.4584779Z Writing to /home/runner/.m2/toolchains.xml
+2026-10-04T15:00:03.4585265Z 
+2026-10-04T15:00:03.4585456Z Java configuration:
+2026-10-04T15:00:03.4585962Z   Distribution: temurin
+2026-10-04T15:00:03.4586385Z   Version: 17.0.20+1
+2026-10-04T15:00:03.4586973Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:00:03.4587274Z 
+2026-10-04T15:00:03.4587761Z ##[endgroup]
+2026-10-04T15:00:03.4606744Z Creating settings.xml with server-id: github
+2026-10-04T15:00:03.4623227Z Writing to /home/runner/.m2/settings.xml
+2026-10-04T15:00:03.4790951Z ##[group]Run set -eu
+2026-10-04T15:00:03.4791523Z [36;1mset -eu[0m
+2026-10-04T15:00:03.4792082Z [36;1mecho "ANDROID_HOME=$ANDROID_HOME"[0m
+2026-10-04T15:00:03.4792935Z [36;1mSDKM="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -1 || true)"[0m
+2026-10-04T15:00:03.4793777Z [36;1mif [ -n "$SDKM" ] && [ -x "$SDKM" ]; then[0m
+2026-10-04T15:00:03.4794630Z [36;1m  "$SDKM" --version[0m
+2026-10-04T15:00:03.4795157Z [36;1m  yes | "$SDKM" --licenses > /dev/null || true[0m
+2026-10-04T15:00:03.4795862Z [36;1m  echo "licenses accepted via $SDKM"[0m
+2026-10-04T15:00:03.4796369Z [36;1melse[0m
+2026-10-04T15:00:03.4796976Z [36;1m  echo "sdkmanager not found (runner SDK licenses are pre-accepted); continuing"[0m
+2026-10-04T15:00:03.4797666Z [36;1mfi[0m
+2026-10-04T15:00:03.5020024Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:00:03.5020446Z env:
+2026-10-04T15:00:03.5020934Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:00:03.5021741Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:00:03.5022260Z ##[endgroup]
+2026-10-04T15:00:03.5108467Z ANDROID_HOME=/usr/local/lib/android/sdk
+2026-10-04T15:00:08.3207365Z 12.0
+2026-10-04T15:00:08.3208065Z 
+2026-10-04T15:00:11.0461943Z yes: standard output: Broken pipe
+2026-10-04T15:00:11.0470471Z licenses accepted via /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+2026-10-04T15:00:11.0506532Z ##[group]Run ./gradlew --version
+2026-10-04T15:00:11.0506849Z [36;1m./gradlew --version[0m
+2026-10-04T15:00:11.0545468Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:00:11.0545741Z env:
+2026-10-04T15:00:11.0546015Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:00:11.0546425Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:00:11.0546735Z ##[endgroup]
+2026-10-04T15:00:11.1566463Z Downloading https://services.gradle.org/distributions/gradle-8.7-bin.zip
+2026-10-04T15:00:12.4067214Z ............10%.............20%.............30%.............40%............50%.............60%.............70%.............80%.............90%............100%
+2026-10-04T15:00:13.4008351Z 
+2026-10-04T15:00:13.4009455Z Welcome to Gradle 8.7!
+2026-10-04T15:00:13.4010328Z 
+2026-10-04T15:00:13.4035231Z Here are the highlights of this release:
+2026-10-04T15:00:13.4051231Z  - Compiling and testing with Java 22
+2026-10-04T15:00:13.4051864Z  - Cacheable Groovy script compilation
+2026-10-04T15:00:13.4052583Z  - New methods in lazy collection properties
+2026-10-04T15:00:13.4052792Z 
+2026-10-04T15:00:13.4053007Z For more details see https://docs.gradle.org/8.7/release-notes.html
+2026-10-04T15:00:13.4053309Z 
+2026-10-04T15:00:13.4053318Z 
+2026-10-04T15:00:13.4053498Z ------------------------------------------------------------
+2026-10-04T15:00:13.4053833Z Gradle 8.7
+2026-10-04T15:00:13.4054287Z ------------------------------------------------------------
+2026-10-04T15:00:13.4054523Z 
+2026-10-04T15:00:13.4054645Z Build time:   2024-03-22 15:52:46 UTC
+2026-10-04T15:00:13.4055020Z Revision:     650af14d7653aa949fce5e886e685efc9cf97c10
+2026-10-04T15:00:13.4055257Z 
+2026-10-04T15:00:13.4055354Z Kotlin:       1.9.22
+2026-10-04T15:00:13.4055586Z Groovy:       3.0.17
+2026-10-04T15:00:13.4055839Z Ant:          Apache Ant(TM) version 1.10.13 compiled on January 4 2023
+2026-10-04T15:00:13.4056158Z JVM:          17.0.20.1 (Eclipse Adoptium 17.0.20.1+1)
+2026-10-04T15:00:13.4056417Z OS:           Linux 6.17.0-1022-azure amd64
+2026-10-04T15:00:13.4057040Z 
+2026-10-04T15:00:13.4164391Z ##[group]Run ./gradlew --no-daemon --stacktrace :ndt1:testDebugUnitTest
+2026-10-04T15:00:13.4165026Z [36;1m./gradlew --no-daemon --stacktrace :ndt1:testDebugUnitTest[0m
+2026-10-04T15:00:13.4210688Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:00:13.4210942Z env:
+2026-10-04T15:00:13.4211209Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:00:13.4211601Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:00:13.4211899Z ##[endgroup]
+2026-10-04T15:00:13.9143097Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.7/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-04T15:00:14.9131143Z Daemon will be stopped at the end of the build 
+2026-10-04T15:01:03.5166124Z > Task :ndt1:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T15:01:03.5166605Z > Task :ndt1:preBuild UP-TO-DATE
+2026-10-04T15:01:03.5166838Z > Task :ndt1:preDebugBuild UP-TO-DATE
+2026-10-04T15:01:03.5167082Z > Task :ndt1:generateDebugResValues
+2026-10-04T15:01:03.6130483Z > Task :ndt1:generateDebugResources
+2026-10-04T15:01:03.6130959Z > Task :ndt1:packageDebugResources
+2026-10-04T15:01:04.5160824Z > Task :ndt1:preDebugUnitTestBuild UP-TO-DATE
+2026-10-04T15:01:04.6130718Z > Task :ndt1:javaPreCompileDebugUnitTest
+2026-10-04T15:01:04.6155096Z > Task :ndt1:javaPreCompileDebug
+2026-10-04T15:01:04.6184589Z > Task :ndt1:parseDebugLocalResources
+2026-10-04T15:01:04.6214524Z > Task :ndt1:generateDebugRFile
+2026-10-04T15:01:07.7155617Z > Task :ndt1:generateDebugUnitTestStubRFile
+2026-10-04T15:01:15.8135235Z 
+2026-10-04T15:01:15.8136528Z > Task :ndt1:compileDebugKotlin
+2026-10-04T15:01:15.8158462Z w: file:///home/runner/work/nexdrop/nexdrop/android/ndt1/src/main/java/com/nexdrop/ndt1/TurboReceiver.kt:163:22 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, ByteArray>
+2026-10-04T15:01:15.8160630Z w: file:///home/runner/work/nexdrop/nexdrop/android/ndt1/src/main/java/com/nexdrop/ndt1/TurboReceiver.kt:165:39 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, ByteArray>
+2026-10-04T15:01:15.8161634Z 
+2026-10-04T15:01:15.8183790Z > Task :ndt1:compileDebugJavaWithJavac NO-SOURCE
+2026-10-04T15:01:15.9131583Z > Task :ndt1:bundleLibRuntimeToJarDebug
+2026-10-04T15:01:15.9132702Z > Task :ndt1:bundleLibCompileToJarDebug
+2026-10-04T15:01:15.9158248Z > Task :ndt1:processDebugJavaRes
+2026-10-04T15:01:19.2130373Z 
+2026-10-04T15:01:19.2131409Z > Task :ndt1:compileDebugUnitTestKotlin
+2026-10-04T15:01:19.2132618Z w: file:///home/runner/work/nexdrop/nexdrop/android/ndt1/src/test/java/com/nexdrop/ndt1/Ndt1TcpBothWaysTest.kt:104:24 Variable 'verifyType' initializer is redundant
+2026-10-04T15:01:19.2133446Z 
+2026-10-04T15:01:19.2133780Z > Task :ndt1:compileDebugUnitTestJavaWithJavac NO-SOURCE
+2026-10-04T15:01:19.2134529Z > Task :ndt1:processDebugUnitTestJavaRes
+2026-10-04T15:01:39.0135597Z > Task :ndt1:testDebugUnitTest
+2026-10-04T15:01:39.0140648Z 
+2026-10-04T15:01:39.0155090Z BUILD SUCCESSFUL in 1m 25s
+2026-10-04T15:01:39.0171981Z 16 actionable tasks: 16 executed
+2026-10-04T15:01:39.3645080Z ##[group]Run ./gradlew --no-daemon --stacktrace :app:assembleDebug
+2026-10-04T15:01:39.3645564Z [36;1m./gradlew --no-daemon --stacktrace :app:assembleDebug[0m
+2026-10-04T15:01:39.3683339Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:01:39.3683705Z env:
+2026-10-04T15:01:39.3684231Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:01:39.3684628Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:01:39.3684927Z ##[endgroup]
+2026-10-04T15:01:39.9041668Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.7/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-04T15:01:40.7023859Z Daemon will be stopped at the end of the build 
+2026-10-04T15:01:47.4080906Z > Task :app:preBuild UP-TO-DATE
+2026-10-04T15:01:47.5065594Z > Task :app:preDebugBuild UP-TO-DATE
+2026-10-04T15:01:47.5066686Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+2026-10-04T15:01:47.5096769Z > Task :app:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T15:01:47.5147244Z > Task :ndt1:preBuild UP-TO-DATE
+2026-10-04T15:01:47.5149034Z > Task :ndt1:preDebugBuild UP-TO-DATE
+2026-10-04T15:01:47.6026452Z > Task :app:generateDebugResValues
+2026-10-04T15:01:47.6055176Z > Task :ndt1:writeDebugAarMetadata
+2026-10-04T15:01:53.9023685Z > Task :app:checkDebugAarMetadata
+2026-10-04T15:01:53.9024561Z > Task :ndt1:generateDebugResValues UP-TO-DATE
+2026-10-04T15:01:53.9024913Z > Task :ndt1:generateDebugResources UP-TO-DATE
+2026-10-04T15:01:54.0035403Z > Task :ndt1:packageDebugResources UP-TO-DATE
+2026-10-04T15:01:54.0035830Z > Task :app:mapDebugSourceSetPaths
+2026-10-04T15:01:54.0036127Z > Task :app:generateDebugResources
+2026-10-04T15:01:55.0027465Z > Task :app:packageDebugResources
+2026-10-04T15:01:55.1035561Z > Task :app:createDebugCompatibleScreenManifests
+2026-10-04T15:01:55.1036420Z > Task :app:mergeDebugResources
+2026-10-04T15:01:55.1036958Z > Task :app:extractDeepLinksDebug
+2026-10-04T15:01:55.1037632Z > Task :ndt1:extractDeepLinksDebug
+2026-10-04T15:01:55.1038114Z > Task :app:parseDebugLocalResources
+2026-10-04T15:01:55.2024463Z > Task :ndt1:processDebugManifest
+2026-10-04T15:01:55.6037730Z > Task :ndt1:compileDebugLibraryResources
+2026-10-04T15:01:55.8044753Z 
+2026-10-04T15:01:55.8045777Z > Task :app:processDebugMainManifest
+2026-10-04T15:01:55.8046686Z /home/runner/work/nexdrop/nexdrop/android/app/src/main/AndroidManifest.xml Warning:
+2026-10-04T15:01:55.8048483Z 	Namespace 'com.nexdrop.ndt1' is used in multiple modules and/or libraries: AndroidManifest.xml, :ndt1. Please ensure that all modules and libraries have a unique namespace. For more information, See https://developer.android.com/studio/build/configure-app-module#set-namespace
+2026-10-04T15:01:55.9025446Z 
+2026-10-04T15:01:55.9055592Z > Task :app:processDebugManifest
+2026-10-04T15:01:55.9056385Z > Task :ndt1:parseDebugLocalResources UP-TO-DATE
+2026-10-04T15:01:55.9056981Z > Task :ndt1:generateDebugRFile UP-TO-DATE
+2026-10-04T15:01:55.9057555Z > Task :ndt1:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T15:01:55.9058103Z > Task :ndt1:compileDebugKotlin UP-TO-DATE
+2026-10-04T15:01:55.9058586Z > Task :ndt1:javaPreCompileDebug UP-TO-DATE
+2026-10-04T15:01:55.9059074Z > Task :ndt1:compileDebugJavaWithJavac NO-SOURCE
+2026-10-04T15:01:55.9059606Z > Task :ndt1:bundleLibCompileToJarDebug UP-TO-DATE
+2026-10-04T15:01:56.0027570Z > Task :app:processDebugManifestForPackage
+2026-10-04T15:01:56.0038475Z > Task :app:javaPreCompileDebug
+2026-10-04T15:01:56.5023532Z > Task :app:mergeDebugShaders
+2026-10-04T15:01:56.5043584Z > Task :app:compileDebugShaders NO-SOURCE
+2026-10-04T15:01:56.5056014Z > Task :app:generateDebugAssets UP-TO-DATE
+2026-10-04T15:01:56.5056935Z > Task :ndt1:mergeDebugShaders
+2026-10-04T15:01:56.5057353Z > Task :ndt1:compileDebugShaders NO-SOURCE
+2026-10-04T15:01:56.5057820Z > Task :ndt1:generateDebugAssets UP-TO-DATE
+2026-10-04T15:01:56.5058336Z > Task :ndt1:packageDebugAssets
+2026-10-04T15:01:56.5058682Z > Task :app:mergeDebugAssets
+2026-10-04T15:01:56.6038987Z > Task :app:compressDebugAssets
+2026-10-04T15:01:56.6042127Z > Task :ndt1:bundleLibRuntimeToJarDebug UP-TO-DATE
+2026-10-04T15:01:56.6042836Z > Task :app:desugarDebugFileDependencies
+2026-10-04T15:01:56.6043299Z > Task :ndt1:processDebugJavaRes UP-TO-DATE
+2026-10-04T15:01:57.2029369Z > Task :app:processDebugResources
+2026-10-04T15:01:57.3049091Z > Task :app:checkDebugDuplicateClasses
+2026-10-04T15:01:58.4025997Z > Task :app:mergeDebugStartupProfile
+2026-10-04T15:02:23.4047674Z > Task :app:mergeDebugJniLibFolders
+2026-10-04T15:02:23.4151547Z > Task :ndt1:bundleLibRuntimeToDirDebug
+2026-10-04T15:02:23.4194752Z > Task :ndt1:mergeDebugJniLibFolders
+2026-10-04T15:02:23.4210175Z > Task :ndt1:mergeDebugNativeLibs NO-SOURCE
+2026-10-04T15:02:23.4210753Z > Task :ndt1:copyDebugJniLibsProjectOnly
+2026-10-04T15:02:23.7027097Z > Task :app:mergeDebugNativeLibs NO-SOURCE
+2026-10-04T15:02:23.7075166Z > Task :app:stripDebugDebugSymbols NO-SOURCE
+2026-10-04T15:02:25.9045210Z > Task :app:validateSigningDebug
+2026-10-04T15:02:25.9105093Z > Task :app:writeDebugAppMetadata
+2026-10-04T15:02:25.9134840Z > Task :app:writeDebugSigningConfigVersions
+2026-10-04T15:02:26.0057665Z > Task :app:mergeLibDexDebug
+2026-10-04T15:02:27.2085166Z > Task :app:compileDebugKotlin
+2026-10-04T15:02:27.4045334Z > Task :app:mergeExtDexDebug
+2026-10-04T15:02:31.0046782Z 
+2026-10-04T15:02:31.0055407Z > Task :app:compileDebugKotlin
+2026-10-04T15:02:31.0065730Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:638:9 Variable 'ep' is never used
+2026-10-04T15:02:31.0066949Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:771:11 Variable 'm' is never used
+2026-10-04T15:02:31.0068285Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1305:60 'versionCode: Int' is deprecated. Deprecated in Java
+2026-10-04T15:02:31.0070209Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1525:32 The corresponding parameter in the supertype 'Listener' is named 'peerIp'. This may cause problems when calling this function with named arguments.
+2026-10-04T15:02:31.0105352Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1682:43 'getter for allNetworks: Array<(out) Network!>' is deprecated. Deprecated in Java
+2026-10-04T15:02:31.1064755Z 
+2026-10-04T15:02:31.1115029Z > Task :app:compileDebugJavaWithJavac NO-SOURCE
+2026-10-04T15:02:31.6025388Z > Task :app:dexBuilderDebug
+2026-10-04T15:02:31.7022899Z > Task :app:mergeDebugGlobalSynthetics
+2026-10-04T15:02:31.8044663Z > Task :app:processDebugJavaRes
+2026-10-04T15:02:32.0045551Z > Task :app:mergeProjectDexDebug
+2026-10-04T15:02:32.2024787Z > Task :app:mergeDebugJavaResource
+2026-10-04T15:02:32.5026474Z > Task :app:packageDebug
+2026-10-04T15:02:32.5050043Z > Task :app:createDebugApkListingFileRedirect
+2026-10-04T15:02:32.5050770Z > Task :app:assembleDebug
+2026-10-04T15:02:32.5051149Z 
+2026-10-04T15:02:32.5051944Z BUILD SUCCESSFUL in 53s
+2026-10-04T15:02:32.5072102Z 55 actionable tasks: 45 executed, 10 up-to-date
+2026-10-04T15:02:32.8339586Z ##[group]Run ./gradlew --no-daemon --stacktrace :tv:assembleDebug
+2026-10-04T15:02:32.8340220Z [36;1m./gradlew --no-daemon --stacktrace :tv:assembleDebug[0m
+2026-10-04T15:02:32.8389999Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:02:32.8390347Z env:
+2026-10-04T15:02:32.8390696Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:02:32.8391254Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:02:32.8391677Z ##[endgroup]
+2026-10-04T15:02:33.3873320Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.7/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-04T15:02:34.1860370Z Daemon will be stopped at the end of the build 
+2026-10-04T15:02:40.5874823Z > Task :tv:preBuild UP-TO-DATE
+2026-10-04T15:02:40.5901024Z > Task :tv:preDebugBuild UP-TO-DATE
+2026-10-04T15:02:40.5901750Z > Task :tv:mergeDebugNativeDebugMetadata NO-SOURCE
+2026-10-04T15:02:40.5902353Z > Task :ndt1:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T15:02:40.5902842Z > Task :ndt1:preBuild UP-TO-DATE
+2026-10-04T15:02:40.5903244Z > Task :ndt1:preDebugBuild UP-TO-DATE
+2026-10-04T15:02:40.6858478Z > Task :ndt1:generateDebugResValues UP-TO-DATE
+2026-10-04T15:02:40.6900004Z > Task :ndt1:generateDebugResources UP-TO-DATE
+2026-10-04T15:02:40.6926479Z > Task :ndt1:packageDebugResources UP-TO-DATE
+2026-10-04T15:02:40.6941893Z > Task :ndt1:parseDebugLocalResources UP-TO-DATE
+2026-10-04T15:02:40.6952433Z > Task :ndt1:generateDebugRFile UP-TO-DATE
+2026-10-04T15:02:40.7855610Z > Task :ndt1:compileDebugKotlin UP-TO-DATE
+2026-10-04T15:02:40.7857345Z > Task :ndt1:javaPreCompileDebug UP-TO-DATE
+2026-10-04T15:02:40.7865657Z > Task :ndt1:compileDebugJavaWithJavac NO-SOURCE
+2026-10-04T15:02:40.7866060Z > Task :ndt1:bundleLibCompileToJarDebug UP-TO-DATE
+2026-10-04T15:02:40.7868079Z > Task :tv:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T15:02:40.7868552Z > Task :ndt1:compileDebugLibraryResources UP-TO-DATE
+2026-10-04T15:02:40.7868999Z > Task :ndt1:writeDebugAarMetadata UP-TO-DATE
+2026-10-04T15:02:42.2875244Z > Task :tv:generateDebugResValues
+2026-10-04T15:02:42.2875711Z > Task :tv:checkDebugAarMetadata
+2026-10-04T15:02:42.3855537Z > Task :tv:mapDebugSourceSetPaths
+2026-10-04T15:02:42.3856179Z > Task :tv:generateDebugResources
+2026-10-04T15:02:43.0895086Z > Task :tv:packageDebugResources
+2026-10-04T15:02:43.0895950Z > Task :tv:createDebugCompatibleScreenManifests
+2026-10-04T15:02:43.0925051Z > Task :ndt1:extractDeepLinksDebug UP-TO-DATE
+2026-10-04T15:02:43.0950907Z > Task :ndt1:processDebugManifest UP-TO-DATE
+2026-10-04T15:02:43.1865415Z > Task :tv:extractDeepLinksDebug
+2026-10-04T15:02:43.5858782Z > Task :tv:parseDebugLocalResources
+2026-10-04T15:02:43.5874939Z > Task :tv:mergeDebugResources
+2026-10-04T15:02:43.6858922Z > Task :tv:processDebugMainManifest
+2026-10-04T15:02:43.7868446Z > Task :tv:processDebugManifest
+2026-10-04T15:02:43.7895197Z > Task :tv:processDebugManifestForPackage
+2026-10-04T15:02:43.7900832Z > Task :tv:javaPreCompileDebug
+2026-10-04T15:02:44.2891368Z > Task :ndt1:mergeDebugShaders UP-TO-DATE
+2026-10-04T15:02:44.2915370Z > Task :ndt1:compileDebugShaders NO-SOURCE
+2026-10-04T15:02:44.2947110Z > Task :ndt1:generateDebugAssets UP-TO-DATE
+2026-10-04T15:02:44.2974882Z > Task :ndt1:packageDebugAssets UP-TO-DATE
+2026-10-04T15:02:44.2975580Z > Task :tv:mergeDebugShaders
+2026-10-04T15:02:44.3004932Z > Task :tv:compileDebugShaders NO-SOURCE
+2026-10-04T15:02:44.3014759Z > Task :tv:generateDebugAssets UP-TO-DATE
+2026-10-04T15:02:44.3858929Z > Task :tv:mergeDebugAssets
+2026-10-04T15:02:44.3875327Z > Task :tv:compressDebugAssets
+2026-10-04T15:02:44.3904851Z > Task :ndt1:bundleLibRuntimeToJarDebug UP-TO-DATE
+2026-10-04T15:02:44.3934667Z > Task :tv:desugarDebugFileDependencies
+2026-10-04T15:02:44.3947550Z > Task :ndt1:processDebugJavaRes UP-TO-DATE
+2026-10-04T15:02:44.6857810Z > Task :tv:mergeDebugStartupProfile
+2026-10-04T15:02:44.6870344Z > Task :ndt1:bundleLibRuntimeToDirDebug UP-TO-DATE
+2026-10-04T15:02:44.6924825Z > Task :ndt1:mergeDebugJniLibFolders UP-TO-DATE
+2026-10-04T15:02:44.6934720Z > Task :ndt1:mergeDebugNativeLibs NO-SOURCE
+2026-10-04T15:02:44.6935204Z > Task :ndt1:copyDebugJniLibsProjectOnly UP-TO-DATE
+2026-10-04T15:02:44.6935699Z > Task :tv:checkDebugDuplicateClasses
+2026-10-04T15:02:44.6936091Z > Task :tv:mergeDebugJniLibFolders
+2026-10-04T15:02:48.7864377Z > Task :tv:processDebugResources
+2026-10-04T15:02:51.8855332Z > Task :tv:mergeDebugNativeLibs NO-SOURCE
+2026-10-04T15:02:51.8910178Z > Task :tv:stripDebugDebugSymbols NO-SOURCE
+2026-10-04T15:02:51.8969286Z > Task :tv:mergeLibDexDebug
+2026-10-04T15:02:51.9865670Z > Task :tv:validateSigningDebug
+2026-10-04T15:02:51.9894904Z > Task :tv:writeDebugAppMetadata
+2026-10-04T15:02:51.9895648Z > Task :tv:writeDebugSigningConfigVersions
+2026-10-04T15:02:54.7882893Z > Task :tv:mergeExtDexDebug
+2026-10-04T15:02:58.7861164Z 
+2026-10-04T15:02:58.7863873Z > Task :tv:compileDebugKotlin
+2026-10-04T15:02:58.7865569Z w: file:///home/runner/work/nexdrop/nexdrop/android/tv/src/main/java/com/nexdrop/tv/ReceiveActivity.kt:147:32 The corresponding parameter in the supertype 'Listener' is named 'peerIp'. This may cause problems when calling this function with named arguments.
+2026-10-04T15:02:58.8856491Z 
+2026-10-04T15:02:58.8874821Z > Task :tv:compileDebugJavaWithJavac NO-SOURCE
+2026-10-04T15:02:59.0861787Z > Task :tv:dexBuilderDebug
+2026-10-04T15:02:59.0863742Z > Task :tv:mergeDebugGlobalSynthetics
+2026-10-04T15:02:59.0864531Z > Task :tv:processDebugJavaRes
+2026-10-04T15:02:59.2896139Z > Task :tv:mergeProjectDexDebug
+2026-10-04T15:02:59.5855490Z > Task :tv:mergeDebugJavaResource
+2026-10-04T15:02:59.8855602Z > Task :tv:packageDebug
+2026-10-04T15:02:59.8857805Z > Task :tv:createDebugApkListingFileRedirect
+2026-10-04T15:02:59.8860955Z > Task :tv:assembleDebug
+2026-10-04T15:02:59.9488544Z 
+2026-10-04T15:02:59.9562451Z BUILD SUCCESSFUL in 27s
+2026-10-04T15:02:59.9605079Z 55 actionable tasks: 36 executed, 19 up-to-date
+2026-10-04T15:03:00.2820524Z ##[group]Run set -eu
+2026-10-04T15:03:00.2820876Z [36;1mset -eu[0m
+2026-10-04T15:03:00.2821208Z [36;1mAPK=app/build/outputs/apk/debug/app-debug.apk[0m
+2026-10-04T15:03:00.2821582Z [36;1mtest -s "$APK"[0m
+2026-10-04T15:03:00.2821917Z [36;1m# The real NDT1 classes must be inside the APK[0m
+2026-10-04T15:03:00.2822353Z [36;1munzip -o -q "$APK" 'classes*.dex' -d /tmp/apkcheck[0m
+2026-10-04T15:03:00.2823024Z [36;1mfor token in "com/nexdrop/ndt1/TurboSender" "com/nexdrop/ndt1/TurboReceiver" "com/nexdrop/ndt1/MainActivity"; do[0m
+2026-10-04T15:03:00.2823770Z [36;1m  if ! grep -qa "$token" /tmp/apkcheck/classes*.dex; then[0m
+2026-10-04T15:03:00.2824445Z [36;1m    echo "MISSING $token in APK — refusing to upload a fake APK"; exit 1[0m
+2026-10-04T15:03:00.2824823Z [36;1m  fi[0m
+2026-10-04T15:03:00.2825042Z [36;1mdone[0m
+2026-10-04T15:03:00.2825350Z [36;1mecho "APK verified: real NDT1 sender/receiver + phone UI present"[0m
+2026-10-04T15:03:00.2873167Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:03:00.2873493Z env:
+2026-10-04T15:03:00.2873838Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:03:00.2874566Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:03:00.2874976Z ##[endgroup]
+2026-10-04T15:03:00.3758261Z APK verified: real NDT1 sender/receiver + phone UI present
+2026-10-04T15:03:00.3789718Z ##[group]Run set -eu
+2026-10-04T15:03:00.3790003Z [36;1mset -eu[0m
+2026-10-04T15:03:00.3790429Z [36;1mMERGED="$(find app/build/intermediates -path '*merged_manifests*debug*' -name 'AndroidManifest.xml' | head -1)"[0m
+2026-10-04T15:03:00.3790959Z [36;1mtest -n "$MERGED" || { echo "merged manifest not found"; exit 1; }[0m
+2026-10-04T15:03:00.3791266Z [36;1mpython3 - "$MERGED" <<'PYEOF'[0m
+2026-10-04T15:03:00.3791526Z [36;1mimport sys, re, zipfile[0m
+2026-10-04T15:03:00.3791768Z [36;1mimport xml.etree.ElementTree as ET[0m
+2026-10-04T15:03:00.3792017Z [36;1mmerged, = sys.argv[1:][0m
+2026-10-04T15:03:00.3792303Z [36;1mapk = "app/build/outputs/apk/debug/app-debug.apk"[0m
+2026-10-04T15:03:00.3792604Z [36;1mz = zipfile.ZipFile(apk)[0m
+2026-10-04T15:03:00.3792913Z [36;1mdex = b"".join(z.read(n) for n in z.namelist() if re.match(r'classes\d*\.dex', n))[0m
+2026-10-04T15:03:00.3793296Z [36;1mns = '{http://schemas.android.com/apk/res/android}'[0m
+2026-10-04T15:03:00.3793612Z [36;1mroot = ET.parse(merged).getroot()[0m
+2026-10-04T15:03:00.3793837Z [36;1mdeclared = [][0m
+2026-10-04T15:03:00.3794561Z [36;1mfor tag in ('activity', 'activity-alias', 'service', 'receiver', 'provider'):[0m
+2026-10-04T15:03:00.3795020Z [36;1m    for node in root.iter(tag):[0m
+2026-10-04T15:03:00.3795262Z [36;1m        name = node.get(ns + 'name')[0m
+2026-10-04T15:03:00.3795487Z [36;1m        if not name:[0m
+2026-10-04T15:03:00.3795688Z [36;1m            continue[0m
+2026-10-04T15:03:00.3795933Z [36;1m        if name.startswith('.'):[0m
+2026-10-04T15:03:00.3796181Z [36;1m            pkg = root.get('package')[0m
+2026-10-04T15:03:00.3796411Z [36;1m            name = pkg + name[0m
+2026-10-04T15:03:00.3796636Z [36;1m        declared.append((tag, name))[0m
+2026-10-04T15:03:00.3796958Z [36;1m# dex descriptors store classes slash-form: Lcom/nexdrop/ndt1/MainActivity;[0m
+2026-10-04T15:03:00.3797468Z [36;1mmissing = [(t, n) for (t, n) in declared if n.startswith('com.nexdrop.') and n.replace('.', '/').encode() not in dex][0m
+2026-10-04T15:03:00.3797857Z [36;1mif missing:[0m
+2026-10-04T15:03:00.3798048Z [36;1m    for t, n in missing:[0m
+2026-10-04T15:03:00.3798370Z [36;1m        print(f"manifest declares {t} {n} but that class is NOT in the APK dex")[0m
+2026-10-04T15:03:00.3798821Z [36;1m    print("STARTUP GUARD FAILED — the app would crash on launch with ClassNotFoundException")[0m
+2026-10-04T15:03:00.3799172Z [36;1m    sys.exit(1)[0m
+2026-10-04T15:03:00.3799396Z [36;1mnames = [n for _, n in declared][0m
+2026-10-04T15:03:00.3799734Z [36;1mfor must in ("com.nexdrop.ndt1.MainActivity", "com.nexdrop.ndt1.TransferService"):[0m
+2026-10-04T15:03:00.3800074Z [36;1m    if must not in names:[0m
+2026-10-04T15:03:00.3800368Z [36;1m        print(f"expected component {must} missing from merged manifest")[0m
+2026-10-04T15:03:00.3800664Z [36;1m        sys.exit(1)[0m
+2026-10-04T15:03:00.3801007Z [36;1mprint("startup guard OK: %d components declared, all resolve to real classes" % len(declared))[0m
+2026-10-04T15:03:00.3801362Z [36;1mPYEOF[0m
+2026-10-04T15:03:00.3840214Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:03:00.3840482Z env:
+2026-10-04T15:03:00.3840761Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:03:00.3841157Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:03:00.3841454Z ##[endgroup]
+2026-10-04T15:03:00.4711073Z startup guard OK: 6 components declared, all resolve to real classes
+2026-10-04T15:03:00.4807702Z ##[group]Run set -eu
+2026-10-04T15:03:00.4807994Z [36;1mset -eu[0m
+2026-10-04T15:03:00.4827254Z [36;1mecho "***" | base64 -d > "$HOME/nexdrop-release.keystore"[0m
+2026-10-04T15:03:00.4827734Z [36;1mtest -s "$HOME/nexdrop-release.keystore"[0m
+2026-10-04T15:03:00.4828325Z [36;1mecho "NEXDROP_KEYSTORE_FILE=$HOME/nexdrop-release.keystore" >> "$GITHUB_ENV"[0m
+2026-10-04T15:03:00.4828993Z [36;1mecho "NEXDROP_KEYSTORE_PASSWORD=***" >> "$GITHUB_ENV"[0m
+2026-10-04T15:03:00.4829477Z [36;1mecho "NEXDROP_KEY_PASSWORD=***" >> "$GITHUB_ENV"[0m
+2026-10-04T15:03:00.4869455Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:03:00.4869742Z env:
+2026-10-04T15:03:00.4870044Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:03:00.4870453Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:03:00.4870761Z ##[endgroup]
+2026-10-04T15:03:00.4966975Z ##[group]Run ./gradlew --no-daemon --stacktrace :app:assembleRelease
+2026-10-04T15:03:00.4967373Z [36;1m./gradlew --no-daemon --stacktrace :app:assembleRelease[0m
+2026-10-04T15:03:00.4995025Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:03:00.4995257Z env:
+2026-10-04T15:03:00.4995540Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:03:00.4995928Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:03:00.4996295Z   NEXDROP_KEYSTORE_FILE: /home/runner/nexdrop-release.keystore
+2026-10-04T15:03:00.4996755Z   NEXDROP_KEYSTORE_PASSWORD: ***
+2026-10-04T15:03:00.4997007Z   NEXDROP_KEY_PASSWORD: ***
+2026-10-04T15:03:00.4997201Z ##[endgroup]
+2026-10-04T15:03:01.0352599Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.7/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-04T15:03:01.8346409Z Daemon will be stopped at the end of the build 
+2026-10-04T15:03:08.3363413Z > Task :app:buildKotlinToolingMetadata
+2026-10-04T15:03:08.3364478Z > Task :app:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T15:03:08.3365075Z > Task :app:preBuild UP-TO-DATE
+2026-10-04T15:03:08.3365502Z > Task :app:preReleaseBuild UP-TO-DATE
+2026-10-04T15:03:08.3365862Z > Task :ndt1:preBuild UP-TO-DATE
+2026-10-04T15:03:08.4365462Z > Task :ndt1:preReleaseBuild UP-TO-DATE
+2026-10-04T15:03:08.4366189Z > Task :app:generateReleaseResValues
+2026-10-04T15:03:08.4366681Z > Task :ndt1:generateReleaseResValues
+2026-10-04T15:03:08.4367126Z > Task :ndt1:writeReleaseAarMetadata
+2026-10-04T15:03:08.5355513Z > Task :ndt1:generateReleaseResources
+2026-10-04T15:03:08.7345155Z > Task :app:checkReleaseAarMetadata
+2026-10-04T15:03:08.7348318Z > Task :ndt1:packageReleaseResources
+2026-10-04T15:03:08.8352291Z > Task :app:mapReleaseSourceSetPaths
+2026-10-04T15:03:08.8385040Z > Task :app:generateReleaseResources
+2026-10-04T15:03:09.5362495Z > Task :app:packageReleaseResources
+2026-10-04T15:03:09.5408257Z > Task :app:createReleaseCompatibleScreenManifests
+2026-10-04T15:03:09.6355534Z > Task :app:extractDeepLinksRelease
+2026-10-04T15:03:09.6367265Z > Task :ndt1:extractDeepLinksRelease
+2026-10-04T15:03:10.0335011Z > Task :ndt1:compileReleaseLibraryResources
+2026-10-04T15:03:10.0397274Z > Task :ndt1:parseReleaseLocalResources
+2026-10-04T15:03:10.0397939Z > Task :app:parseReleaseLocalResources
+2026-10-04T15:03:10.0398471Z > Task :ndt1:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T15:03:10.0398995Z > Task :ndt1:javaPreCompileRelease
+2026-10-04T15:03:10.0399442Z > Task :app:javaPreCompileRelease
+2026-10-04T15:03:10.0399861Z > Task :app:extractProguardFiles
+2026-10-04T15:03:10.0400276Z > Task :ndt1:extractProguardFiles
+2026-10-04T15:03:10.1356164Z > Task :ndt1:processReleaseManifest
+2026-10-04T15:03:10.1384938Z > Task :ndt1:prepareLintJarForPublish
+2026-10-04T15:03:10.1415023Z > Task :ndt1:generateReleaseRFile
+2026-10-04T15:03:10.1434686Z > Task :app:mergeReleaseResources
+2026-10-04T15:03:10.2352938Z 
+2026-10-04T15:03:10.2415069Z > Task :app:processReleaseMainManifest
+2026-10-04T15:03:10.2441796Z /home/runner/work/nexdrop/nexdrop/android/app/src/main/AndroidManifest.xml Warning:
+2026-10-04T15:03:10.2466026Z 	Namespace 'com.nexdrop.ndt1' is used in multiple modules and/or libraries: AndroidManifest.xml, :ndt1. Please ensure that all modules and libraries have a unique namespace. For more information, See https://developer.android.com/studio/build/configure-app-module#set-namespace
+2026-10-04T15:03:10.3344964Z 
+2026-10-04T15:03:10.3355467Z > Task :app:processReleaseManifest
+2026-10-04T15:03:10.6367478Z > Task :app:processReleaseManifestForPackage
+2026-10-04T15:03:10.8365317Z > Task :ndt1:mergeReleaseJniLibFolders
+2026-10-04T15:03:10.8441473Z > Task :ndt1:mergeReleaseNativeLibs NO-SOURCE
+2026-10-04T15:03:10.8525607Z > Task :ndt1:stripReleaseDebugSymbols NO-SOURCE
+2026-10-04T15:03:10.9355251Z > Task :ndt1:copyReleaseJniLibsProjectAndLocalJars
+2026-10-04T15:03:10.9365087Z > Task :ndt1:extractDeepLinksForAarRelease
+2026-10-04T15:03:10.9391574Z > Task :ndt1:mergeReleaseShaders
+2026-10-04T15:03:10.9418286Z > Task :ndt1:compileReleaseShaders NO-SOURCE
+2026-10-04T15:03:10.9476583Z > Task :ndt1:generateReleaseAssets UP-TO-DATE
+2026-10-04T15:03:10.9505608Z > Task :ndt1:packageReleaseAssets
+2026-10-04T15:03:10.9542766Z > Task :ndt1:prepareReleaseArtProfile
+2026-10-04T15:03:10.9631720Z > Task :ndt1:writeReleaseLintModelMetadata
+2026-10-04T15:03:10.9683853Z > Task :app:mergeReleaseJniLibFolders
+2026-10-04T15:03:10.9710242Z > Task :ndt1:copyReleaseJniLibsProjectOnly
+2026-10-04T15:03:11.1349186Z > Task :app:checkReleaseDuplicateClasses
+2026-10-04T15:03:11.1434877Z > Task :app:mergeReleaseNativeLibs NO-SOURCE
+2026-10-04T15:03:11.1495129Z > Task :app:stripReleaseDebugSymbols NO-SOURCE
+2026-10-04T15:03:11.1554739Z > Task :app:extractReleaseNativeSymbolTables NO-SOURCE
+2026-10-04T15:03:11.1555284Z > Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+2026-10-04T15:03:11.1614884Z > Task :app:desugarReleaseFileDependencies
+2026-10-04T15:03:11.1615687Z > Task :app:mergeReleaseStartupProfile
+2026-10-04T15:03:11.4345656Z > Task :app:processReleaseResources
+2026-10-04T15:03:32.0354707Z 
+2026-10-04T15:03:32.0385364Z > Task :ndt1:compileReleaseKotlin
+2026-10-04T15:03:32.0445684Z w: file:///home/runner/work/nexdrop/nexdrop/android/ndt1/src/main/java/com/nexdrop/ndt1/TurboReceiver.kt:163:22 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, ByteArray>
+2026-10-04T15:03:32.0475484Z w: file:///home/runner/work/nexdrop/nexdrop/android/ndt1/src/main/java/com/nexdrop/ndt1/TurboReceiver.kt:165:39 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, ByteArray>
+2026-10-04T15:03:34.3338396Z 
+2026-10-04T15:03:34.3376882Z > Task :ndt1:compileReleaseJavaWithJavac NO-SOURCE
+2026-10-04T15:03:34.3377695Z > Task :ndt1:bundleLibCompileToJarRelease
+2026-10-04T15:03:34.3378210Z > Task :ndt1:bundleLibRuntimeToJarRelease
+2026-10-04T15:03:34.3378696Z > Task :ndt1:processReleaseJavaRes
+2026-10-04T15:03:34.8351657Z > Task :ndt1:createFullJarRelease
+2026-10-04T15:03:36.0405459Z > Task :ndt1:generateReleaseLintModel
+2026-10-04T15:03:37.8355294Z > Task :app:mergeExtDexRelease
+2026-10-04T15:03:46.2357741Z > Task :ndt1:extractReleaseAnnotations
+2026-10-04T15:03:46.2437317Z > Task :ndt1:mergeReleaseGeneratedProguardFiles
+2026-10-04T15:03:46.2515308Z > Task :ndt1:mergeReleaseConsumerProguardFiles
+2026-10-04T15:03:46.3342331Z > Task :ndt1:generateReleaseLintVitalModel
+2026-10-04T15:03:46.3395252Z > Task :ndt1:bundleLibRuntimeToDirRelease
+2026-10-04T15:03:46.4403628Z > Task :ndt1:mergeReleaseJavaResource
+2026-10-04T15:03:46.4464987Z > Task :ndt1:syncReleaseLibJars
+2026-10-04T15:03:46.5346461Z > Task :ndt1:bundleReleaseLocalLintAar
+2026-10-04T15:03:46.7382134Z > Task :app:mergeReleaseArtProfile
+2026-10-04T15:03:46.8364252Z > Task :app:mergeReleaseShaders
+2026-10-04T15:03:46.8395052Z > Task :app:compileReleaseShaders NO-SOURCE
+2026-10-04T15:03:46.8422966Z > Task :app:generateReleaseAssets UP-TO-DATE
+2026-10-04T15:03:46.9425613Z > Task :app:mergeReleaseAssets
+2026-10-04T15:03:46.9435184Z > Task :app:compressReleaseAssets
+2026-10-04T15:03:47.1334140Z > Task :app:extractReleaseVersionControlInfo
+2026-10-04T15:03:47.3346047Z > Task :app:collectReleaseDependencies
+2026-10-04T15:03:47.4334582Z > Task :app:sdkReleaseDependencyData
+2026-10-04T15:03:47.4360203Z > Task :app:validateSigningRelease
+2026-10-04T15:03:47.4365003Z > Task :app:writeReleaseAppMetadata
+2026-10-04T15:03:47.4394734Z > Task :app:writeReleaseSigningConfigVersions
+2026-10-04T15:03:47.4424622Z > Task :app:optimizeReleaseResources
+2026-10-04T15:03:50.7336756Z 
+2026-10-04T15:03:50.7381593Z > Task :app:compileReleaseKotlin
+2026-10-04T15:03:50.7425449Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:638:9 Variable 'ep' is never used
+2026-10-04T15:03:50.7475611Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:771:11 Variable 'm' is never used
+2026-10-04T15:03:50.7511651Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1305:60 'versionCode: Int' is deprecated. Deprecated in Java
+2026-10-04T15:03:50.7575792Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1525:32 The corresponding parameter in the supertype 'Listener' is named 'peerIp'. This may cause problems when calling this function with named arguments.
+2026-10-04T15:03:50.7609357Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1682:43 'getter for allNetworks: Array<(out) Network!>' is deprecated. Deprecated in Java
+2026-10-04T15:03:50.8334552Z 
+2026-10-04T15:03:50.8375071Z > Task :app:compileReleaseJavaWithJavac NO-SOURCE
+2026-10-04T15:03:51.0334480Z > Task :app:generateReleaseLintVitalReportModel
+2026-10-04T15:03:51.7366661Z > Task :app:dexBuilderRelease
+2026-10-04T15:03:51.8348820Z > Task :app:mergeReleaseGlobalSynthetics
+2026-10-04T15:03:51.8405222Z > Task :app:processReleaseJavaRes
+2026-10-04T15:03:52.4345455Z > Task :app:mergeReleaseJavaResource
+2026-10-04T15:03:53.5335384Z > Task :app:mergeDexRelease
+2026-10-04T15:03:53.7345471Z > Task :app:compileReleaseArtProfile
+2026-10-04T15:03:54.5333302Z > Task :app:packageRelease
+2026-10-04T15:03:54.5342042Z > Task :app:createReleaseApkListingFileRedirect
+2026-10-04T15:03:59.1347423Z > Task :ndt1:lintVitalAnalyzeRelease
+2026-10-04T15:04:08.1335391Z > Task :app:lintVitalAnalyzeRelease
+2026-10-04T15:04:08.1345577Z > Task :app:lintVitalReportRelease
+2026-10-04T15:04:08.1347439Z > Task :app:lintVitalRelease
+2026-10-04T15:04:08.1348019Z > Task :app:assembleRelease
+2026-10-04T15:04:08.2215517Z 
+2026-10-04T15:04:08.2228371Z BUILD SUCCESSFUL in 1m 7s
+2026-10-04T15:04:08.2244214Z 82 actionable tasks: 82 executed
+2026-10-04T15:04:08.5481695Z ##[group]Run set -eu
+2026-10-04T15:04:08.5481980Z [36;1mset -eu[0m
+2026-10-04T15:04:08.5482211Z [36;1mAPK=app/build/outputs/apk/release/app-release.apk[0m
+2026-10-04T15:04:08.5482643Z [36;1mtest -s "$APK" || { echo "signed release APK missing"; ls -la app/build/outputs/apk/release/; exit 1; }[0m
+2026-10-04T15:04:08.5483186Z [36;1mAPKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)[0m
+2026-10-04T15:04:08.5483640Z [36;1mtest -n "$APKSIGNER" || { echo "apksigner not found in build-tools"; exit 1; }[0m
+2026-10-04T15:04:08.5484239Z [36;1m# (a) SIGNED: apksigner verify fails on a tampered/unsigned APK[0m
+2026-10-04T15:04:08.5484573Z [36;1m"$APKSIGNER" verify "$APK"[0m
+2026-10-04T15:04:08.5484854Z [36;1m# (b) modern signing scheme present (v2 mandatory on API 30+)[0m
+2026-10-04T15:04:08.5485194Z [36;1m"$APKSIGNER" verify -v "$APK" | tee /tmp/apksigner-v.txt[0m
+2026-10-04T15:04:08.5485651Z [36;1mgrep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/apksigner-v.txt[0m
+2026-10-04T15:04:08.5486057Z [36;1m# (c) certificate of the real release key (not the debug key)[0m
+2026-10-04T15:04:08.5486428Z [36;1m"$APKSIGNER" verify --print-certs "$APK" | tee /tmp/apksigner-certs.txt[0m
+2026-10-04T15:04:08.5486783Z [36;1mgrep -q "CN=NexDrop Release" /tmp/apksigner-certs.txt[0m
+2026-10-04T15:04:08.5487065Z [36;1m# (d) zip integrity[0m
+2026-10-04T15:04:08.5487312Z [36;1munzip -t "$APK" > /dev/null && echo "zip integrity: OK"[0m
+2026-10-04T15:04:08.5487629Z [36;1m# (e) package/version identity (aapt from the Android SDK)[0m
+2026-10-04T15:04:08.5487977Z [36;1mAAPT=$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)[0m
+2026-10-04T15:04:08.5488345Z [36;1m"$AAPT" dump badging "$APK" | head -1 | tee /tmp/badging.txt[0m
+2026-10-04T15:04:08.5488658Z [36;1mgrep -q "name='com.nexdrop.ndt1'" /tmp/badging.txt[0m
+2026-10-04T15:04:08.5488945Z [36;1mgrep -q "versionCode='3'" /tmp/badging.txt[0m
+2026-10-04T15:04:08.5489221Z [36;1mgrep -q "versionName='1.2.0'" /tmp/badging.txt[0m
+2026-10-04T15:04:08.5489560Z [36;1mecho "SIGNED RELEASE APK VERIFIED (signature, scheme, identity, integrity)"[0m
+2026-10-04T15:04:08.5527521Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:04:08.5527753Z env:
+2026-10-04T15:04:08.5528016Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:04:08.5528395Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:04:08.5528750Z   NEXDROP_KEYSTORE_FILE: /home/runner/nexdrop-release.keystore
+2026-10-04T15:04:08.5529233Z   NEXDROP_KEYSTORE_PASSWORD: ***
+2026-10-04T15:04:08.5529494Z   NEXDROP_KEY_PASSWORD: ***
+2026-10-04T15:04:08.5529694Z ##[endgroup]
+2026-10-04T15:04:09.3784339Z Verifies
+2026-10-04T15:04:09.3785000Z Verified using v1 scheme (JAR signing): false
+2026-10-04T15:04:09.3785793Z Verified using v2 scheme (APK Signature Scheme v2): true
+2026-10-04T15:04:09.3786654Z Verified using v3 scheme (APK Signature Scheme v3): true
+2026-10-04T15:04:09.3787183Z Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+2026-10-04T15:04:09.3787673Z Verified using v3.2 scheme (APK Signature Scheme v3.2): false
+2026-10-04T15:04:09.3788173Z Verified using v4 scheme (APK Signature Scheme v4): false
+2026-10-04T15:04:09.3789079Z Verified for SourceStamp: false
+2026-10-04T15:04:09.3789473Z Number of signers: 1
+2026-10-04T15:04:09.5812929Z V3.0 Signer: certificate DN: CN=NexDrop Release, OU=NexDrop, O=PDFly-source, C=IN
+2026-10-04T15:04:09.5820586Z V3.0 Signer: certificate SHA-256 digest: 11cb2ab82ba751fea04d101bd3a1498b852581f999056a3bc371e47e326a861a
+2026-10-04T15:04:09.5822469Z V3.0 Signer: certificate SHA-1 digest: 0018bad4c079e1fcaa2906a2cf8947b72a4f86a8
+2026-10-04T15:04:09.5826259Z V3.0 Signer: certificate MD5 digest: 74c410b7c4090a32e35f95cc9b69bd41
+2026-10-04T15:04:09.6456156Z zip integrity: OK
+2026-10-04T15:04:09.7921921Z package: name='com.nexdrop.ndt1' versionCode='4' versionName='1.2.1' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+2026-10-04T15:04:09.7955674Z ##[error]Process completed with exit code 1.
+2026-10-04T15:04:09.8065837Z Post job cleanup.
+2026-10-04T15:04:09.9147382Z (node:3418) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T15:04:09.9148196Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T15:04:09.9317490Z Post job cleanup.
+2026-10-04T15:04:10.0134688Z [command]/usr/bin/git version
+2026-10-04T15:04:10.0174934Z git version 2.55.0
+2026-10-04T15:04:10.0204725Z Temporarily overriding HOME='/home/runner/work/_temp/2ce19804-959f-4210-b065-a225a8f7d59b' before making global git config changes
+2026-10-04T15:04:10.0206155Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-04T15:04:10.0209624Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/nexdrop/nexdrop
+2026-10-04T15:04:10.0240479Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-04T15:04:10.0287840Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-04T15:04:10.0461825Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-04T15:04:10.0485679Z http.https://github.com/.extraheader
+2026-10-04T15:04:10.0501483Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-04T15:04:10.0524664Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-04T15:04:10.0715556Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-04T15:04:10.0741547Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-04T15:04:10.1041586Z Cleaning up orphan processes
+2026-10-04T15:04:10.1259251Z Terminate orphan process: pid (3203) (java)
+2026-10-04T15:04:10.1302740Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

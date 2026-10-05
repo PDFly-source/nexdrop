@@ -1,0 +1,499 @@
+﻿2026-10-04T16:30:42.7471246Z ##[group]Run reactivecircus/android-emulator-runner@v2
+2026-10-04T16:30:42.7471565Z with:
+2026-10-04T16:30:42.7471745Z   api-level: 36
+2026-10-04T16:30:42.7471933Z   arch: x86_64
+2026-10-04T16:30:42.7472103Z   target: default
+2026-10-04T16:30:42.7472291Z   force-avd-creation: false
+2026-10-04T16:30:42.7472678Z   emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back virtualscene
+2026-10-04T16:30:42.7473084Z   emulator-boot-timeout: 1800
+2026-10-04T16:30:42.7473296Z   disable-animations: true
+2026-10-04T16:30:42.7473560Z   script: bash "$GITHUB_WORKSPACE/.github/scripts/android-smoke.sh"
+2026-10-04T16:30:42.7473836Z   cores: 2
+2026-10-04T16:30:42.7474013Z   avd-name: test
+2026-10-04T16:30:42.7474208Z   emulator-port: 5554
+2026-10-04T16:30:42.7474438Z   disable-spellchecker: false
+2026-10-04T16:30:42.7474686Z   disable-linux-hw-accel: auto
+2026-10-04T16:30:42.7474899Z   enable-hw-keyboard: false
+2026-10-04T16:30:42.7475097Z   channel: stable
+2026-10-04T16:30:42.7475274Z ##[endgroup]
+2026-10-04T16:30:42.7918977Z ##[group]Configure emulator
+2026-10-04T16:30:42.7919710Z API level: 36
+2026-10-04T16:30:42.7920116Z System image API level: 36
+2026-10-04T16:30:42.7920436Z target: default
+2026-10-04T16:30:42.7920913Z CPU architecture: x86_64
+2026-10-04T16:30:42.7921267Z Hardware profile: 
+2026-10-04T16:30:42.7928921Z Cores: 2
+2026-10-04T16:30:42.7929182Z RAM size: 
+2026-10-04T16:30:42.7929423Z Heap size: 
+2026-10-04T16:30:42.7929672Z SD card path or size: 
+2026-10-04T16:30:42.7929950Z Disk size: 
+2026-10-04T16:30:42.7930133Z AVD name: test
+2026-10-04T16:30:42.7930323Z force avd creation: false
+2026-10-04T16:30:42.7930532Z Emulator boot timeout: 1800
+2026-10-04T16:30:42.7931208Z emulator port: 5554
+2026-10-04T16:30:42.7931588Z emulator options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back virtualscene
+2026-10-04T16:30:42.7932002Z disable animations: true
+2026-10-04T16:30:42.7932227Z disable spellchecker: false
+2026-10-04T16:30:42.7932460Z disable Linux hardware acceleration: false
+2026-10-04T16:30:42.7932721Z enable hardware keyboard: false
+2026-10-04T16:30:42.7932930Z Channel: 0 (stable)
+2026-10-04T16:30:42.7933105Z Script:
+2026-10-04T16:30:42.7933360Z bash "$GITHUB_WORKSPACE/.github/scripts/android-smoke.sh"
+2026-10-04T16:30:42.7933641Z Pre emulator launch script:
+2026-10-04T16:30:42.7934013Z ##[endgroup]
+2026-10-04T16:30:42.7934324Z ##[group]Install Android SDK
+2026-10-04T16:30:42.8216533Z [command]/usr/bin/sh -c \yes | sdkmanager --licenses > /dev/null
+2026-10-04T16:30:49.2971904Z Installing latest build tools, platform tools, and platform.
+2026-10-04T16:30:49.2982389Z [command]/usr/bin/sh -c \sdkmanager --install 'build-tools;37.0.0' platform-tools 'platforms;android-36'> /dev/null
+2026-10-04T16:30:50.4632391Z Installing latest emulator.
+2026-10-04T16:30:50.4642997Z [command]/usr/bin/sh -c \sdkmanager --install emulator --channel=0 > /dev/null
+2026-10-04T16:31:01.9989275Z Installing system images.
+2026-10-04T16:31:01.9999451Z [command]/usr/bin/sh -c \sdkmanager --install 'system-images;android-36;default;x86_64' --channel=0 > /dev/null
+2026-10-04T16:31:27.6623603Z ##[endgroup]
+2026-10-04T16:31:27.6624623Z ##[group]Create AVD
+2026-10-04T16:31:27.6625103Z Creating AVD.
+2026-10-04T16:31:27.6637812Z [command]/usr/bin/sh -c \echo no | avdmanager create avd --force -n test --package 'system-images;android-36;default;x86_64'
+2026-10-04T16:31:28.2363129Z Loading local repository...                                                     
+2026-10-04T16:31:28.2381593Z [=========                              ] 25% Loading local repository...       
+2026-10-04T16:31:28.2391407Z [=========                              ] 25% Fetch remote repository...        
+2026-10-04T16:31:28.2391929Z [=======================================] 100% Fetch remote repository...       
+2026-10-04T16:31:28.4012457Z Auto-selecting single ABI x86_64
+2026-10-04T16:31:28.4618267Z Do you wish to create a custom hardware profile? [no] [command]/usr/bin/sh -c \printf 'hw.cpu.ncore=2\n' >> /home/runner/.android/avd/test.avd/config.ini
+2026-10-04T16:31:28.4638728Z ##[endgroup]
+2026-10-04T16:31:28.4641737Z ##[group]Launch Emulator
+2026-10-04T16:31:28.4642049Z Starting emulator.
+2026-10-04T16:31:28.4655138Z [command]/usr/bin/sh -c \/usr/local/lib/android/sdk/emulator/emulator -port 5554 -avd test -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back virtualscene &
+2026-10-04T16:31:28.4759043Z INFO         | Android emulator version 37.2.12.0 (build_id 16428233) (CL:N/A)
+2026-10-04T16:31:28.4759566Z INFO         | Graphics backend: gfxstream
+2026-10-04T16:31:28.4760065Z INFO         | Found systemPath /usr/local/lib/android/sdk/system-images/android-36/default/x86_64/
+2026-10-04T16:31:28.5182869Z INFO         | Saving last run QEMU version for the AVD to 2
+2026-10-04T16:31:28.5184224Z INFO         | Guest usage of host flag 'VulkanVirtualQueue' will be ignored.
+2026-10-04T16:31:28.5184691Z INFO         | Increasing RAM size to 2560MB
+2026-10-04T16:31:28.5185033Z ##############################################################################
+2026-10-04T16:31:28.5185508Z ##                        WARNING - ACTION REQUIRED                         ##
+2026-10-04T16:31:28.5186029Z ##  Consider using the '-metrics-collection' flag to help improve the       ##
+2026-10-04T16:31:28.5186565Z ##  emulator by sending anonymized usage data. Or use the '-no-metrics'     ##
+2026-10-04T16:31:28.5187083Z ##  flag to bypass this warning and turn off the metrics collection.        ##
+2026-10-04T16:31:28.5187619Z ##  In a future release this warning will turn into a one-time blocking     ##
+2026-10-04T16:31:28.5188209Z ##  prompt to ask for explicit user input regarding metrics collection.     ##
+2026-10-04T16:31:28.5188975Z ##                                                                          ##
+2026-10-04T16:31:28.5189474Z ##  Please see '-help-metrics-collection' for more details. You can use     ##
+2026-10-04T16:31:28.5190051Z ##  '-metrics-to-file' or '-metrics-to-console' flags to see what type of   ##
+2026-10-04T16:31:28.5190818Z ##  data is being collected by emulator as part of usage statistics.        ##
+2026-10-04T16:31:28.5191317Z ##############################################################################
+2026-10-04T16:31:28.5191751Z INFO         | Guest GLES Driver: Auto (ext controls)
+2026-10-04T16:31:28.5192310Z INFO         | emuglConfig_init: vulkan_mode_selected:swiftshader gles_mode_selected:swiftshader
+2026-10-04T16:31:28.5192863Z INFO         | Checking system compatibility:
+2026-10-04T16:31:28.5193259Z INFO         |   Checking: hasSufficientDiskSpace
+2026-10-04T16:31:28.5193735Z INFO         |      Ok: Disk space requirements to run avd: `test` are met
+2026-10-04T16:31:28.5194197Z INFO         |   Checking: hasSufficientHwGpu
+2026-10-04T16:31:28.5194652Z INFO         |      Ok: Hardware GPU compatibility checks are not required
+2026-10-04T16:31:28.5195116Z INFO         |   Checking: hasSufficientSystem
+2026-10-04T16:31:28.5195560Z INFO         |      Ok: System requirements to run avd: `test` are met
+2026-10-04T16:31:28.5196583Z WARNING      | Feature QuickbootFileBacked is disabled due to stability issues, if you really want that, the environment variable ANDROID_EMU_FORCE_QUICKBOOT_FILE_BACKED need to set to 1
+2026-10-04T16:31:28.8647255Z ERROR        | Unable to connect to adb daemon on port: 5037
+2026-10-04T16:31:28.8650066Z INFO         | Storing crashdata in: /tmp/android-runner/emu-crash-37.2.12.db, detection is enabled for process: 2466
+2026-10-04T16:31:28.8651187Z INFO         | Initializing gfxstream backend
+2026-10-04T16:31:28.8659015Z INFO         | startOpenglesRendererImpl: gpu info
+2026-10-04T16:31:28.8659417Z INFO         | 
+2026-10-04T16:31:28.8662245Z INFO         | initIcdPaths: ICD set to 'swiftshader', using Swiftshader ICD
+2026-10-04T16:31:28.8663390Z INFO         | Setting ICD filenames for the loader = /usr/local/lib/android/sdk/emulator/lib64/vulkan/vk_swiftshader_icd.json
+2026-10-04T16:31:28.8667327Z INFO         | SharedLibrary::open for [/usr/local/lib/android/sdk/emulator/qemu/linux-x86_64/lib64/vulkan/libvulkan.so]
+2026-10-04T16:31:28.8668254Z INFO         | SharedLibrary::open for [/usr/local/lib/android/sdk/emulator/qemu/linux-x86_64/lib64/vulkan/libvulkan.so.1]
+2026-10-04T16:31:28.8668807Z INFO         | SharedLibrary::open for [/usr/local/lib/android/sdk/emulator/lib64/vulkan/libvulkan.so]
+2026-10-04T16:31:28.8669400Z INFO         | Added library: /usr/local/lib/android/sdk/emulator/lib64/vulkan/libvulkan.so
+2026-10-04T16:31:28.8703542Z INFO         | Selecting Vulkan device: SwiftShader Device (Subzero), Version: 1.3.0
+2026-10-04T16:31:28.8704126Z INFO         | Using Vulkan externalMemoryMode: OpaqueFd for VkEmulation
+2026-10-04T16:31:28.8800035Z INFO         | Format VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16 does not support YCbCr sampler conversion
+2026-10-04T16:31:28.8826983Z INFO         | SharedLibrary::open for [libX11]
+2026-10-04T16:31:28.8829594Z WARNING      | Could not open libX11.so, try libX11.so.6
+2026-10-04T16:31:28.8830034Z INFO         | SharedLibrary::open for [libX11.so.6]
+2026-10-04T16:31:28.8830445Z INFO         | SharedLibrary::open for [libX11-xcb]
+2026-10-04T16:31:28.8830885Z WARNING      | Could not open libX11-xcb.so, try libX11-xcb.so.1
+2026-10-04T16:31:28.8831217Z INFO         | SharedLibrary::open for [libX11-xcb.so.1]
+2026-10-04T16:31:28.8871866Z INFO         | Initializing VkEmulation features:
+2026-10-04T16:31:28.8872297Z INFO         |     glInteropSupported: false
+2026-10-04T16:31:28.8872674Z INFO         |     useDeferredCommands: true
+2026-10-04T16:31:28.8873089Z INFO         |     createResourceWithRequirements: true
+2026-10-04T16:31:28.8873532Z INFO         |     useVulkanComposition: false
+2026-10-04T16:31:28.8874272Z INFO         |     useVulkanNativeSwapchain: false
+2026-10-04T16:31:28.8874683Z INFO         |     enable guestRenderDoc: false
+2026-10-04T16:31:28.8875449Z INFO         |     ASTC LDR emulation mode: Gpu
+2026-10-04T16:31:28.8875829Z INFO         |     enable ETC2 emulation: true
+2026-10-04T16:31:28.8876223Z INFO         |     enable Ycbcr emulation: false
+2026-10-04T16:31:28.8876630Z INFO         |     guestVulkanOnly: false
+2026-10-04T16:31:28.8877010Z INFO         |     useDedicatedAllocations: false
+2026-10-04T16:31:28.8897699Z INFO         |     guestVulkanMaxApiVersion: 1.3.0
+2026-10-04T16:31:28.8898169Z INFO         |     enableProtectedMemoryEmulation: false
+2026-10-04T16:31:28.8898602Z INFO         | Graphics Adapter Vendor Google (Google Inc.)
+2026-10-04T16:31:28.8899374Z INFO         | Graphics Adapter Android Emulator OpenGL ES Translator (Google SwiftShader)
+2026-10-04T16:31:28.8900058Z INFO         | Graphics API Version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
+2026-10-04T16:31:28.8902672Z INFO         | Graphics API Extensions GL_OES_EGL_sync GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_depth24 GL_OES_depth32 GL_OES_element_index_uint GL_OES_texture_float GL_OES_texture_float_linear GL_OES_compressed_paletted_texture GL_OES_compressed_ETC1_RGB8_texture GL_OES_depth_texture GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_packed_depth_stencil GL_OES_vertex_half_float GL_OES_standard_derivatives GL_OES_texture_npot GL_OES_rgb8_rgba8 GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_texture_format_BGRA8888 GL_APPLE_texture_format_BGRA8888 
+2026-10-04T16:31:28.8905335Z INFO         | Graphics Device Extensions N/A
+2026-10-04T16:31:28.8905943Z INFO         | Disabling sparse binding feature support
+2026-10-04T16:31:28.8925117Z INFO         | Sending adb public key [QAAAAK1C/4Tbjv7Hdr1JTpEDxpW41Q1u0PXNeaEpXa6XuYLlFaxJH329AHLRwDvPSSxHgcIZcE3BG1WPi4EHTrjuqzXt/agh8nO8nXdJDbj1bvYdOYaw7pEkfiqU3+n4Ts9Mr/RcSS/biE4Matws9GBiOLXbSVdtJRmlCRt8MxdhQEsBBUpA9N6VFko7Js/jmx9TT7KADShyXtLPwJNsTYXCz5HJFE58DIej2mXe0j0ks8gNqt7fPS9Ikwr4iv6VC01K5/4IcV7RgoXdIryvZtg/zk2Q8yiz4LvTh1hiujeMShBh/AeD+ATB5s7CtJ245sRFlXwDeT4YNL81KKHJVPhmSho8TdSpMm2jUd6VFfyxfRjG/oL8lhxALKVH3JXPg/5p57exprJrXgGSZc/S7OIWtMXlQFQsYzhKB2DLrE9XQdJPL+xKsY2u3SrpEfZTPfu48QNpnE2IrXk91rnutOn60x1QK/Duz7rPPdaulukC4zKrbUR+lbZLLDP+frt4xdanpcljtahHVmu4XaUXiumG/6xm46FDnn1rgivLTbW3cBdOdxGL4RhN/GSf15vYHl/ceAiXKUCJJKmzpODu8C0P7mCQg+uWZF4DdIayEI80vjgbGlEmRGRf36rPStp9/kabLT59Qqy4j9HnyHH9cj5R6P1vBXbXlJ69h85Q+qms59p9F0VNXQEAAQA= runner@unknown]
+2026-10-04T16:31:28.8929604Z INFO         | Userspace boot properties:
+2026-10-04T16:31:28.8930040Z INFO         |   androidboot.boot_devices=pci0000:00/0000:00:03.0 pci0000:00/0000:00:06.0
+2026-10-04T16:31:28.8930464Z INFO         |   androidboot.dalvik.vm.heapsize=576m
+2026-10-04T16:31:28.8931030Z INFO         |   androidboot.debug.hwui.renderer=skiagl
+2026-10-04T16:31:28.8931486Z INFO         |   androidboot.debug.sf.nobootanimation=1
+2026-10-04T16:31:28.8931900Z INFO         |   androidboot.hardware=ranchu
+2026-10-04T16:31:28.8932191Z INFO         |   androidboot.hardware.gltransport=pipe
+2026-10-04T16:31:28.8932462Z INFO         |   androidboot.hardware.vulkan=ranchu
+2026-10-04T16:31:28.8932709Z INFO         |   androidboot.logcat=*:V
+2026-10-04T16:31:28.8932961Z INFO         |   androidboot.opengles.version=196608
+2026-10-04T16:31:28.8933222Z INFO         |   androidboot.qemu=1
+2026-10-04T16:31:28.8936759Z INFO         |   androidboot.qemu.adb.pubkey=QAAAAK1C/4Tbjv7Hdr1JTpEDxpW41Q1u0PXNeaEpXa6XuYLlFaxJH329AHLRwDvPSSxHgcIZcE3BG1WPi4EHTrjuqzXt/agh8nO8nXdJDbj1bvYdOYaw7pEkfiqU3+n4Ts9Mr/RcSS/biE4Matws9GBiOLXbSVdtJRmlCRt8MxdhQEsBBUpA9N6VFko7Js/jmx9TT7KADShyXtLPwJNsTYXCz5HJFE58DIej2mXe0j0ks8gNqt7fPS9Ikwr4iv6VC01K5/4IcV7RgoXdIryvZtg/zk2Q8yiz4LvTh1hiujeMShBh/AeD+ATB5s7CtJ245sRFlXwDeT4YNL81KKHJVPhmSho8TdSpMm2jUd6VFfyxfRjG/oL8lhxALKVH3JXPg/5p57exprJrXgGSZc/S7OIWtMXlQFQsYzhKB2DLrE9XQdJPL+xKsY2u3SrpEfZTPfu48QNpnE2IrXk91rnutOn60x1QK/Duz7rPPdaulukC4zKrbUR+lbZLLDP+frt4xdanpcljtahHVmu4XaUXiumG/6xm46FDnn1rgivLTbW3cBdOdxGL4RhN/GSf15vYHl/ceAiXKUCJJKmzpODu8C0P7mCQg+uWZF4DdIayEI80vjgbGlEmRGRf36rPStp9/kabLT59Qqy4j9HnyHH9cj5R6P1vBXbXlJ69h85Q+qms59p9F0VNXQEAAQA= runner@unknown
+2026-10-04T16:31:28.8941081Z INFO         |   androidboot.qemu.avd_name=test
+2026-10-04T16:31:28.8941500Z INFO         |   androidboot.qemu.camera_hq_edge_processing=0
+2026-10-04T16:31:28.8941974Z INFO         |   androidboot.qemu.camera_protocol_ver=1
+2026-10-04T16:31:28.8942426Z INFO         |   androidboot.qemu.cpuvulkan.version=4206592
+2026-10-04T16:31:28.8942940Z INFO         |   androidboot.qemu.gltransport.drawFlushInterval=800
+2026-10-04T16:31:28.8943431Z INFO         |   androidboot.qemu.gltransport.name=pipe
+2026-10-04T16:31:28.8943866Z INFO         |   androidboot.qemu.hwcodec.avcdec=2
+2026-10-04T16:31:28.8944290Z INFO         |   androidboot.qemu.hwcodec.hevcdec=2
+2026-10-04T16:31:28.8944720Z INFO         |   androidboot.qemu.hwcodec.vpxdec=2
+2026-10-04T16:31:28.8945252Z INFO         |   androidboot.qemu.settings.system.screen_off_timeout=2147483647
+2026-10-04T16:31:28.8945773Z INFO         |   androidboot.qemu.skin=320x640
+2026-10-04T16:31:28.8946169Z INFO         |   androidboot.qemu.virtiowifi=1
+2026-10-04T16:31:28.8946642Z INFO         |   androidboot.qemu.vsync=60
+2026-10-04T16:31:28.8947075Z INFO         |   androidboot.serialno=EMULATOR37X2X12X0
+2026-10-04T16:31:28.8947729Z INFO         |   androidboot.vbmeta.digest=d691872627a6e6bd3bceb7dac3a30a498d305819c117349424d61aae8093028f
+2026-10-04T16:31:28.8948386Z INFO         |   androidboot.vbmeta.hash_alg=sha256
+2026-10-04T16:31:28.8948781Z INFO         |   androidboot.vbmeta.size=6848
+2026-10-04T16:31:28.8949179Z INFO         |   androidboot.veritymode=enforcing
+2026-10-04T16:31:28.9092970Z WARNING: cannnot unmap ptr 0x7efe44a01000 as it is in the protected range from 0x7efda4a00000 to 0x7efe44c00000
+2026-10-04T16:31:28.9267889Z INFO         | Monitoring duration of emulator setup.
+2026-10-04T16:31:29.9523757Z INFO         | Activated packet streamer for bluetooth emulation
+2026-10-04T16:31:29.9524339Z INFO         | Successfully initialized netsim WiFi
+2026-10-04T16:31:29.9529371Z INFO         | Activated packet streamer for uwb emulation
+2026-10-04T16:31:29.9555482Z INFO         | Setting display: 0 configuration to: 320x640, dpi: 160x160 
+2026-10-04T16:31:29.9555984Z INFO         | setDisplayActiveConfig: id:0, 320x640
+2026-10-04T16:31:29.9557197Z WARNING      | getEnvironmentConfig: No environment config is provided
+2026-10-04T16:31:29.9557831Z INFO         | getEnvironmentConfig: Using default virtual scene mode for the environment.
+2026-10-04T16:31:29.9558600Z INFO         | getEnvironmentConfig: Using default configuration for mode mesh3d for the environment.
+2026-10-04T16:31:29.9559430Z INFO         | Initializing a scene with mode: mesh3d, argument: Toren1BD.obj
+2026-10-04T16:31:29.9876362Z INFO         | Loading snapshot 'default_boot'...
+2026-10-04T16:31:29.9877306Z WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
+2026-10-04T16:31:30.0002285Z WARNING      | Device 'cache' does not have the requested snapshot 'default_boot'
+2026-10-04T16:31:30.0002635Z 
+2026-10-04T16:31:30.0002813Z WARNING      | Failed to load snapshot 'default_boot'
+2026-10-04T16:31:30.0003633Z USER_INFO    | The emulator is performing a cold boot without a saved state because there's no snapshot and you have configured it not to save on exit.
+2026-10-04T16:31:30.1914346Z WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
+2026-10-04T16:31:38.4691399Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:31:38.4722993Z * daemon not running; starting now at tcp:5037
+2026-10-04T16:31:38.5371731Z * daemon started successfully
+2026-10-04T16:31:38.5376032Z adb: device offline
+2026-10-04T16:31:38.5379910Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-10-04T16:31:40.5407387Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:31:40.5429544Z adb: device offline
+2026-10-04T16:31:40.5435685Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-10-04T16:31:42.5472577Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:31:42.5503439Z adb: device offline
+2026-10-04T16:31:42.5509066Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-10-04T16:31:44.5545562Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:31:44.5579335Z adb: device offline
+2026-10-04T16:31:44.5585709Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-10-04T16:31:46.5630386Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:31:46.5663096Z adb: device offline
+2026-10-04T16:31:46.5667690Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-10-04T16:31:48.5686592Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:31:48.6462666Z 
+2026-10-04T16:31:50.6542084Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:31:50.6778465Z 
+2026-10-04T16:31:52.6817953Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:31:52.7463048Z 
+2026-10-04T16:31:54.7522134Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:31:54.7710229Z 
+2026-10-04T16:31:56.7771967Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:31:56.7993541Z 
+2026-10-04T16:31:58.8055103Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:31:58.8189933Z 
+2026-10-04T16:32:00.8239672Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:32:00.9217633Z 
+2026-10-04T16:32:02.9302382Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:32:02.9637569Z 
+2026-10-04T16:32:03.3074468Z INFO         | Boot completed in 34807 ms
+2026-10-04T16:32:03.3083575Z INFO         | Increasing screen off timeout, logcat buffer size to 2M.
+2026-10-04T16:32:04.9671925Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:32:05.0542302Z 1
+2026-10-04T16:32:05.0549871Z Emulator booted.
+2026-10-04T16:32:05.0619719Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell input keyevent 82
+2026-10-04T16:32:05.8474506Z Disabling animations.
+2026-10-04T16:32:05.8514287Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell settings put global window_animation_scale 0.0
+2026-10-04T16:32:05.9498709Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell settings put global transition_animation_scale 0.0
+2026-10-04T16:32:06.1004501Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell settings put global animator_duration_scale 0.0
+2026-10-04T16:32:06.1398442Z ##[endgroup]
+2026-10-04T16:32:06.1452336Z [command]/usr/bin/sh -c bash "$GITHUB_WORKSPACE/.github/scripts/android-smoke.sh"
+2026-10-04T16:32:06.1481424Z == 1) first launch: 01 Welcome, then GET STARTED -> 02 Home ==
+2026-10-04T16:32:07.2902393Z Performing Streamed Install
+2026-10-04T16:32:07.2921029Z Success
+2026-10-04T16:32:07.5314423Z Starting: Intent { cmp=com.nexdrop.ndt1/.MainActivity }
+2026-10-04T16:32:08.9775067Z Status: ok
+2026-10-04T16:32:08.9776835Z LaunchState: COLD
+2026-10-04T16:32:08.9777185Z Activity: com.nexdrop.ndt1/.MainActivity
+2026-10-04T16:32:08.9777587Z TotalTime: 1442
+2026-10-04T16:32:08.9779850Z WaitTime: 1444
+2026-10-04T16:32:08.9780154Z Complete
+2026-10-04T16:32:16.9835685Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 9.9 MB/s (8037 bytes in 0.001s)
+2026-10-04T16:32:17.1873646Z   [shot] screenshots/01-welcome.png
+2026-10-04T16:32:19.1598004Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 11.2 MB/s (8037 bytes in 0.001s)
+2026-10-04T16:32:19.1795006Z adb shell input tap 160 498
+2026-10-04T16:32:25.1590218Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.6 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:32:25.1743701Z Welcome -> Home OK — mockup 01+02 live, no debug controls
+2026-10-04T16:32:27.1505743Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 26.7 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:32:27.1704591Z LAYOUT OK: 63 nodes within screen, nav clean
+2026-10-04T16:32:27.3053818Z   [shot] screenshots/02-home.png
+2026-10-04T16:32:27.3178282Z == 2) 03 Send files: opens WITHOUT the scanner (file-first flow) ==
+2026-10-04T16:32:29.2795010Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 28.3 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:32:29.2981078Z adb shell input tap 68 273
+2026-10-04T16:32:35.2861334Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 25.2 MB/s (17842 bytes in 0.001s)
+2026-10-04T16:32:37.2994055Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 9.3 MB/s (17842 bytes in 0.002s)
+2026-10-04T16:32:37.3181043Z adb shell input tap 159 442
+2026-10-04T16:32:40.5110548Z   [shot] screenshots/03-send-files.png
+2026-10-04T16:32:40.5242550Z Send files OK — no scanner until a real file is picked
+2026-10-04T16:32:40.5243145Z == 2b) Back affordance: real history, never Home-only, never cancels ==
+2026-10-04T16:32:42.4875394Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 9.7 MB/s (17842 bytes in 0.002s)
+2026-10-04T16:32:44.4520068Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 27.1 MB/s (17842 bytes in 0.001s)
+2026-10-04T16:32:44.4711352Z adb shell input tap 38 62
+2026-10-04T16:32:50.4488619Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 24.3 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:32:50.4523367Z on-screen Back OK — returned to Home (previous screen)
+2026-10-04T16:32:52.4139792Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 34.2 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:32:52.4334652Z adb shell input tap 97 575
+2026-10-04T16:32:58.4448863Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 30.7 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:33:00.4059809Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.6 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:33:00.4259712Z adb shell input tap 159 575
+2026-10-04T16:33:06.4324517Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 31.8 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:33:06.4343567Z Back history OK — system + on-screen back share one stack
+2026-10-04T16:33:06.4344081Z == 3) 04 Receive: ONE QR + truthful LOCAL DIRECT + real expiry ==
+2026-10-04T16:33:08.4124514Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 24.2 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:33:08.4314033Z adb shell input tap 207 273
+2026-10-04T16:33:21.2890749Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 15.7 MB/s (12585 bytes in 0.001s)
+2026-10-04T16:33:27.3032012Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 16.6 MB/s (12585 bytes in 0.001s)
+2026-10-04T16:33:27.3217770Z LAYOUT OK: 35 nodes within screen
+2026-10-04T16:33:27.4587194Z   [shot] screenshots/04-receive-qr.png
+2026-10-04T16:33:31.3015780Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 17.9 MB/s (12585 bytes in 0.001s)
+2026-10-04T16:33:31.3207153Z adb shell input tap 251 499
+2026-10-04T16:33:37.3231861Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 9.3 MB/s (6216 bytes in 0.001s)
+2026-10-04T16:33:37.5011507Z   [shot] screenshots/05-receive-details.png
+2026-10-04T16:33:39.4886686Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 9.4 MB/s (6216 bytes in 0.001s)
+2026-10-04T16:33:39.5124585Z adb shell input tap 258 420
+2026-10-04T16:33:44.5600247Z Receive OK — ONE QR, truthful transport card + details
+2026-10-04T16:33:44.5600873Z == 4) 08 Your NexDrop + History + Settings via bottom nav ==
+2026-10-04T16:33:46.5308414Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.7 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:33:46.5498420Z adb shell input tap 159 575
+2026-10-04T16:33:50.5353131Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 26.7 MB/s (23091 bytes in 0.001s)
+2026-10-04T16:33:52.5153030Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 33.9 MB/s (23091 bytes in 0.001s)
+2026-10-04T16:33:52.5349617Z LAYOUT OK: 65 nodes within screen, nav clean
+2026-10-04T16:33:52.6723457Z   [shot] screenshots/08-devices.png
+2026-10-04T16:33:54.6579564Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 25.1 MB/s (23091 bytes in 0.001s)
+2026-10-04T16:33:54.6775439Z adb shell input tap 221 575
+2026-10-04T16:33:58.6613217Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.4 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:34:00.6372771Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 17.6 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:34:00.6569098Z LAYOUT OK: 33 nodes within screen, nav clean
+2026-10-04T16:34:00.7867845Z   [shot] screenshots/06-history.png
+2026-10-04T16:34:02.7732641Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 16.7 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:34:02.7919685Z adb shell input tap 284 575
+2026-10-04T16:34:06.8060424Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 10.4 MB/s (24937 bytes in 0.002s)
+2026-10-04T16:34:06.8253800Z LAYOUT OK: 70 nodes within screen, nav clean
+2026-10-04T16:34:06.9608088Z   [shot] screenshots/07-settings-top.png
+2026-10-04T16:34:08.9472238Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 34.3 MB/s (24937 bytes in 0.001s)
+2026-10-04T16:34:12.2628962Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.0 MB/s (27101 bytes in 0.001s)
+2026-10-04T16:34:12.4042344Z   [shot] screenshots/07-settings.png
+2026-10-04T16:34:12.4184599Z nav tabs OK
+2026-10-04T16:34:12.4185365Z == 5) Device Test: engineering tools live BEHIND Settings ==
+2026-10-04T16:34:14.3992325Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 36.9 MB/s (27101 bytes in 0.001s)
+2026-10-04T16:34:14.4180292Z adb shell input tap 159 527
+2026-10-04T16:34:20.3973201Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 13.0 MB/s (7835 bytes in 0.001s)
+2026-10-04T16:34:20.4006877Z Device Test OK — benchmarks hidden behind Settings
+2026-10-04T16:34:20.5330515Z   [shot] screenshots/09-device-test.png
+2026-10-04T16:34:20.5464072Z == 6) benchmark path: scanner opens once CAMERA is granted ==
+2026-10-04T16:34:22.5286892Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 12.2 MB/s (7835 bytes in 0.001s)
+2026-10-04T16:34:22.5478938Z adb shell input tap 160 131
+2026-10-04T16:34:22.8686285Z INFO         | Initialized camera with name: environment
+2026-10-04T16:34:22.8785569Z INFO         | VER: Using Vulkan device: llvmpipe (LLVM 21.0.0, 256 bits), driver name: llvmpipe, driver version: 104865796
+2026-10-04T16:34:23.0987645Z INFO         | createView
+2026-10-04T16:34:27.7013557Z INFO         | removeView: view=0x5612610eb130
+2026-10-04T16:34:28.6325927Z == 7) REAL-DATA pass: live NDT1 transfers into the app via emulator tunnel ==
+2026-10-04T16:34:34.6068255Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 10.3 MB/s (7835 bytes in 0.001s)
+2026-10-04T16:34:38.6055456Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 32.3 MB/s (24937 bytes in 0.001s)
+2026-10-04T16:34:42.5872551Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 17.3 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:34:46.5804740Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 25.4 MB/s (23091 bytes in 0.001s)
+2026-10-04T16:34:50.5817391Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 23.7 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:34:52.5500403Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 28.3 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:34:54.5301877Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 30.9 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:34:54.5499870Z adb shell input tap 207 273
+2026-10-04T16:35:05.7066081Z   [shot] screenshots/10-probe-qr.png
+2026-10-04T16:35:05.7838089Z   QR decoded: 10.0.2.15:36023 (session 37b6a2ed)
+2026-10-04T16:35:13.4242203Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 27.2 MB/s (22142 bytes in 0.001s)
+2026-10-04T16:35:13.5521035Z   [shot] screenshots/10-probe-incoming-sheet.png
+2026-10-04T16:35:17.4265934Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 10.7 MB/s (22142 bytes in 0.002s)
+2026-10-04T16:35:17.4476556Z adb shell input tap 221 554
+2026-10-04T16:35:21.4923818Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.8 MB/s (15406 bytes in 0.001s)
+2026-10-04T16:35:21.4965273Z Hashing nd-probe.bin (2.0 MB)...
+2026-10-04T16:35:21.4965817Z (node:3316) Warning: Closing file descriptor 38 on garbage collection
+2026-10-04T16:35:21.4966320Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:35:21.4967643Z (node:3316) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:35:21.4969645Z Connected to 127.0.0.1:36023 — streaming...
+2026-10-04T16:35:21.4970407Z Done in 11.1s — average 0.2 MB/s — integrity PASS
+2026-10-04T16:35:23.5715433Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 0.3 MB/s (15406 bytes in 0.042s)
+2026-10-04T16:35:23.7337194Z   [shot] screenshots/10-probe-complete.png
+2026-10-04T16:35:25.7903447Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.6 MB/s (15406 bytes in 0.001s)
+2026-10-04T16:35:25.8157429Z adb shell input tap 234 462
+2026-10-04T16:35:29.8394725Z REAL_SEND_OK /tmp/nd-probe.bin
+2026-10-04T16:35:32.6801762Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 28.7 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:35:32.6994774Z adb shell input tap 207 273
+2026-10-04T16:35:43.8566445Z   [shot] screenshots/11-big-qr.png
+2026-10-04T16:35:43.9369402Z   QR decoded: 10.0.2.15:34211 (session dcdd2037)
+2026-10-04T16:35:51.5805455Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 31.3 MB/s (22166 bytes in 0.001s)
+2026-10-04T16:35:51.7096463Z   [shot] screenshots/11-big-incoming-sheet.png
+2026-10-04T16:35:55.5759482Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.1 MB/s (22166 bytes in 0.001s)
+2026-10-04T16:35:55.5947929Z adb shell input tap 221 554
+2026-10-04T16:36:08.6754560Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 28.7 MB/s (22166 bytes in 0.001s)
+2026-10-04T16:36:15.7087329Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.2 MB/s (15431 bytes in 0.001s)
+2026-10-04T16:36:15.7116893Z Hashing Device-backup-341MB-full-final.apk (342.0 MB)...
+2026-10-04T16:36:15.7119610Z (node:3469) Warning: Closing file descriptor 23 on garbage collection
+2026-10-04T16:36:15.7120513Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:36:15.7122314Z (node:3469) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:36:15.7124060Z Connected to 127.0.0.1:34211 — streaming...
+2026-10-04T16:36:15.7124513Z Done in 21.8s — average 15.7 MB/s — integrity PASS
+2026-10-04T16:36:17.7427857Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 18.5 MB/s (15431 bytes in 0.001s)
+2026-10-04T16:36:17.9182707Z   [shot] screenshots/11-big-complete.png
+2026-10-04T16:36:19.9756285Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 10.7 MB/s (15431 bytes in 0.001s)
+2026-10-04T16:36:20.0002821Z adb shell input tap 234 462
+2026-10-04T16:36:24.0263315Z REAL_SEND_OK /tmp/Device-backup-341MB-full-final.apk
+2026-10-04T16:36:24.2068610Z   [shot] screenshots/11-big-live.png
+2026-10-04T16:36:26.1979692Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 27.6 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:36:26.2173083Z adb shell input tap 207 273
+2026-10-04T16:36:37.3832330Z   [shot] screenshots/12-trip-qr.png
+2026-10-04T16:36:37.4613242Z   QR decoded: 10.0.2.15:40077 (session 2bfdecdb)
+2026-10-04T16:36:45.1000551Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 27.0 MB/s (22151 bytes in 0.001s)
+2026-10-04T16:36:45.2216762Z   [shot] screenshots/12-trip-incoming-sheet.png
+2026-10-04T16:36:49.1020439Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 25.1 MB/s (22151 bytes in 0.001s)
+2026-10-04T16:36:49.1221451Z adb shell input tap 221 554
+2026-10-04T16:36:53.1748435Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 20.5 MB/s (15415 bytes in 0.001s)
+2026-10-04T16:36:53.1781439Z Hashing Trip-photos-March.zip (3.0 MB)...
+2026-10-04T16:36:53.1782086Z Connected to 127.0.0.1:40077 — streaming...
+2026-10-04T16:36:53.1782533Z (node:3605) Warning: Closing file descriptor 23 on garbage collection
+2026-10-04T16:36:53.1783229Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:36:53.1784594Z (node:3605) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:36:53.1785872Z Done in 11.0s — average 0.3 MB/s — integrity PASS
+2026-10-04T16:36:55.2102755Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 24.1 MB/s (15415 bytes in 0.001s)
+2026-10-04T16:36:55.3720347Z   [shot] screenshots/12-trip-complete.png
+2026-10-04T16:36:57.4276737Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 22.5 MB/s (15415 bytes in 0.001s)
+2026-10-04T16:36:57.4497396Z adb shell input tap 234 462
+2026-10-04T16:37:01.4761356Z REAL_SEND_OK /tmp/Trip-photos-March.zip
+2026-10-04T16:37:03.4490159Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 28.1 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:37:03.4685795Z adb shell input tap 207 273
+2026-10-04T16:37:14.6204136Z   [shot] screenshots/13-resume-qr.png
+2026-10-04T16:37:14.6978385Z   QR decoded: 10.0.2.15:34075 (session 712203b3)
+2026-10-04T16:37:22.3523879Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.3 MB/s (22149 bytes in 0.001s)
+2026-10-04T16:37:22.5240175Z   [shot] screenshots/13-resume-incoming-sheet.png
+2026-10-04T16:37:26.3406782Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 26.9 MB/s (22149 bytes in 0.001s)
+2026-10-04T16:37:26.3608149Z adb shell input tap 221 554
+2026-10-04T16:37:30.4266448Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 23.4 MB/s (15413 bytes in 0.001s)
+2026-10-04T16:37:30.4299002Z Hashing resume-final-v2.pdf (2.0 MB)...
+2026-10-04T16:37:30.4301485Z Connected to 127.0.0.1:34075 — streaming...
+2026-10-04T16:37:30.4316552Z (node:3732) Warning: Closing file descriptor 23 on garbage collection
+2026-10-04T16:37:30.4317183Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:37:30.4318366Z (node:3732) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:37:30.4319927Z Done in 11.0s — average 0.2 MB/s — integrity PASS
+2026-10-04T16:37:32.4611906Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 9.9 MB/s (15413 bytes in 0.001s)
+2026-10-04T16:37:32.6358048Z   [shot] screenshots/13-resume-complete.png
+2026-10-04T16:37:34.6793604Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 15.5 MB/s (15413 bytes in 0.001s)
+2026-10-04T16:37:34.7043874Z adb shell input tap 234 462
+2026-10-04T16:37:38.7310987Z REAL_SEND_OK /tmp/resume-final-v2.pdf
+2026-10-04T16:37:40.7169063Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 24.8 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:37:40.7364138Z adb shell input tap 207 273
+2026-10-04T16:37:51.9008747Z   [shot] screenshots/14-demo-qr.png
+2026-10-04T16:37:51.9855018Z   QR decoded: 10.0.2.15:33339 (session b22d08cb)
+2026-10-04T16:37:59.6214187Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.9 MB/s (22147 bytes in 0.001s)
+2026-10-04T16:37:59.7483476Z   [shot] screenshots/14-demo-incoming-sheet.png
+2026-10-04T16:38:03.6191922Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 26.9 MB/s (22147 bytes in 0.001s)
+2026-10-04T16:38:03.6396532Z adb shell input tap 221 554
+2026-10-04T16:38:07.6921460Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 23.3 MB/s (15411 bytes in 0.001s)
+2026-10-04T16:38:07.6952809Z Hashing workshop-demo.mp4 (5.0 MB)...
+2026-10-04T16:38:07.6953504Z Connected to 127.0.0.1:33339 — streaming...
+2026-10-04T16:38:07.6953864Z (node:3879) Warning: Closing file descriptor 23 on garbage collection
+2026-10-04T16:38:07.6954336Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:38:07.6955729Z (node:3879) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:38:07.6956669Z Done in 11.0s — average 0.5 MB/s — integrity PASS
+2026-10-04T16:38:09.7350049Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 17.1 MB/s (15411 bytes in 0.001s)
+2026-10-04T16:38:09.9058163Z   [shot] screenshots/14-demo-complete.png
+2026-10-04T16:38:11.9458171Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 6.7 MB/s (15411 bytes in 0.002s)
+2026-10-04T16:38:11.9687331Z adb shell input tap 234 462
+2026-10-04T16:38:15.9937725Z REAL_SEND_OK /tmp/workshop-demo.mp4
+2026-10-04T16:38:17.9679575Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 31.4 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:38:17.9871425Z adb shell input tap 207 273
+2026-10-04T16:38:29.1447148Z   [shot] screenshots/15-notes-qr.png
+2026-10-04T16:38:29.2234367Z   QR decoded: 10.0.2.15:39677 (session bbd41597)
+2026-10-04T16:38:36.8728413Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 17.5 MB/s (22149 bytes in 0.001s)
+2026-10-04T16:38:37.0055879Z   [shot] screenshots/15-notes-incoming-sheet.png
+2026-10-04T16:38:40.8697549Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 27.9 MB/s (22149 bytes in 0.001s)
+2026-10-04T16:38:40.8916521Z adb shell input tap 221 554
+2026-10-04T16:38:44.9263461Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 24.9 MB/s (15413 bytes in 0.001s)
+2026-10-04T16:38:44.9292828Z Hashing notes-and-ideas.txt (1.0 MB)...
+2026-10-04T16:38:44.9293566Z Connected to 127.0.0.1:39677 — streaming...
+2026-10-04T16:38:44.9294172Z (node:4000) Warning: Closing file descriptor 23 on garbage collection
+2026-10-04T16:38:44.9295009Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:38:44.9296217Z (node:4000) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:38:44.9297390Z Done in 10.9s — average 0.1 MB/s — integrity PASS
+2026-10-04T16:38:46.9782827Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 22.5 MB/s (15413 bytes in 0.001s)
+2026-10-04T16:38:47.1450412Z   [shot] screenshots/15-notes-complete.png
+2026-10-04T16:38:49.1956710Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 19.0 MB/s (15413 bytes in 0.001s)
+2026-10-04T16:38:49.2196329Z adb shell input tap 234 462
+2026-10-04T16:38:53.2466810Z REAL_SEND_OK /tmp/notes-and-ideas.txt
+2026-10-04T16:38:53.2468067Z == 7b) populated state: History 5 real transfers, Devices connected ==
+2026-10-04T16:38:55.2166173Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.3 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:38:55.2356916Z adb shell input tap 221 575
+2026-10-04T16:38:59.2205284Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 30.2 MB/s (24231 bytes in 0.001s)
+2026-10-04T16:38:59.3555137Z   [shot] screenshots/16-history-populated.png
+2026-10-04T16:39:03.9964198Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.2 MB/s (24231 bytes in 0.001s)
+2026-10-04T16:39:05.9953135Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 10.2 MB/s (24231 bytes in 0.002s)
+2026-10-04T16:39:06.0148941Z LAYOUT OK: 68 nodes within screen, nav clean
+2026-10-04T16:39:06.1529588Z   [shot] screenshots/17-history-scrolled.png
+2026-10-04T16:39:08.1370845Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 34.3 MB/s (24231 bytes in 0.001s)
+2026-10-04T16:39:08.1594720Z adb shell input tap 159 575
+2026-10-04T16:39:12.1454756Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 34.3 MB/s (29106 bytes in 0.001s)
+2026-10-04T16:39:14.1344714Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 31.6 MB/s (29106 bytes in 0.001s)
+2026-10-04T16:39:14.1549845Z LAYOUT OK: 82 nodes within screen, nav clean
+2026-10-04T16:39:14.2939556Z   [shot] screenshots/18-devices-connected.png
+2026-10-04T16:39:14.3077442Z == 7c) Clear transfer history: back to the real empty state ==
+2026-10-04T16:39:16.2787295Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 38.9 MB/s (29106 bytes in 0.001s)
+2026-10-04T16:39:16.2981309Z adb shell input tap 284 575
+2026-10-04T16:39:20.2910456Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.3 MB/s (24933 bytes in 0.001s)
+2026-10-04T16:39:20.3105044Z   (label 'Clear transfer history' not visible — scrolling down, attempt 1)
+2026-10-04T16:39:23.6111085Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 32.7 MB/s (27108 bytes in 0.001s)
+2026-10-04T16:39:23.6312606Z adb shell input tap 160 98
+2026-10-04T16:39:29.6325605Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 34.8 MB/s (24933 bytes in 0.001s)
+2026-10-04T16:39:29.6524199Z adb shell input tap 221 575
+2026-10-04T16:39:33.6369713Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 13.7 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:39:35.6192464Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 17.9 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:39:35.6394290Z LAYOUT OK: 33 nodes within screen, nav clean
+2026-10-04T16:39:35.7829214Z   [shot] screenshots/19-history-cleared.png
+2026-10-04T16:39:35.7972408Z REAL-DATA PASS OK — 6 live NDT1 transfers (incl. 341 MB) accepted, verified, recorded, then cleared
+2026-10-04T16:39:38.8148735Z == 8) FONT-SCALE 1.3: long-text / large-font layout robustness ==
+2026-10-04T16:39:44.8045152Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 11.2 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:39:44.8242966Z adb shell input tap 159 575
+2026-10-04T16:39:48.8375633Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 31.1 MB/s (23088 bytes in 0.001s)
+2026-10-04T16:39:48.8577588Z LAYOUT OK: 65 nodes within screen, nav clean
+2026-10-04T16:39:49.0030026Z   [shot] screenshots/20-devices-font130.png
+2026-10-04T16:39:50.9891611Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 32.0 MB/s (23088 bytes in 0.001s)
+2026-10-04T16:39:53.9846869Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 30.9 MB/s (23088 bytes in 0.001s)
+2026-10-04T16:39:56.9718392Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 30.4 MB/s (23088 bytes in 0.001s)
+2026-10-04T16:39:57.9922094Z SMOKE FAIL: bottom-nav tab 'History' not found
+2026-10-04T16:39:58.0005566Z <?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0"><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,0][320,640]" drawing-order="0" hint=""><node index="0" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,0][320,592]" drawing-order="1" hint=""><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,24][320,592]" drawing-order="2" hint=""><node index="0" text="" resource-id="com.nexdrop.ndt1:id/action_bar_root" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,24][320,592]" drawing-order="1" hint=""><node index="0" text="" resource-id="android:id/content" class="android.widget.FrameLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,24][320,592]" drawing-order="2" hint=""><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,24][320,592]" drawing-order="1" hint=""><node index="0" text="" resource-id="" class="android.view.View" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,24][320,592]" drawing-order="1" hint="" /><node index="1" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,24][320,592]" drawing-order="2" hint=""><node index="0" text="" resource-id="" class="android.widget.ScrollView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="true" focused="false" scrollable="true" long-clickable="false" *** selected="false" bounds="[0,24][320,512]" drawing-order="1" hint=""><node index="0" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,24][320,512]" drawing-order="1" hint=""><node index="0" text="Your NexDrop" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[16,42][193,73]" drawing-order="1" hint="" /><node index="1" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[16,83][304,177]" drawing-order="4" hint=""><node index="0" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[30,110][70,150]" drawing-order="1" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[30,110][70,150]" drawing-order="1" hint="" /></node><node index="1" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[80,97][158,163]" drawing-order="3" hint=""><node index="0" text="Nearby device" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[80,97][158,143]" drawing-order="1" hint="" /><node index="1" text="Connected" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[80,143][152,163]" drawing-order="2" hint="" /></node><node index="2" text="LOCAL DIRECT" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[158,115][290,144]" drawing-order="4" hint="" /></node><node index="2" text="Recent transfers" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[16,191][124,211]" drawing-order="2" hint="" /><node index="3" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[16,217][304,261]" drawing-order="5" hint=""><node index="0" text="No transfers yet" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,229][132,249]" drawing-order="1" hint="" /></node><node index="4" text="Settings" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[16,275][70,295]" drawing-order="3" hint="" /><node index="5" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[16,301][304,512]" drawing-order="6" hint=""><node index="0" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,313][292,339]" drawing-order="1" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,316][48,336]" drawing-order="1" hint="" /><node index="1" text="Native Local" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[54,315][274,337]" drawing-order="3" hint="" /><node index="2" text="On" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[274,316][292,336]" drawing-order="4" hint="" /></node><node index="1" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,346][292,372]" drawing-order="3" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,349][48,369]" drawing-order="1" hint="" /><node index="1" text="PWA fallback" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[54,348][261,370]" drawing-order="3" hint="" /><node index="2" text="Auto" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[261,349][292,369]" drawing-order="4" hint="" /></node><node index="2" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,379][292,405]" drawing-order="5" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,382][48,402]" drawing-order="1" hint="" /><node index="1" text="SHA-256 verification" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[54,381][274,403]" drawing-order="3" hint="" /><node index="2" text="On" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[274,382][292,402]" drawing-order="4" hint="" /></node><node index="3" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,412][292,438]" drawing-order="7" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,415][48,435]" drawing-order="1" hint="" /><node index="1" text="Notifications" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[54,414][274,436]" drawing-order="3" hint="" /><node index="2" text="On" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[274,415][292,435]" drawing-order="4" hint="" /></node><node index="4" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,445][292,471]" drawing-order="9" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,448][48,468]" drawing-order="1" hint="" /><node index="1" text="Appearance" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[54,447][262,469]" drawing-order="3" hint="" /><node index="2" text="Dark" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[262,448][292,468]" drawing-order="4" hint="" /></node><node index="5" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,478][292,504]" drawing-order="11" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[28,481][48,501]" drawing-order="1" hint="" /><node index="1" text="Diagnostics" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[54,480][258,502]" drawing-order="3" hint="" /><node index="2" text="Open" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[258,481][292,501]" drawing-order="4" hint="" /></node></node></node></node><node index="1" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,512][320,592]" drawing-order="2" hint=""><node index="0" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[4,531][66,575]" drawing-order="1" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[25,533][44,552]" drawing-order="1" hint="" /><node index="1" text="Home" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[10,555][60,573]" drawing-order="3" hint="" /></node><node index="1" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[66,522][128,584]" drawing-order="2" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[87,524][106,543]" drawing-order="1" hint="" /><node index="1" text="Transfer" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[72,546][122,582]" drawing-order="3" hint="" /></node><node index="2" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[128,531][190,575]" drawing-order="3" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[149,533][168,552]" drawing-order="1" hint="" /><node index="1" text="Devices" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[134,555][184,573]" drawing-order="3" hint="" /></node><node index="3" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[190,531][253,575]" drawing-order="4" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[212,533][231,552]" drawing-order="1" hint="" /><node index="1" text="History" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[196,555][247,573]" drawing-order="3" hint="" /></node><node index="4" text="" resource-id="" class="android.widget.LinearLayout" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="true" enabled="true" focusable="true" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[253,522][316,584]" drawing-order="5" hint=""><node index="0" text="" resource-id="" class="android.widget.ImageView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[275,524][294,543]" drawing-order="1" hint="" /><node index="1" text="Settings" resource-id="" class="android.widget.TextView" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[259,546][310,582]" drawing-order="3" hint="" /></node></node></node></node></node></node></node></node><node index="1" text="" resource-id="android:id/statusBarBackground" class="android.view.View" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,0][320,24]" drawing-order="3" hint="" /><node index="2" text="" resource-id="android:id/navigationBarBackground" class="android.view.View" package="com.nexdrop.ndt1" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" *** selected="false" bounds="[0,592][320,640]" drawing-order="2" hint="" /></node></hierarchy>::error::The process '/usr/bin/sh' failed with exit code 1
+2026-10-04T16:39:58.0076644Z ##[group]Terminate Emulator
+2026-10-04T16:39:58.0077503Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 emu kill
+2026-10-04T16:39:58.0078682Z OK: killing emulator, bye bye
+2026-10-04T16:39:58.0079357Z OK
+2026-10-04T16:39:58.0080858Z INFO         | Wait for emulator (pid 2466) 20 seconds to shutdown gracefully before kill;you can set environment variable ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL(in seconds) to change the default value (20 seconds)
+2026-10-04T16:39:58.0081936Z 
+2026-10-04T16:39:58.0082413Z ##[endgroup]
+2026-10-04T16:40:02.3360263Z INFO         | Saving with gfxstream=1
+2026-10-04T16:40:02.3946487Z INFO         | Saving snapshot 'default_boot' took 4387 ms
+2026-10-04T16:40:02.9702337Z ERROR        | stop: Not implemented
+2026-10-04T16:40:02.9702823Z WARNING      | Emulator client has not yet been configured.. Call configure me first!
+2026-10-04T16:40:02.9913588Z INFO         | removeScene: scene=0x561243bdb7a0
+2026-10-04T16:40:03.0078172Z INFO         | removeAll
+2026-10-04T16:40:03.3530206Z WARNING      | Netsim Wifi dns:///localhost:36865 is gone due to Stream removed (CANCELLED)

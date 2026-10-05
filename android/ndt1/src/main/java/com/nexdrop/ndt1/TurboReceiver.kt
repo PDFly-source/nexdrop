@@ -179,6 +179,14 @@ class TurboReceiver(
         val writer = DurableWriter(partFile, offer.sizeBytes)
         activePart = partFile
         activeWriter = writer
+        // v1.4.2-rc3: fsync leaves the receive loop. PROGRESS is emitted by
+        // the durability worker strictly AFTER part.force(true) — the wire
+        // contract (PROGRESS only ever reports fsynced contiguous bytes) is
+        // unchanged; the loop never blocks on storage. Same lock as every
+        // other control write on this socket.
+        writer.startAsyncFsync { durable ->
+          synchronized(out) { out.write(encodeHeader(FrameType.PROGRESS, 12) + encodeOffset(offer.fileId, durable)) }
+        }
         val sampler = ThroughputSampler()
         var lastNotify = 0L
         synchronized(out) { out.write(encodeHeader(FrameType.READY, 12) + encodeOffset(offer.fileId, writer.durableOffset)) }
@@ -198,17 +206,19 @@ class TurboReceiver(
               lastProfile.bytesIn += d.bytes.size.toLong()
               if (sinceProgress >= Ndt1Tunables.progressCadenceBytes) {
                 sinceProgress = 0
-                val durable = writer.fsyncDurable()
+                // v1.4.2-rc3: queue the durability checkpoint (coalesced by
+                // the writer) — PROGRESS comes from the worker post-fsync.
+                // CREDIT still advertises full window headroom here: RAM is
+                // bounded by the 8 MiB window regardless of fsync cadence.
+                writer.requestDurability(writer.durableOffset)
                 synchronized(out) {
-                  out.write(encodeHeader(FrameType.PROGRESS, 12) + encodeOffset(offer.fileId, durable))
-                  // CREDIT: full window headroom — RAM stays bounded at 8 MiB.
                   out.write(encodeHeader(FrameType.CREDIT, 16) + encodeOffset(offer.fileId, Ndt1Tunables.windowBytes.toLong(), Ndt1Tunables.windowBytes))
                 }
-                sampler.sample(durable)
+                sampler.sample(writer.durableOffset)
                 val now = System.currentTimeMillis()
                 if (now - lastNotify >= 100) { // max 10 Hz — never per-chunk
                   lastNotify = now
-                  listener.onProgress(durable, offer.sizeBytes)
+                  listener.onProgress(writer.durableOffset, offer.sizeBytes)
                 }
               }
             }
@@ -216,7 +226,7 @@ class TurboReceiver(
             FrameType.RESUME -> {}
             FrameType.CANCEL -> { writer.close(); partFile.delete(); return }
             FrameType.COMPLETE -> {
-              val durable = writer.fsyncDurable()
+              val durable = writer.drainDurability() // wait for the final durability batch
               snapshotProfile(writer)
               listener.onProgress(durable, offer.sizeBytes)
               val (_, senderSha) = decodeComplete(frame.second)
@@ -256,6 +266,8 @@ class TurboReceiver(
         activePart?.delete()
         activeWriter = null
         activePart = null
+      } else {
+        activeWriter?.stopAsync() // drop/EOF: part file retained for resume, worker stopped
       }
     }
   }

@@ -1,0 +1,129 @@
+﻿2026-10-04T15:37:20.6049823Z ##[group]Run ./gradlew --no-daemon --stacktrace :app:assembleRelease
+2026-10-04T15:37:20.6050095Z [36;1m./gradlew --no-daemon --stacktrace :app:assembleRelease[0m
+2026-10-04T15:37:20.6097610Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:37:20.6097750Z env:
+2026-10-04T15:37:20.6097918Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:37:20.6098175Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:37:20.6098419Z   NEXDROP_KEYSTORE_FILE: /home/runner/nexdrop-release.keystore
+2026-10-04T15:37:20.6098738Z   NEXDROP_KEYSTORE_PASSWORD: ***
+2026-10-04T15:37:20.6098929Z   NEXDROP_KEY_PASSWORD: ***
+2026-10-04T15:37:20.6099059Z ##[endgroup]
+2026-10-04T15:37:20.9693041Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.7/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-04T15:37:21.6649805Z Daemon will be stopped at the end of the build 
+2026-10-04T15:37:26.7664942Z > Task :app:buildKotlinToolingMetadata
+2026-10-04T15:37:26.7681016Z > Task :app:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T15:37:26.7681805Z > Task :app:preBuild UP-TO-DATE
+2026-10-04T15:37:26.7682235Z > Task :app:preReleaseBuild UP-TO-DATE
+2026-10-04T15:37:26.7682646Z > Task :ndt1:preBuild UP-TO-DATE
+2026-10-04T15:37:26.7683045Z > Task :ndt1:preReleaseBuild UP-TO-DATE
+2026-10-04T15:37:26.7683464Z > Task :app:generateReleaseResValues
+2026-10-04T15:37:26.7683881Z > Task :ndt1:writeReleaseAarMetadata
+2026-10-04T15:37:26.8666256Z > Task :ndt1:generateReleaseResValues
+2026-10-04T15:37:26.9654134Z > Task :app:checkReleaseAarMetadata
+2026-10-04T15:37:26.9662260Z > Task :ndt1:generateReleaseResources
+2026-10-04T15:37:27.0649383Z > Task :ndt1:packageReleaseResources
+2026-10-04T15:37:27.0672451Z > Task :app:mapReleaseSourceSetPaths
+2026-10-04T15:37:27.0682182Z > Task :app:generateReleaseResources
+2026-10-04T15:37:27.6649780Z > Task :app:packageReleaseResources
+2026-10-04T15:37:27.7672583Z > Task :app:createReleaseCompatibleScreenManifests
+2026-10-04T15:37:27.7677833Z > Task :app:extractDeepLinksRelease
+2026-10-04T15:37:27.7678431Z > Task :ndt1:extractDeepLinksRelease
+2026-10-04T15:37:28.0672305Z > Task :ndt1:compileReleaseLibraryResources
+2026-10-04T15:37:28.0672805Z > Task :ndt1:parseReleaseLocalResources
+2026-10-04T15:37:28.1645252Z > Task :ndt1:generateReleaseRFile
+2026-10-04T15:37:28.1665745Z > Task :ndt1:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T15:37:28.1671713Z > Task :app:parseReleaseLocalResources
+2026-10-04T15:37:28.1689107Z > Task :ndt1:processReleaseManifest
+2026-10-04T15:37:28.2652609Z > Task :app:mergeReleaseResources
+2026-10-04T15:37:28.5676067Z 
+2026-10-04T15:37:28.5739437Z > Task :app:processReleaseMainManifest
+2026-10-04T15:37:28.5740171Z /home/runner/work/nexdrop/nexdrop/android/app/src/main/AndroidManifest.xml Warning:
+2026-10-04T15:37:28.5741316Z 	Namespace 'com.nexdrop.ndt1' is used in multiple modules and/or libraries: AndroidManifest.xml, :ndt1. Please ensure that all modules and libraries have a unique namespace. For more information, See https://developer.android.com/studio/build/configure-app-module#set-namespace
+2026-10-04T15:37:28.6644368Z 
+2026-10-04T15:37:28.6676773Z > Task :app:processReleaseManifest
+2026-10-04T15:37:28.6691831Z > Task :app:processReleaseManifestForPackage
+2026-10-04T15:37:28.6742145Z > Task :ndt1:javaPreCompileRelease
+2026-10-04T15:37:28.6767618Z > Task :app:javaPreCompileRelease
+2026-10-04T15:37:28.8698198Z > Task :app:extractProguardFiles
+2026-10-04T15:37:28.8765988Z > Task :ndt1:extractProguardFiles
+2026-10-04T15:37:28.8802708Z > Task :ndt1:prepareLintJarForPublish
+2026-10-04T15:37:28.8875640Z > Task :ndt1:mergeReleaseJniLibFolders
+2026-10-04T15:37:28.8928126Z > Task :ndt1:mergeReleaseNativeLibs NO-SOURCE
+2026-10-04T15:37:28.8946097Z > Task :ndt1:stripReleaseDebugSymbols NO-SOURCE
+2026-10-04T15:37:28.9674994Z > Task :ndt1:copyReleaseJniLibsProjectAndLocalJars
+2026-10-04T15:37:28.9700054Z > Task :ndt1:extractDeepLinksForAarRelease
+2026-10-04T15:37:28.9725906Z > Task :ndt1:mergeReleaseShaders
+2026-10-04T15:37:28.9753381Z > Task :ndt1:compileReleaseShaders NO-SOURCE
+2026-10-04T15:37:28.9803754Z > Task :ndt1:generateReleaseAssets UP-TO-DATE
+2026-10-04T15:37:28.9857802Z > Task :ndt1:packageReleaseAssets
+2026-10-04T15:37:28.9863566Z > Task :ndt1:prepareReleaseArtProfile
+2026-10-04T15:37:28.9888813Z > Task :ndt1:writeReleaseLintModelMetadata
+2026-10-04T15:37:28.9912685Z > Task :app:mergeReleaseJniLibFolders
+2026-10-04T15:37:29.0682398Z > Task :ndt1:copyReleaseJniLibsProjectOnly
+2026-10-04T15:37:29.1682413Z > Task :app:checkReleaseDuplicateClasses
+2026-10-04T15:37:29.1742318Z > Task :app:mergeReleaseNativeLibs NO-SOURCE
+2026-10-04T15:37:29.1791880Z > Task :app:stripReleaseDebugSymbols NO-SOURCE
+2026-10-04T15:37:29.1821933Z > Task :app:extractReleaseNativeSymbolTables NO-SOURCE
+2026-10-04T15:37:29.1851939Z > Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+2026-10-04T15:37:29.2682774Z > Task :app:desugarReleaseFileDependencies
+2026-10-04T15:37:29.2700470Z > Task :app:mergeReleaseStartupProfile
+2026-10-04T15:37:29.3645778Z > Task :app:processReleaseResources
+2026-10-04T15:37:47.9651909Z 
+2026-10-04T15:37:47.9662128Z > Task :ndt1:compileReleaseKotlin
+2026-10-04T15:37:47.9672667Z w: file:///home/runner/work/nexdrop/nexdrop/android/ndt1/src/main/java/com/nexdrop/ndt1/TurboReceiver.kt:163:22 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, ByteArray>
+2026-10-04T15:37:47.9673957Z w: file:///home/runner/work/nexdrop/nexdrop/android/ndt1/src/main/java/com/nexdrop/ndt1/TurboReceiver.kt:165:39 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, ByteArray>
+2026-10-04T15:37:48.1718749Z 
+2026-10-04T15:37:48.1742318Z > Task :ndt1:compileReleaseJavaWithJavac NO-SOURCE
+2026-10-04T15:37:48.1772225Z > Task :ndt1:bundleLibRuntimeToJarRelease
+2026-10-04T15:37:48.1811352Z > Task :ndt1:processReleaseJavaRes
+2026-10-04T15:37:48.1812997Z > Task :ndt1:bundleLibCompileToJarRelease
+2026-10-04T15:37:48.1814073Z > Task :ndt1:createFullJarRelease
+2026-10-04T15:37:49.4689055Z > Task :ndt1:generateReleaseLintModel
+2026-10-04T15:37:51.3692780Z > Task :app:mergeExtDexRelease
+2026-10-04T15:37:58.2672318Z > Task :ndt1:extractReleaseAnnotations
+2026-10-04T15:37:58.2702107Z > Task :ndt1:mergeReleaseGeneratedProguardFiles
+2026-10-04T15:37:58.2734605Z > Task :ndt1:mergeReleaseConsumerProguardFiles
+2026-10-04T15:37:58.4703448Z > Task :ndt1:generateReleaseLintVitalModel
+2026-10-04T15:37:58.4762606Z > Task :ndt1:bundleLibRuntimeToDirRelease
+2026-10-04T15:37:58.5712608Z > Task :ndt1:mergeReleaseJavaResource
+2026-10-04T15:37:58.6662335Z > Task :ndt1:syncReleaseLibJars
+2026-10-04T15:37:58.6771193Z > Task :ndt1:bundleReleaseLocalLintAar
+2026-10-04T15:37:58.9665691Z > Task :app:mergeReleaseArtProfile
+2026-10-04T15:37:58.9692264Z > Task :app:mergeReleaseShaders
+2026-10-04T15:37:58.9803788Z > Task :app:compileReleaseShaders NO-SOURCE
+2026-10-04T15:37:58.9904570Z > Task :app:generateReleaseAssets UP-TO-DATE
+2026-10-04T15:37:59.0695481Z > Task :app:mergeReleaseAssets
+2026-10-04T15:37:59.0772187Z > Task :app:compressReleaseAssets
+2026-10-04T15:37:59.1680054Z > Task :app:extractReleaseVersionControlInfo
+2026-10-04T15:37:59.3666820Z > Task :app:collectReleaseDependencies
+2026-10-04T15:37:59.4652483Z > Task :app:sdkReleaseDependencyData
+2026-10-04T15:37:59.4702223Z > Task :app:validateSigningRelease
+2026-10-04T15:37:59.4712193Z > Task :app:writeReleaseAppMetadata
+2026-10-04T15:37:59.4761904Z > Task :app:writeReleaseSigningConfigVersions
+2026-10-04T15:37:59.4811984Z > Task :app:optimizeReleaseResources
+2026-10-04T15:38:03.8668566Z 
+2026-10-04T15:38:03.8692641Z > Task :app:compileReleaseKotlin
+2026-10-04T15:38:03.8722301Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:638:9 Variable 'ep' is never used
+2026-10-04T15:38:03.8723343Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:771:11 Variable 'm' is never used
+2026-10-04T15:38:03.8752377Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1305:60 'versionCode: Int' is deprecated. Deprecated in Java
+2026-10-04T15:38:03.8782667Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1525:32 The corresponding parameter in the supertype 'Listener' is named 'peerIp'. This may cause problems when calling this function with named arguments.
+2026-10-04T15:38:03.8812305Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1682:43 'getter for allNetworks: Array<(out) Network!>' is deprecated. Deprecated in Java
+2026-10-04T15:38:03.8813092Z 
+2026-10-04T15:38:03.8841978Z > Task :app:compileReleaseJavaWithJavac NO-SOURCE
+2026-10-04T15:38:04.0662506Z > Task :app:generateReleaseLintVitalReportModel
+2026-10-04T15:38:04.9673181Z > Task :app:dexBuilderRelease
+2026-10-04T15:38:05.0652225Z > Task :app:mergeReleaseGlobalSynthetics
+2026-10-04T15:38:05.0702229Z > Task :app:processReleaseJavaRes
+2026-10-04T15:38:05.4652615Z > Task :app:mergeReleaseJavaResource
+2026-10-04T15:38:06.4668005Z > Task :app:mergeDexRelease
+2026-10-04T15:38:06.6664231Z > Task :app:compileReleaseArtProfile
+2026-10-04T15:38:07.2655734Z > Task :app:packageRelease
+2026-10-04T15:38:07.2698756Z > Task :app:createReleaseApkListingFileRedirect
+2026-10-04T15:38:10.3660546Z > Task :ndt1:lintVitalAnalyzeRelease
+2026-10-04T15:38:17.5664190Z > Task :app:lintVitalAnalyzeRelease
+2026-10-04T15:38:17.6645835Z > Task :app:lintVitalReportRelease
+2026-10-04T15:38:17.6678742Z > Task :app:lintVitalRelease
+2026-10-04T15:38:17.6702253Z > Task :app:assembleRelease
+2026-10-04T15:38:17.7555123Z 
+2026-10-04T15:38:17.7570279Z BUILD SUCCESSFUL in 57s
+2026-10-04T15:38:17.7570698Z 82 actionable tasks: 82 executed

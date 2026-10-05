@@ -1,0 +1,25 @@
+﻿2026-10-04T16:05:29.2866477Z ##[group]Run actions/upload-artifact@v4
+2026-10-04T16:05:29.2866876Z with:
+2026-10-04T16:05:29.2867232Z   name: smoke-screenshots
+2026-10-04T16:05:29.2867587Z   path: screenshots/
+2026-10-04T16:05:29.2867901Z   if-no-files-found: ignore
+2026-10-04T16:05:29.2868305Z   compression-level: 6
+2026-10-04T16:05:29.2868626Z   overwrite: false
+2026-10-04T16:05:29.2868954Z   include-hidden-files: false
+2026-10-04T16:05:29.2870017Z env:
+2026-10-04T16:05:29.2870354Z   ANDROID_AVD_HOME: /home/runner/.android/avd
+2026-10-04T16:05:29.2870795Z ##[endgroup]
+2026-10-04T16:05:29.4598655Z (node:4521) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T16:05:29.4599673Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T16:05:29.4686817Z With the provided path, there will be 32 files uploaded
+2026-10-04T16:05:29.4699972Z Artifact name is valid!
+2026-10-04T16:05:29.4700968Z Root directory input is valid!
+2026-10-04T16:05:29.7947696Z Beginning upload of artifact content to blob storage
+2026-10-04T16:05:29.9162684Z (node:4521) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-04T16:05:30.4419895Z Uploaded bytes 2623068
+2026-10-04T16:05:30.5005968Z Finished uploading artifact content to blob storage!
+2026-10-04T16:05:30.5007002Z SHA256 digest of uploaded artifact zip is e20bb73563a822ef833d8cc97949b3870cedcf1c34db88a8daa63ee653bd0fe4
+2026-10-04T16:05:30.5007829Z Finalizing artifact upload
+2026-10-04T16:05:30.7512033Z Artifact smoke-screenshots.zip successfully finalized. Artifact ID 11308530869
+2026-10-04T16:05:30.7513215Z Artifact smoke-screenshots has been successfully uploaded! Final size is 2623068 bytes. Artifact ID is 11308530869
+2026-10-04T16:05:30.7517958Z Artifact download URL: https://github.com/PDFly-source/nexdrop/actions/runs/37214611254/artifacts/11308530869

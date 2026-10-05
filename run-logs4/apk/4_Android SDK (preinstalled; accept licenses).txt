@@ -1,0 +1,21 @@
+﻿2026-10-04T15:15:11.1475870Z ##[group]Run set -eu
+2026-10-04T15:15:11.1477108Z [36;1mset -eu[0m
+2026-10-04T15:15:11.1478068Z [36;1mecho "ANDROID_HOME=$ANDROID_HOME"[0m
+2026-10-04T15:15:11.1480710Z [36;1mSDKM="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -1 || true)"[0m
+2026-10-04T15:15:11.1484110Z [36;1mif [ -n "$SDKM" ] && [ -x "$SDKM" ]; then[0m
+2026-10-04T15:15:11.1486328Z [36;1m  "$SDKM" --version[0m
+2026-10-04T15:15:11.1488148Z [36;1m  yes | "$SDKM" --licenses > /dev/null || true[0m
+2026-10-04T15:15:11.1490357Z [36;1m  echo "licenses accepted via $SDKM"[0m
+2026-10-04T15:15:11.1492203Z [36;1melse[0m
+2026-10-04T15:15:11.1494577Z [36;1m  echo "sdkmanager not found (runner SDK licenses are pre-accepted); continuing"[0m
+2026-10-04T15:15:11.1497668Z [36;1mfi[0m
+2026-10-04T15:15:11.1835247Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:15:11.1836348Z env:
+2026-10-04T15:15:11.1837553Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:15:11.1839575Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:15:11.1841201Z ##[endgroup]
+2026-10-04T15:15:11.1965746Z ANDROID_HOME=/usr/local/lib/android/sdk
+2026-10-04T15:15:16.3819266Z 12.0
+2026-10-04T15:15:16.3820872Z 
+2026-10-04T15:15:19.7832081Z yes: standard output: Broken pipe
+2026-10-04T15:15:19.7836740Z licenses accepted via /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager

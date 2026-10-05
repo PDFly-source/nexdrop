@@ -1,0 +1,4 @@
+﻿2026-10-04T15:20:06.6766150Z ##[group]Run sudo chmod 666 /dev/kvm || true
+2026-10-04T15:20:06.6766585Z [36;1msudo chmod 666 /dev/kvm || true[0m
+2026-10-04T15:20:06.7038574Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:20:06.7038911Z ##[endgroup]

@@ -1,0 +1,52 @@
+﻿2026-10-04T16:55:59.0321295Z ##[group]Run set -eu
+2026-10-04T16:55:59.0321670Z [36;1mset -eu[0m
+2026-10-04T16:55:59.0321967Z [36;1msudo apt-get -yq install apksigner aapt > /dev/null 2>&1 || true[0m
+2026-10-04T16:55:59.0322389Z [36;1mcommand -v aapt >/dev/null || { echo "aapt unavailable"; exit 1; }[0m
+2026-10-04T16:55:59.0322711Z [36;1mAPK=NexDrop-release.apk[0m
+2026-10-04T16:55:59.0323006Z [36;1m# Real version from the APK itself — never hardcode[0m
+2026-10-04T16:55:59.0334942Z [36;1mBADGE=$(aapt dump badging "$APK" 2>/dev/null | head -1)[0m
+2026-10-04T16:55:59.0335653Z [36;1mVNAME=$(echo "$BADGE" | grep -oE "versionName='[^']+'" | cut -d"'" -f2)[0m
+2026-10-04T16:55:59.0336476Z [36;1mVCODE=$(echo "$BADGE" | grep -oE "versionCode='[0-9]+'" | cut -d"'" -f2)[0m
+2026-10-04T16:55:59.0336836Z [36;1mtest -n "$VNAME" && test -n "$VCODE"[0m
+2026-10-04T16:55:59.0337094Z [36;1mSIZE=$(stat -c%s "$APK")[0m
+2026-10-04T16:55:59.0337347Z [36;1mSHA256=$(sha256sum "$APK" | cut -d' ' -f1)[0m
+2026-10-04T16:55:59.0337671Z [36;1mCERTS=$(apksigner verify --print-certs "$APK" || true)[0m
+2026-10-04T16:55:59.0338292Z [36;1mCERT_SHA256=$(echo "$CERTS" | grep -i "certificate SHA-256 digest" | grep -oE '[0-9a-fA-F]{64}' | head -1)[0m
+2026-10-04T16:55:59.0338892Z [36;1mSCHEMES=$(apksigner verify -v "$APK" | grep "Verified using" | grep ": true" | sed 's/^ *//' || true)[0m
+2026-10-04T16:55:59.0339269Z [36;1m{[0m
+2026-10-04T16:55:59.0339491Z [36;1m  echo "# NexDrop release verification report"[0m
+2026-10-04T16:55:59.0339751Z [36;1m  echo[0m
+2026-10-04T16:55:59.0339943Z [36;1m  echo "- APK filename: $APK"[0m
+2026-10-04T16:55:59.0340221Z [36;1m  echo "- versionName / versionCode: $VNAME / $VCODE"[0m
+2026-10-04T16:55:59.0340554Z [36;1m  echo "- package / applicationId: com.nexdrop.ndt1"[0m
+2026-10-04T16:55:59.0340845Z [36;1m  echo "- APK size: $SIZE bytes"[0m
+2026-10-04T16:55:59.0341102Z [36;1m  echo "- APK SHA-256 (integrity): $SHA256"[0m
+2026-10-04T16:55:59.0341419Z [36;1m  echo "- signing certificate SHA-256 fingerprint: $CERT_SHA256"[0m
+2026-10-04T16:55:59.0341749Z [36;1m  echo "- signing schemes verified:"[0m
+2026-10-04T16:55:59.0342013Z [36;1m  echo "$SCHEMES" | sed 's/^/  - /'[0m
+2026-10-04T16:55:59.0342483Z [36;1m  echo "- build result: PASS (:app:assembleRelease with release signingConfig, keystore from repo secret, never committed)"[0m
+2026-10-04T16:55:59.0343130Z [36;1m  echo "- signature verification: PASS (apksigner verify + scheme check + certificate identity CN=NexDrop Release)"[0m
+2026-10-04T16:55:59.0343904Z [36;1m  echo "- install smoke-test result: PASS (API 36 emulator — the startup-smoke job installed and launched THIS signed APK; this release only runs if that job succeeded)"[0m
+2026-10-04T16:55:59.0344629Z [36;1m  echo "- zip integrity: PASS (unzip -t in the apk job)"[0m
+2026-10-04T16:55:59.0344964Z [36;1m} | tee RELEASE-VERIFICATION.md[0m
+2026-10-04T16:55:59.0345284Z [36;1m# The report must be real: fail if any expected value is empty[0m
+2026-10-04T16:55:59.0345624Z [36;1mtest -n "$CERT_SHA256" && test -n "$SCHEMES"[0m
+2026-10-04T16:55:59.0578522Z shell: /usr/bin/bash -e {0}
+2026-10-04T16:55:59.0578795Z env:
+2026-10-04T16:55:59.0581122Z   GH_TOKEN: ***
+2026-10-04T16:55:59.0581330Z ##[endgroup]
+2026-10-04T16:56:08.2211052Z # NexDrop release verification report
+2026-10-04T16:56:08.2219284Z 
+2026-10-04T16:56:08.2219529Z - APK filename: NexDrop-release.apk
+2026-10-04T16:56:08.2219864Z - versionName / versionCode: 1.2.1 / 4
+2026-10-04T16:56:08.2220135Z - package / applicationId: com.nexdrop.ndt1
+2026-10-04T16:56:08.2220410Z - APK size: 3659374 bytes
+2026-10-04T16:56:08.2220771Z - APK SHA-256 (integrity): 3da0a9d230ca82055559bfbd9fbe2b03d40fdce9488fdfebe3fb983ec832382e
+2026-10-04T16:56:08.2221355Z - signing certificate SHA-256 fingerprint: 11cb2ab82ba751fea04d101bd3a1498b852581f999056a3bc371e47e326a861a
+2026-10-04T16:56:08.2221825Z - signing schemes verified:
+2026-10-04T16:56:08.2222262Z   - Verified using v2 scheme (APK Signature Scheme v2): true
+2026-10-04T16:56:08.2222772Z   - Verified using v3 scheme (APK Signature Scheme v3): true
+2026-10-04T16:56:08.2223835Z - build result: PASS (:app:assembleRelease with release signingConfig, keystore from repo secret, never committed)
+2026-10-04T16:56:08.2224798Z - signature verification: PASS (apksigner verify + scheme check + certificate identity CN=NexDrop Release)
+2026-10-04T16:56:08.2226003Z - install smoke-test result: PASS (API 36 emulator — the startup-smoke job installed and launched THIS signed APK; this release only runs if that job succeeded)
+2026-10-04T16:56:08.2226572Z - zip integrity: PASS (unzip -t in the apk job)

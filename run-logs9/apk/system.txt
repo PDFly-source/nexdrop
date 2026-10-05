@@ -1,0 +1,8 @@
+2026-10-04T16:26:25.8050000Z Evaluating apk.if
+2026-10-04T16:26:25.8050000Z Evaluating: success()
+2026-10-04T16:26:25.8050000Z Result: true
+2026-10-04T16:26:25.9030000Z Requested labels: ubuntu-latest
+2026-10-04T16:26:25.9030000Z Job defined at: PDFly-source/nexdrop/.github/workflows/android-build.yml@refs/heads/main
+2026-10-04T16:26:25.9030000Z Waiting for a runner to pick up this job...
+2026-10-04T16:26:26.1640000Z Job is about to start running on the hosted runner: GitHub Actions 1000001111
+2026-10-04T16:26:26.1650000Z Job is waiting for a hosted runner to come online.

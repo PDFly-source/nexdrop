@@ -1,0 +1,25 @@
+﻿2026-10-04T15:33:57.1596280Z ##[group]Run actions/upload-artifact@v4
+2026-10-04T15:33:57.1596602Z with:
+2026-10-04T15:33:57.1596808Z   name: smoke-screenshots
+2026-10-04T15:33:57.1597426Z   path: screenshots/
+2026-10-04T15:33:57.1597662Z   if-no-files-found: ignore
+2026-10-04T15:33:57.1597912Z   compression-level: 6
+2026-10-04T15:33:57.1598136Z   overwrite: false
+2026-10-04T15:33:57.1598354Z   include-hidden-files: false
+2026-10-04T15:33:57.1598602Z env:
+2026-10-04T15:33:57.1598819Z   ANDROID_AVD_HOME: /home/runner/.android/avd
+2026-10-04T15:33:57.1599102Z ##[endgroup]
+2026-10-04T15:33:57.3299475Z (node:3378) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T15:33:57.3300366Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T15:33:57.3381346Z With the provided path, there will be 7 files uploaded
+2026-10-04T15:33:57.3397510Z Artifact name is valid!
+2026-10-04T15:33:57.3398238Z Root directory input is valid!
+2026-10-04T15:33:57.5433005Z Beginning upload of artifact content to blob storage
+2026-10-04T15:33:57.5931547Z (node:3378) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-04T15:33:57.7113286Z Uploaded bytes 605073
+2026-10-04T15:33:57.7273667Z Finished uploading artifact content to blob storage!
+2026-10-04T15:33:57.7275295Z SHA256 digest of uploaded artifact zip is 5f50fbde374e172721e00428cd658b4e8a023b13c5ca6989cfbd48d7ee5d023f
+2026-10-04T15:33:57.7276793Z Finalizing artifact upload
+2026-10-04T15:33:57.9258705Z Artifact smoke-screenshots.zip successfully finalized. Artifact ID 11307631738
+2026-10-04T15:33:57.9260927Z Artifact smoke-screenshots has been successfully uploaded! Final size is 605073 bytes. Artifact ID is 11307631738
+2026-10-04T15:33:57.9268329Z Artifact download URL: https://github.com/PDFly-source/nexdrop/actions/runs/37212905970/artifacts/11307631738

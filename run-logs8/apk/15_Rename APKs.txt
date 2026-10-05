@@ -1,0 +1,16 @@
+﻿2026-10-04T16:14:51.1504854Z ##[group]Run cp android/app/build/outputs/apk/debug/app-debug.apk NexDrop-debug.apk
+2026-10-04T16:14:51.1505243Z [36;1mcp android/app/build/outputs/apk/debug/app-debug.apk NexDrop-debug.apk[0m
+2026-10-04T16:14:51.1505578Z [36;1mcp android/tv/build/outputs/apk/debug/tv-debug.apk NexDropTV-debug.apk[0m
+2026-10-04T16:14:51.1505914Z [36;1mcp android/app/build/outputs/apk/release/app-release.apk NexDrop-release.apk[0m
+2026-10-04T16:14:51.1506191Z [36;1mls -la NexDrop*.apk[0m
+2026-10-04T16:14:51.1568311Z shell: /usr/bin/bash -e {0}
+2026-10-04T16:14:51.1568575Z env:
+2026-10-04T16:14:51.1568865Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T16:14:51.1569313Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T16:14:51.1569767Z   NEXDROP_KEYSTORE_FILE: /home/runner/nexdrop-release.keystore
+2026-10-04T16:14:51.1570315Z   NEXDROP_KEYSTORE_PASSWORD: ***
+2026-10-04T16:14:51.1570607Z   NEXDROP_KEY_PASSWORD: ***
+2026-10-04T16:14:51.1570860Z ##[endgroup]
+2026-10-04T16:14:51.1745322Z -rw-r--r-- 1 runner runner 4462792 Oct  4 16:14 NexDrop-debug.apk
+2026-10-04T16:14:51.1746002Z -rw-r--r-- 1 runner runner 3659374 Oct  4 16:14 NexDrop-release.apk
+2026-10-04T16:14:51.1746862Z -rw-r--r-- 1 runner runner 4659568 Oct  4 16:14 NexDropTV-debug.apk

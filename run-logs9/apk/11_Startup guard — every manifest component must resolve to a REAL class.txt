@@ -1,0 +1,43 @@
+﻿2026-10-04T16:29:16.6639840Z ##[group]Run set -eu
+2026-10-04T16:29:16.6640100Z [36;1mset -eu[0m
+2026-10-04T16:29:16.6640493Z [36;1mMERGED="$(find app/build/intermediates -path '*merged_manifests*debug*' -name 'AndroidManifest.xml' | head -1)"[0m
+2026-10-04T16:29:16.6641024Z [36;1mtest -n "$MERGED" || { echo "merged manifest not found"; exit 1; }[0m
+2026-10-04T16:29:16.6641329Z [36;1mpython3 - "$MERGED" <<'PYEOF'[0m
+2026-10-04T16:29:16.6641557Z [36;1mimport sys, re, zipfile[0m
+2026-10-04T16:29:16.6641797Z [36;1mimport xml.etree.ElementTree as ET[0m
+2026-10-04T16:29:16.6642030Z [36;1mmerged, = sys.argv[1:][0m
+2026-10-04T16:29:16.6642282Z [36;1mapk = "app/build/outputs/apk/debug/app-debug.apk"[0m
+2026-10-04T16:29:16.6642552Z [36;1mz = zipfile.ZipFile(apk)[0m
+2026-10-04T16:29:16.6642865Z [36;1mdex = b"".join(z.read(n) for n in z.namelist() if re.match(r'classes\d*\.dex', n))[0m
+2026-10-04T16:29:16.6643241Z [36;1mns = '{http://schemas.android.com/apk/res/android}'[0m
+2026-10-04T16:29:16.6643518Z [36;1mroot = ET.parse(merged).getroot()[0m
+2026-10-04T16:29:16.6643775Z [36;1mdeclared = [][0m
+2026-10-04T16:29:16.6644062Z [36;1mfor tag in ('activity', 'activity-alias', 'service', 'receiver', 'provider'):[0m
+2026-10-04T16:29:16.6644538Z [36;1m    for node in root.iter(tag):[0m
+2026-10-04T16:29:16.6644773Z [36;1m        name = node.get(ns + 'name')[0m
+2026-10-04T16:29:16.6644998Z [36;1m        if not name:[0m
+2026-10-04T16:29:16.6645188Z [36;1m            continue[0m
+2026-10-04T16:29:16.6645389Z [36;1m        if name.startswith('.'):[0m
+2026-10-04T16:29:16.6645635Z [36;1m            pkg = root.get('package')[0m
+2026-10-04T16:29:16.6645871Z [36;1m            name = pkg + name[0m
+2026-10-04T16:29:16.6646096Z [36;1m        declared.append((tag, name))[0m
+2026-10-04T16:29:16.6646427Z [36;1m# dex descriptors store classes slash-form: Lcom/nexdrop/ndt1/MainActivity;[0m
+2026-10-04T16:29:16.6646929Z [36;1mmissing = [(t, n) for (t, n) in declared if n.startswith('com.nexdrop.') and n.replace('.', '/').encode() not in dex][0m
+2026-10-04T16:29:16.6647328Z [36;1mif missing:[0m
+2026-10-04T16:29:16.6647518Z [36;1m    for t, n in missing:[0m
+2026-10-04T16:29:16.6647837Z [36;1m        print(f"manifest declares {t} {n} but that class is NOT in the APK dex")[0m
+2026-10-04T16:29:16.6648311Z [36;1m    print("STARTUP GUARD FAILED — the app would crash on launch with ClassNotFoundException")[0m
+2026-10-04T16:29:16.6648845Z [36;1m    sys.exit(1)[0m
+2026-10-04T16:29:16.6649058Z [36;1mnames = [n for _, n in declared][0m
+2026-10-04T16:29:16.6649416Z [36;1mfor must in ("com.nexdrop.ndt1.MainActivity", "com.nexdrop.ndt1.TransferService"):[0m
+2026-10-04T16:29:16.6649765Z [36;1m    if must not in names:[0m
+2026-10-04T16:29:16.6650062Z [36;1m        print(f"expected component {must} missing from merged manifest")[0m
+2026-10-04T16:29:16.6650369Z [36;1m        sys.exit(1)[0m
+2026-10-04T16:29:16.6650708Z [36;1mprint("startup guard OK: %d components declared, all resolve to real classes" % len(declared))[0m
+2026-10-04T16:29:16.6651070Z [36;1mPYEOF[0m
+2026-10-04T16:29:16.6707026Z shell: /usr/bin/bash -e {0}
+2026-10-04T16:29:16.6707239Z env:
+2026-10-04T16:29:16.6707500Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T16:29:16.6707900Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T16:29:16.6708201Z ##[endgroup]
+2026-10-04T16:29:16.7540190Z startup guard OK: 6 components declared, all resolve to real classes

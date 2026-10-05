@@ -1,0 +1,7 @@
+﻿2026-10-04T15:30:04.3585564Z ##[group]Run pip3 install --quiet zxing-cpp pillow
+2026-10-04T15:30:04.3586242Z [36;1mpip3 install --quiet zxing-cpp pillow[0m
+2026-10-04T15:30:04.3586810Z [36;1mnpx --yes tsx --version[0m
+2026-10-04T15:30:04.3647984Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:30:04.3648469Z ##[endgroup]
+2026-10-04T15:30:14.6002950Z tsx v4.23.15
+2026-10-04T15:30:14.6088133Z node v22.23.3

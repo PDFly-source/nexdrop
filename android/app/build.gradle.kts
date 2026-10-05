@@ -20,8 +20,8 @@ android {
     targetSdk = 34
     // Production release (mission 2026-10-04 §14): production label/icons,
     // release build in CI. Debug APK stays available for engineering.
-    versionCode = 9
-    versionName = "1.4.2-rc2"  // internal: profile units fix + full perf matrix — not a release
+    versionCode = 10
+    versionName = "1.4.2-rc3"  // internal: fsync off the receive loop (async durability) — not a release
   }
   // Production signing (mission 2026-10-04 signing pipeline): the keystore
   // and passwords live ONLY in GitHub Actions secrets

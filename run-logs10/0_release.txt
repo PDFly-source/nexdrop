@@ -1,0 +1,168 @@
+﻿2026-10-04T16:55:53.1321183Z Current runner version: '2.337.0'
+2026-10-04T16:55:53.1342791Z ##[group]Runner Image Provisioner
+2026-10-04T16:55:53.1343540Z Hosted Compute Agent
+2026-10-04T16:55:53.1344166Z Version: 20260901.588
+2026-10-04T16:55:53.1344690Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-04T16:55:53.1345318Z Build Date: 2026-09-01T19:56:44Z
+2026-10-04T16:55:53.1345893Z Worker ID: {cd395aca-968b-4547-b432-2ac12b4fbaf1}
+2026-10-04T16:55:53.1346480Z Azure Region: westus3
+2026-10-04T16:55:53.1347027Z ##[endgroup]
+2026-10-04T16:55:53.1348464Z ##[group]Operating System
+2026-10-04T16:55:53.1349045Z Ubuntu
+2026-10-04T16:55:53.1349592Z 24.04.5
+2026-10-04T16:55:53.1350042Z LTS
+2026-10-04T16:55:53.1350593Z ##[endgroup]
+2026-10-04T16:55:53.1351061Z ##[group]Runner Image
+2026-10-04T16:55:53.1351552Z Image: ubuntu-24.04
+2026-10-04T16:55:53.1352090Z Version: 20260927.320.1
+2026-10-04T16:55:53.1353138Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-04T16:55:53.1354777Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+2026-10-04T16:55:53.1355534Z ##[endgroup]
+2026-10-04T16:55:53.1356513Z ##[group]GITHUB_TOKEN Permissions
+2026-10-04T16:55:53.1358515Z Contents: write
+2026-10-04T16:55:53.1359104Z Metadata: read
+2026-10-04T16:55:53.1359579Z ##[endgroup]
+2026-10-04T16:55:53.1361440Z Secret source: Actions
+2026-10-04T16:55:53.1362291Z Cache mode: write
+2026-10-04T16:55:53.1362900Z Prepare workflow directory
+2026-10-04T16:55:53.2134492Z Prepare all required actions
+2026-10-04T16:55:53.2173482Z Getting action download info
+2026-10-04T16:55:53.5075009Z Download action repository 'actions/download-artifact@v4' (SHA:d3f86a106a0bac45b974a628896c90dbdf5c8093)
+2026-10-04T16:55:54.4384636Z Complete job name: release
+2026-10-04T16:55:54.5598953Z ##[group]Run actions/download-artifact@v4
+2026-10-04T16:55:54.5599910Z with:
+2026-10-04T16:55:54.5600305Z   name: NexDrop-debug.apk
+2026-10-04T16:55:54.5600731Z   merge-multiple: false
+2026-10-04T16:55:54.5601172Z   repository: PDFly-source/nexdrop
+2026-10-04T16:55:54.5601623Z   run-id: 37217674646
+2026-10-04T16:55:54.5602153Z ##[endgroup]
+2026-10-04T16:55:54.6866619Z Downloading single artifact
+2026-10-04T16:55:54.6957215Z (node:1966) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T16:55:54.6958435Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T16:55:54.9156334Z Preparing to download the following artifacts:
+2026-10-04T16:55:54.9162005Z - NexDrop-debug.apk (ID: 11308204381, Size: 4136946, Expected Digest: sha256:c0dac58b3fa6c0547be8f45abddc9c5a0b9061422a58b82240961e7f5a31ba7c)
+2026-10-04T16:55:55.1436410Z Redirecting to blob download url: https://productionresultssa15.blob.core.windows.net/actions-results/5dc1ed65-b58c-8b57-96d2-c5dd8841815c/workflow-job-run-bcdbb183-2a42-5226-9cd4-a5a53aabdb34/artifacts/877ec34c522ba0b90eef42426f15992b1397725becf68beda7b8b3e0922e326a.zip
+2026-10-04T16:55:55.1438435Z Starting download of artifact to: /home/runner/work/nexdrop/nexdrop
+2026-10-04T16:55:55.3872502Z (node:1966) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-10-04T16:55:56.0107026Z SHA256 digest of downloaded artifact is c0dac58b3fa6c0547be8f45abddc9c5a0b9061422a58b82240961e7f5a31ba7c
+2026-10-04T16:55:56.0108805Z Artifact download completed successfully.
+2026-10-04T16:55:56.0109543Z Total of 1 artifact(s) downloaded
+2026-10-04T16:55:56.0111406Z Download artifact has finished successfully
+2026-10-04T16:55:56.1165906Z ##[group]Run actions/download-artifact@v4
+2026-10-04T16:55:56.1166924Z with:
+2026-10-04T16:55:56.1167614Z   name: NexDropTV-debug.apk
+2026-10-04T16:55:56.1168622Z   merge-multiple: false
+2026-10-04T16:55:56.1169457Z   repository: PDFly-source/nexdrop
+2026-10-04T16:55:56.1170353Z   run-id: 37217674646
+2026-10-04T16:55:56.1171084Z ##[endgroup]
+2026-10-04T16:55:56.2424911Z Downloading single artifact
+2026-10-04T16:55:56.2538459Z (node:1981) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T16:55:56.2540960Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T16:55:56.4707205Z Preparing to download the following artifacts:
+2026-10-04T16:55:56.4710551Z - NexDropTV-debug.apk (ID: 11308418805, Size: 4106710, Expected Digest: sha256:2030c7b99750f74ce48aa93cdc448fff412721d24915fbfea49e5e19befc2f2d)
+2026-10-04T16:55:56.6854213Z Redirecting to blob download url: https://productionresultssa15.blob.core.windows.net/actions-results/5dc1ed65-b58c-8b57-96d2-c5dd8841815c/workflow-job-run-bcdbb183-2a42-5226-9cd4-a5a53aabdb34/artifacts/e5d18a7f2a3d5e0efd426608e7ba4c8f57ca0fda074f74dbd85ccafe864a23fb.zip
+2026-10-04T16:55:56.6858949Z Starting download of artifact to: /home/runner/work/nexdrop/nexdrop
+2026-10-04T16:55:56.9258967Z (node:1981) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-10-04T16:55:57.5142469Z SHA256 digest of downloaded artifact is 2030c7b99750f74ce48aa93cdc448fff412721d24915fbfea49e5e19befc2f2d
+2026-10-04T16:55:57.5143005Z Artifact download completed successfully.
+2026-10-04T16:55:57.5143278Z Total of 1 artifact(s) downloaded
+2026-10-04T16:55:57.5146954Z Download artifact has finished successfully
+2026-10-04T16:55:57.5422178Z ##[group]Run actions/download-artifact@v4
+2026-10-04T16:55:57.5422444Z with:
+2026-10-04T16:55:57.5422623Z   name: NexDrop-release.apk
+2026-10-04T16:55:57.5422832Z   merge-multiple: false
+2026-10-04T16:55:57.5423036Z   repository: PDFly-source/nexdrop
+2026-10-04T16:55:57.5423256Z   run-id: 37217674646
+2026-10-04T16:55:57.5423447Z ##[endgroup]
+2026-10-04T16:55:57.6585908Z Downloading single artifact
+2026-10-04T16:55:57.6729138Z (node:1993) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T16:55:57.6729910Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T16:55:57.8947440Z Preparing to download the following artifacts:
+2026-10-04T16:55:57.8948344Z - NexDrop-release.apk (ID: 11308493497, Size: 3381226, Expected Digest: sha256:836003b1a17106717baae3f2ecac3594c36da234f8cf9be06b547ac5f0d6a909)
+2026-10-04T16:55:58.1177149Z Redirecting to blob download url: https://productionresultssa15.blob.core.windows.net/actions-results/5dc1ed65-b58c-8b57-96d2-c5dd8841815c/workflow-job-run-bcdbb183-2a42-5226-9cd4-a5a53aabdb34/artifacts/0b461358459dc700e110848a55aebf54b0c8821abd85989214fe64e9efc5ef56.zip
+2026-10-04T16:55:58.4309466Z (node:1993) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-10-04T16:55:58.4310421Z Starting download of artifact to: /home/runner/work/nexdrop/nexdrop
+2026-10-04T16:55:59.0126887Z SHA256 digest of downloaded artifact is 836003b1a17106717baae3f2ecac3594c36da234f8cf9be06b547ac5f0d6a909
+2026-10-04T16:55:59.0127716Z Artifact download completed successfully.
+2026-10-04T16:55:59.0128275Z Total of 1 artifact(s) downloaded
+2026-10-04T16:55:59.0132387Z Download artifact has finished successfully
+2026-10-04T16:55:59.0321306Z ##[group]Run set -eu
+2026-10-04T16:55:59.0321673Z [36;1mset -eu[0m
+2026-10-04T16:55:59.0321970Z [36;1msudo apt-get -yq install apksigner aapt > /dev/null 2>&1 || true[0m
+2026-10-04T16:55:59.0322391Z [36;1mcommand -v aapt >/dev/null || { echo "aapt unavailable"; exit 1; }[0m
+2026-10-04T16:55:59.0322713Z [36;1mAPK=NexDrop-release.apk[0m
+2026-10-04T16:55:59.0323009Z [36;1m# Real version from the APK itself — never hardcode[0m
+2026-10-04T16:55:59.0334952Z [36;1mBADGE=$(aapt dump badging "$APK" 2>/dev/null | head -1)[0m
+2026-10-04T16:55:59.0335658Z [36;1mVNAME=$(echo "$BADGE" | grep -oE "versionName='[^']+'" | cut -d"'" -f2)[0m
+2026-10-04T16:55:59.0336479Z [36;1mVCODE=$(echo "$BADGE" | grep -oE "versionCode='[0-9]+'" | cut -d"'" -f2)[0m
+2026-10-04T16:55:59.0336838Z [36;1mtest -n "$VNAME" && test -n "$VCODE"[0m
+2026-10-04T16:55:59.0337096Z [36;1mSIZE=$(stat -c%s "$APK")[0m
+2026-10-04T16:55:59.0337349Z [36;1mSHA256=$(sha256sum "$APK" | cut -d' ' -f1)[0m
+2026-10-04T16:55:59.0337705Z [36;1mCERTS=$(apksigner verify --print-certs "$APK" || true)[0m
+2026-10-04T16:55:59.0338296Z [36;1mCERT_SHA256=$(echo "$CERTS" | grep -i "certificate SHA-256 digest" | grep -oE '[0-9a-fA-F]{64}' | head -1)[0m
+2026-10-04T16:55:59.0338894Z [36;1mSCHEMES=$(apksigner verify -v "$APK" | grep "Verified using" | grep ": true" | sed 's/^ *//' || true)[0m
+2026-10-04T16:55:59.0339272Z [36;1m{[0m
+2026-10-04T16:55:59.0339493Z [36;1m  echo "# NexDrop release verification report"[0m
+2026-10-04T16:55:59.0339753Z [36;1m  echo[0m
+2026-10-04T16:55:59.0339945Z [36;1m  echo "- APK filename: $APK"[0m
+2026-10-04T16:55:59.0340223Z [36;1m  echo "- versionName / versionCode: $VNAME / $VCODE"[0m
+2026-10-04T16:55:59.0340556Z [36;1m  echo "- package / applicationId: com.nexdrop.ndt1"[0m
+2026-10-04T16:55:59.0340847Z [36;1m  echo "- APK size: $SIZE bytes"[0m
+2026-10-04T16:55:59.0341104Z [36;1m  echo "- APK SHA-256 (integrity): $SHA256"[0m
+2026-10-04T16:55:59.0341424Z [36;1m  echo "- signing certificate SHA-256 fingerprint: $CERT_SHA256"[0m
+2026-10-04T16:55:59.0341751Z [36;1m  echo "- signing schemes verified:"[0m
+2026-10-04T16:55:59.0342015Z [36;1m  echo "$SCHEMES" | sed 's/^/  - /'[0m
+2026-10-04T16:55:59.0342485Z [36;1m  echo "- build result: PASS (:app:assembleRelease with release signingConfig, keystore from repo secret, never committed)"[0m
+2026-10-04T16:55:59.0343132Z [36;1m  echo "- signature verification: PASS (apksigner verify + scheme check + certificate identity CN=NexDrop Release)"[0m
+2026-10-04T16:55:59.0343907Z [36;1m  echo "- install smoke-test result: PASS (API 36 emulator — the startup-smoke job installed and launched THIS signed APK; this release only runs if that job succeeded)"[0m
+2026-10-04T16:55:59.0344632Z [36;1m  echo "- zip integrity: PASS (unzip -t in the apk job)"[0m
+2026-10-04T16:55:59.0344966Z [36;1m} | tee RELEASE-VERIFICATION.md[0m
+2026-10-04T16:55:59.0345286Z [36;1m# The report must be real: fail if any expected value is empty[0m
+2026-10-04T16:55:59.0345631Z [36;1mtest -n "$CERT_SHA256" && test -n "$SCHEMES"[0m
+2026-10-04T16:55:59.0578536Z shell: /usr/bin/bash -e {0}
+2026-10-04T16:55:59.0578797Z env:
+2026-10-04T16:55:59.0581132Z   GH_TOKEN: ***
+2026-10-04T16:55:59.0581332Z ##[endgroup]
+2026-10-04T16:56:08.2211096Z # NexDrop release verification report
+2026-10-04T16:56:08.2219291Z 
+2026-10-04T16:56:08.2219533Z - APK filename: NexDrop-release.apk
+2026-10-04T16:56:08.2219867Z - versionName / versionCode: 1.2.1 / 4
+2026-10-04T16:56:08.2220137Z - package / applicationId: com.nexdrop.ndt1
+2026-10-04T16:56:08.2220412Z - APK size: 3659374 bytes
+2026-10-04T16:56:08.2220774Z - APK SHA-256 (integrity): 3da0a9d230ca82055559bfbd9fbe2b03d40fdce9488fdfebe3fb983ec832382e
+2026-10-04T16:56:08.2221359Z - signing certificate SHA-256 fingerprint: 11cb2ab82ba751fea04d101bd3a1498b852581f999056a3bc371e47e326a861a
+2026-10-04T16:56:08.2221828Z - signing schemes verified:
+2026-10-04T16:56:08.2222265Z   - Verified using v2 scheme (APK Signature Scheme v2): true
+2026-10-04T16:56:08.2223068Z   - Verified using v3 scheme (APK Signature Scheme v3): true
+2026-10-04T16:56:08.2223839Z - build result: PASS (:app:assembleRelease with release signingConfig, keystore from repo secret, never committed)
+2026-10-04T16:56:08.2224802Z - signature verification: PASS (apksigner verify + scheme check + certificate identity CN=NexDrop Release)
+2026-10-04T16:56:08.2226007Z - install smoke-test result: PASS (API 36 emulator — the startup-smoke job installed and launched THIS signed APK; this release only runs if that job succeeded)
+2026-10-04T16:56:08.2226574Z - zip integrity: PASS (unzip -t in the apk job)
+2026-10-04T16:56:08.3170266Z ##[group]Run set -eu
+2026-10-04T16:56:08.3170703Z [36;1mset -eu[0m
+2026-10-04T16:56:08.3170954Z [36;1msudo apt-get -yq install aapt > /dev/null 2>&1 || true[0m
+2026-10-04T16:56:08.3171322Z [36;1mcommand -v aapt >/dev/null || { echo "aapt unavailable"; exit 1; }[0m
+2026-10-04T16:56:08.3171664Z [36;1mTAG="nexdrop-android-v${GITHUB_SHA::7}"[0m
+2026-10-04T16:56:08.3172007Z [36;1mBADGE=$(aapt dump badging NexDrop-release.apk 2>/dev/null | head -1)[0m
+2026-10-04T16:56:08.3172393Z [36;1mVNAME=$(echo "$BADGE" | grep -oE "versionName='[^']+'" | cut -d"'" -f2)[0m
+2026-10-04T16:56:08.3172772Z [36;1mVCODE=$(echo "$BADGE" | grep -oE "versionCode='[0-9]+'" | cut -d"'" -f2)[0m
+2026-10-04T16:56:08.3173096Z [36;1mtest -n "$VNAME" && test -n "$VCODE"[0m
+2026-10-04T16:56:08.3173420Z [36;1mif ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then[0m
+2026-10-04T16:56:08.3173789Z [36;1m  gh release create "$TAG" -R "$GITHUB_REPOSITORY" \[0m
+2026-10-04T16:56:08.3174137Z [36;1m    --title "NexDrop Android $GITHUB_SHA" \[0m
+2026-10-04T16:56:08.3174447Z [36;1m    --notes "Built from $GITHUB_SHA by GitHub Actions.[0m
+2026-10-04T16:56:08.3175344Z [36;1mPRODUCTION: NexDrop-release.apk (v$VNAME, code $VCODE) — SIGNED with the dedicated NexDrop release key (certificate SHA-256 fingerprint in RELEASE-VERIFICATION.md). Installs directly on modern Android (v2+v3 signing schemes verified, API 36 emulator install smoke passed).[0m
+2026-10-04T16:56:08.3176369Z [36;1mENGINEERING: NexDrop-debug.apk (debug-signed). NexDropTV-debug.apk is the optional receive-only TV client.[0m
+2026-10-04T16:56:08.3177387Z [36;1mContains the verified native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, honest telemetry, production UI, and the PWA (WebRTC) fallback. Benchmarks live under Settings → Device Test." \[0m
+2026-10-04T16:56:08.3178381Z [36;1m    --prerelease[0m
+2026-10-04T16:56:08.3178590Z [36;1mfi[0m
+2026-10-04T16:56:08.3179055Z [36;1mgh release upload "$TAG" -R "$GITHUB_REPOSITORY" NexDrop-release.apk NexDrop-debug.apk NexDropTV-debug.apk RELEASE-VERIFICATION.md --clobber[0m
+2026-10-04T16:56:08.3179677Z [36;1mecho "RELEASE_URL=https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"[0m
+2026-10-04T16:56:08.3234443Z shell: /usr/bin/bash -e {0}
+2026-10-04T16:56:08.3234661Z env:
+2026-10-04T16:56:08.3236907Z   GH_TOKEN: ***
+2026-10-04T16:56:08.3237111Z ##[endgroup]
+2026-10-04T16:56:10.2459427Z https://github.com/PDFly-source/nexdrop/releases/tag/nexdrop-android-v45095d4
+2026-10-04T16:56:11.7950035Z RELEASE_URL=https://github.com/PDFly-source/nexdrop/releases/tag/nexdrop-android-v45095d4
+2026-10-04T16:56:11.8012953Z Cleaning up orphan processes
+2026-10-04T16:56:11.8258958Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/download-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -1,0 +1,29 @@
+﻿2026-10-04T15:29:54.2742168Z ##[group]Run actions/upload-artifact@v4
+2026-10-04T15:29:54.2742734Z with:
+2026-10-04T15:29:54.2743139Z   name: NexDrop-release.apk
+2026-10-04T15:29:54.2743636Z   path: NexDrop-release.apk
+2026-10-04T15:29:54.2744118Z   if-no-files-found: error
+2026-10-04T15:29:54.2744619Z   compression-level: 6
+2026-10-04T15:29:54.2745315Z   overwrite: false
+2026-10-04T15:29:54.2745756Z   include-hidden-files: false
+2026-10-04T15:29:54.2746217Z env:
+2026-10-04T15:29:54.2746786Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:29:54.2747786Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:29:54.2748863Z   NEXDROP_KEYSTORE_FILE: /home/runner/nexdrop-release.keystore
+2026-10-04T15:29:54.2749474Z   NEXDROP_KEYSTORE_PASSWORD: ***
+2026-10-04T15:29:54.2749847Z   NEXDROP_KEY_PASSWORD: ***
+2026-10-04T15:29:54.2750099Z ##[endgroup]
+2026-10-04T15:29:54.4482061Z (node:3639) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T15:29:54.4483564Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T15:29:54.4531527Z With the provided path, there will be 1 file uploaded
+2026-10-04T15:29:54.4538745Z Artifact name is valid!
+2026-10-04T15:29:54.4539259Z Root directory input is valid!
+2026-10-04T15:29:54.8537091Z Beginning upload of artifact content to blob storage
+2026-10-04T15:29:54.9892268Z (node:3639) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-04T15:29:55.7656898Z Uploaded bytes 3381135
+2026-10-04T15:29:55.8434042Z Finished uploading artifact content to blob storage!
+2026-10-04T15:29:55.8435549Z SHA256 digest of uploaded artifact zip is c627e382d850e990c1a6b93d4e04807bc52db5a8ebc634469aca72fa8d2f93ea
+2026-10-04T15:29:55.8436954Z Finalizing artifact upload
+2026-10-04T15:29:56.1186970Z Artifact NexDrop-release.apk.zip successfully finalized. Artifact ID 11307267623
+2026-10-04T15:29:56.1188443Z Artifact NexDrop-release.apk has been successfully uploaded! Final size is 3381135 bytes. Artifact ID is 11307267623
+2026-10-04T15:29:56.1195084Z Artifact download URL: https://github.com/PDFly-source/nexdrop/actions/runs/37212905970/artifacts/11307267623

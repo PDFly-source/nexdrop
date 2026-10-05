@@ -1,0 +1,26 @@
+﻿2026-10-04T16:56:08.3170252Z ##[group]Run set -eu
+2026-10-04T16:56:08.3170700Z [36;1mset -eu[0m
+2026-10-04T16:56:08.3170951Z [36;1msudo apt-get -yq install aapt > /dev/null 2>&1 || true[0m
+2026-10-04T16:56:08.3171320Z [36;1mcommand -v aapt >/dev/null || { echo "aapt unavailable"; exit 1; }[0m
+2026-10-04T16:56:08.3171663Z [36;1mTAG="nexdrop-android-v${GITHUB_SHA::7}"[0m
+2026-10-04T16:56:08.3172000Z [36;1mBADGE=$(aapt dump badging NexDrop-release.apk 2>/dev/null | head -1)[0m
+2026-10-04T16:56:08.3172391Z [36;1mVNAME=$(echo "$BADGE" | grep -oE "versionName='[^']+'" | cut -d"'" -f2)[0m
+2026-10-04T16:56:08.3172771Z [36;1mVCODE=$(echo "$BADGE" | grep -oE "versionCode='[0-9]+'" | cut -d"'" -f2)[0m
+2026-10-04T16:56:08.3173094Z [36;1mtest -n "$VNAME" && test -n "$VCODE"[0m
+2026-10-04T16:56:08.3173418Z [36;1mif ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then[0m
+2026-10-04T16:56:08.3173787Z [36;1m  gh release create "$TAG" -R "$GITHUB_REPOSITORY" \[0m
+2026-10-04T16:56:08.3174102Z [36;1m    --title "NexDrop Android $GITHUB_SHA" \[0m
+2026-10-04T16:56:08.3174445Z [36;1m    --notes "Built from $GITHUB_SHA by GitHub Actions.[0m
+2026-10-04T16:56:08.3175338Z [36;1mPRODUCTION: NexDrop-release.apk (v$VNAME, code $VCODE) — SIGNED with the dedicated NexDrop release key (certificate SHA-256 fingerprint in RELEASE-VERIFICATION.md). Installs directly on modern Android (v2+v3 signing schemes verified, API 36 emulator install smoke passed).[0m
+2026-10-04T16:56:08.3176367Z [36;1mENGINEERING: NexDrop-debug.apk (debug-signed). NexDropTV-debug.apk is the optional receive-only TV client.[0m
+2026-10-04T16:56:08.3177384Z [36;1mContains the verified native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, honest telemetry, production UI, and the PWA (WebRTC) fallback. Benchmarks live under Settings → Device Test." \[0m
+2026-10-04T16:56:08.3178378Z [36;1m    --prerelease[0m
+2026-10-04T16:56:08.3178581Z [36;1mfi[0m
+2026-10-04T16:56:08.3179052Z [36;1mgh release upload "$TAG" -R "$GITHUB_REPOSITORY" NexDrop-release.apk NexDrop-debug.apk NexDropTV-debug.apk RELEASE-VERIFICATION.md --clobber[0m
+2026-10-04T16:56:08.3179675Z [36;1mecho "RELEASE_URL=https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"[0m
+2026-10-04T16:56:08.3234439Z shell: /usr/bin/bash -e {0}
+2026-10-04T16:56:08.3234660Z env:
+2026-10-04T16:56:08.3236905Z   GH_TOKEN: ***
+2026-10-04T16:56:08.3237109Z ##[endgroup]
+2026-10-04T16:56:10.2459386Z https://github.com/PDFly-source/nexdrop/releases/tag/nexdrop-android-v45095d4
+2026-10-04T16:56:11.7949990Z RELEASE_URL=https://github.com/PDFly-source/nexdrop/releases/tag/nexdrop-android-v45095d4

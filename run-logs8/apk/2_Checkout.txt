@@ -1,0 +1,73 @@
+﻿2026-10-04T16:11:26.7433991Z ##[group]Run actions/checkout@v4
+2026-10-04T16:11:26.7434749Z with:
+2026-10-04T16:11:26.7435273Z   repository: PDFly-source/nexdrop
+2026-10-04T16:11:26.7440573Z   token: ***
+2026-10-04T16:11:26.7441083Z   ssh-strict: true
+2026-10-04T16:11:26.7441604Z   ssh-user: git
+2026-10-04T16:11:26.7442133Z   persist-credentials: true
+2026-10-04T16:11:26.7442873Z   clean: true
+2026-10-04T16:11:26.7443405Z   sparse-checkout-cone-mode: true
+2026-10-04T16:11:26.7444031Z   fetch-depth: 1
+2026-10-04T16:11:26.7444546Z   fetch-tags: false
+2026-10-04T16:11:26.7445075Z   show-progress: true
+2026-10-04T16:11:26.7445612Z   lfs: false
+2026-10-04T16:11:26.7446115Z   submodules: false
+2026-10-04T16:11:26.7446652Z   set-safe-directory: true
+2026-10-04T16:11:26.7447257Z   allow-unsafe-pr-checkout: false
+2026-10-04T16:11:26.7447962Z ##[endgroup]
+2026-10-04T16:11:26.8206214Z Syncing repository: PDFly-source/nexdrop
+2026-10-04T16:11:26.8208598Z ##[group]Getting Git version info
+2026-10-04T16:11:26.8209854Z Working directory is '/home/runner/work/nexdrop/nexdrop'
+2026-10-04T16:11:26.8211708Z [command]/usr/bin/git version
+2026-10-04T16:11:26.8276597Z git version 2.55.0
+2026-10-04T16:11:26.8290452Z ##[endgroup]
+2026-10-04T16:11:26.8301321Z Temporarily overriding HOME='/home/runner/work/_temp/5f6ba177-da5b-4cdc-b2a7-631bb4cd4dcf' before making global git config changes
+2026-10-04T16:11:26.8303970Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-04T16:11:26.8306081Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/nexdrop/nexdrop
+2026-10-04T16:11:26.8807208Z Deleting the contents of '/home/runner/work/nexdrop/nexdrop'
+2026-10-04T16:11:26.8809473Z ##[group]Initializing the repository
+2026-10-04T16:11:26.8811579Z [command]/usr/bin/git init /home/runner/work/nexdrop/nexdrop
+2026-10-04T16:11:26.9705259Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-04T16:11:26.9706663Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-04T16:11:26.9708021Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-04T16:11:26.9708904Z hint: call:
+2026-10-04T16:11:26.9709395Z hint:
+2026-10-04T16:11:26.9710031Z hint: 	git config --global init.defaultBranch <name>
+2026-10-04T16:11:26.9710765Z hint:
+2026-10-04T16:11:26.9711454Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-04T16:11:26.9712714Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-04T16:11:26.9713626Z hint:
+2026-10-04T16:11:26.9714125Z hint: 	git branch -m <name>
+2026-10-04T16:11:26.9714812Z hint:
+2026-10-04T16:11:26.9715855Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-04T16:11:26.9717049Z Initialized empty Git repository in /home/runner/work/nexdrop/nexdrop/.git/
+2026-10-04T16:11:26.9725424Z [command]/usr/bin/git remote add origin https://github.com/PDFly-source/nexdrop
+2026-10-04T16:11:27.0038454Z ##[endgroup]
+2026-10-04T16:11:27.0039893Z ##[group]Disabling automatic garbage collection
+2026-10-04T16:11:27.0041097Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-04T16:11:27.0106523Z ##[endgroup]
+2026-10-04T16:11:27.0107961Z ##[group]Setting up auth
+2026-10-04T16:11:27.0115314Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-04T16:11:27.0148226Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-04T16:11:27.0499632Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-04T16:11:27.0533963Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-04T16:11:27.0714079Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-04T16:11:27.0742374Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-04T16:11:27.0923810Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-04T16:11:27.2706790Z ##[endgroup]
+2026-10-04T16:11:27.2708579Z ##[group]Fetching the repository
+2026-10-04T16:11:27.2717208Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +9e667a42ae63d2e8714e52065dab155c382992b7:refs/remotes/origin/main
+2026-10-04T16:11:28.0814130Z From https://github.com/PDFly-source/nexdrop
+2026-10-04T16:11:28.0815091Z  * [new ref]         9e667a42ae63d2e8714e52065dab155c382992b7 -> origin/main
+2026-10-04T16:11:28.0817520Z ##[endgroup]
+2026-10-04T16:11:28.0817810Z ##[group]Determining the checkout info
+2026-10-04T16:11:28.0819249Z ##[endgroup]
+2026-10-04T16:11:28.0823811Z [command]/usr/bin/git sparse-checkout disable
+2026-10-04T16:11:28.0943719Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-04T16:11:28.1037981Z ##[group]Checking out the ref
+2026-10-04T16:11:28.1038749Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-10-04T16:11:28.1728708Z Switched to a new branch 'main'
+2026-10-04T16:11:28.1734400Z branch 'main' set up to track 'origin/main'.
+2026-10-04T16:11:28.1741948Z ##[endgroup]
+2026-10-04T16:11:28.1773989Z [command]/usr/bin/git log -1 --format=%H
+2026-10-04T16:11:28.1795464Z 9e667a42ae63d2e8714e52065dab155c382992b7

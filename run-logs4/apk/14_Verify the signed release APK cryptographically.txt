@@ -1,0 +1,47 @@
+﻿2026-10-04T15:19:52.0905306Z ##[group]Run set -eu
+2026-10-04T15:19:52.0905646Z [36;1mset -eu[0m
+2026-10-04T15:19:52.0905932Z [36;1mAPK=app/build/outputs/apk/release/app-release.apk[0m
+2026-10-04T15:19:52.0906486Z [36;1mtest -s "$APK" || { echo "signed release APK missing"; ls -la app/build/outputs/apk/release/; exit 1; }[0m
+2026-10-04T15:19:52.0907160Z [36;1mAPKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)[0m
+2026-10-04T15:19:52.0907751Z [36;1mtest -n "$APKSIGNER" || { echo "apksigner not found in build-tools"; exit 1; }[0m
+2026-10-04T15:19:52.0908262Z [36;1m# (a) SIGNED: apksigner verify fails on a tampered/unsigned APK[0m
+2026-10-04T15:19:52.0908634Z [36;1m"$APKSIGNER" verify "$APK"[0m
+2026-10-04T15:19:52.0908980Z [36;1m# (b) modern signing scheme present (v2 mandatory on API 30+)[0m
+2026-10-04T15:19:52.0909417Z [36;1m"$APKSIGNER" verify -v "$APK" | tee /tmp/apksigner-v.txt[0m
+2026-10-04T15:19:52.0909962Z [36;1mgrep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/apksigner-v.txt[0m
+2026-10-04T15:19:52.0910528Z [36;1m# (c) certificate of the real release key (not the debug key)[0m
+2026-10-04T15:19:52.0911006Z [36;1m"$APKSIGNER" verify --print-certs "$APK" | tee /tmp/apksigner-certs.txt[0m
+2026-10-04T15:19:52.0911493Z [36;1mgrep -q "CN=NexDrop Release" /tmp/apksigner-certs.txt[0m
+2026-10-04T15:19:52.0911838Z [36;1m# (d) zip integrity[0m
+2026-10-04T15:19:52.0912146Z [36;1munzip -t "$APK" > /dev/null && echo "zip integrity: OK"[0m
+2026-10-04T15:19:52.0912555Z [36;1m# (e) package/version identity (aapt from the Android SDK)[0m
+2026-10-04T15:19:52.0913019Z [36;1mAAPT=$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)[0m
+2026-10-04T15:19:52.0913483Z [36;1m"$AAPT" dump badging "$APK" | head -1 | tee /tmp/badging.txt[0m
+2026-10-04T15:19:52.0913885Z [36;1mgrep -q "name='com.nexdrop.ndt1'" /tmp/badging.txt[0m
+2026-10-04T15:19:52.0914252Z [36;1mgrep -q "versionCode='4'" /tmp/badging.txt[0m
+2026-10-04T15:19:52.0914600Z [36;1mgrep -q "versionName='1.2.1'" /tmp/badging.txt[0m
+2026-10-04T15:19:52.0915328Z [36;1mecho "SIGNED RELEASE APK VERIFIED (signature, scheme, identity, integrity)"[0m
+2026-10-04T15:19:52.0977652Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:19:52.0977917Z env:
+2026-10-04T15:19:52.0978231Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:19:52.0978731Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:19:52.0979218Z   NEXDROP_KEYSTORE_FILE: /home/runner/nexdrop-release.keystore
+2026-10-04T15:19:52.0979925Z   NEXDROP_KEYSTORE_PASSWORD: ***
+2026-10-04T15:19:52.0980254Z   NEXDROP_KEY_PASSWORD: ***
+2026-10-04T15:19:52.0980488Z ##[endgroup]
+2026-10-04T15:19:52.9393901Z Verifies
+2026-10-04T15:19:52.9395221Z Verified using v1 scheme (JAR signing): false
+2026-10-04T15:19:52.9396202Z Verified using v2 scheme (APK Signature Scheme v2): true
+2026-10-04T15:19:52.9397510Z Verified using v3 scheme (APK Signature Scheme v3): true
+2026-10-04T15:19:52.9398493Z Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+2026-10-04T15:19:52.9399948Z Verified using v3.2 scheme (APK Signature Scheme v3.2): false
+2026-10-04T15:19:52.9402924Z Verified using v4 scheme (APK Signature Scheme v4): false
+2026-10-04T15:19:52.9403862Z Verified for SourceStamp: false
+2026-10-04T15:19:52.9404331Z Number of signers: 1
+2026-10-04T15:19:53.2044080Z V3.0 Signer: certificate DN: CN=NexDrop Release, OU=NexDrop, O=PDFly-source, C=IN
+2026-10-04T15:19:53.2057147Z V3.0 Signer: certificate SHA-256 digest: 11cb2ab82ba751fea04d101bd3a1498b852581f999056a3bc371e47e326a861a
+2026-10-04T15:19:53.2062732Z V3.0 Signer: certificate SHA-1 digest: 0018bad4c079e1fcaa2906a2cf8947b72a4f86a8
+2026-10-04T15:19:53.2068227Z V3.0 Signer: certificate MD5 digest: 74c410b7c4090a32e35f95cc9b69bd41
+2026-10-04T15:19:53.2730074Z zip integrity: OK
+2026-10-04T15:19:53.5570789Z package: name='com.nexdrop.ndt1' versionCode='4' versionName='1.2.1' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+2026-10-04T15:19:53.5618532Z SIGNED RELEASE APK VERIFIED (signature, scheme, identity, integrity)

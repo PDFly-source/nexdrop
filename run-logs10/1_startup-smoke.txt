@@ -1,0 +1,700 @@
+﻿2026-10-04T16:45:52.0229399Z Current runner version: '2.337.0'
+2026-10-04T16:45:52.0254378Z ##[group]Runner Image Provisioner
+2026-10-04T16:45:52.0255278Z Hosted Compute Agent
+2026-10-04T16:45:52.0255884Z Version: 20260901.588
+2026-10-04T16:45:52.0256600Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-04T16:45:52.0257333Z Build Date: 2026-09-01T19:56:44Z
+2026-10-04T16:45:52.0258039Z Worker ID: {bc440975-7984-474a-9d2b-e0fc57860d52}
+2026-10-04T16:45:52.0258772Z Azure Region: westcentralus
+2026-10-04T16:45:52.0259433Z ##[endgroup]
+2026-10-04T16:45:52.0261468Z ##[group]Operating System
+2026-10-04T16:45:52.0262173Z Ubuntu
+2026-10-04T16:45:52.0262764Z 24.04.5
+2026-10-04T16:45:52.0263401Z LTS
+2026-10-04T16:45:52.0263945Z ##[endgroup]
+2026-10-04T16:45:52.0264549Z ##[group]Runner Image
+2026-10-04T16:45:52.0265136Z Image: ubuntu-24.04
+2026-10-04T16:45:52.0266011Z Version: 20260927.320.1
+2026-10-04T16:45:52.0267394Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-04T16:45:52.0269019Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+2026-10-04T16:45:52.0270185Z ##[endgroup]
+2026-10-04T16:45:52.0271358Z ##[group]GITHUB_TOKEN Permissions
+2026-10-04T16:45:52.0273482Z Contents: write
+2026-10-04T16:45:52.0274085Z Metadata: read
+2026-10-04T16:45:52.0274778Z ##[endgroup]
+2026-10-04T16:45:52.0276816Z Secret source: Actions
+2026-10-04T16:45:52.0277842Z Cache mode: write
+2026-10-04T16:45:52.0278586Z Prepare workflow directory
+2026-10-04T16:45:52.1321480Z Prepare all required actions
+2026-10-04T16:45:52.1370334Z Getting action download info
+2026-10-04T16:45:52.4297065Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-04T16:45:52.5524032Z Download action repository 'actions/download-artifact@v4' (SHA:d3f86a106a0bac45b974a628896c90dbdf5c8093)
+2026-10-04T16:45:53.2836015Z Download action repository 'reactivecircus/android-emulator-runner@v2' (SHA:a421e43855164a8197daf9d8d40fe71c6996bb0d)
+2026-10-04T16:45:53.7576885Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-04T16:45:54.1668039Z Complete job name: startup-smoke
+2026-10-04T16:45:54.4322509Z ##[group]Run actions/checkout@v4
+2026-10-04T16:45:54.4323835Z with:
+2026-10-04T16:45:54.4324635Z   repository: PDFly-source/nexdrop
+2026-10-04T16:45:54.4332826Z   token: ***
+2026-10-04T16:45:54.4333603Z   ssh-strict: true
+2026-10-04T16:45:54.4334403Z   ssh-user: git
+2026-10-04T16:45:54.4335210Z   persist-credentials: true
+2026-10-04T16:45:54.4336110Z   clean: true
+2026-10-04T16:45:54.4336922Z   sparse-checkout-cone-mode: true
+2026-10-04T16:45:54.4337883Z   fetch-depth: 1
+2026-10-04T16:45:54.4338673Z   fetch-tags: false
+2026-10-04T16:45:54.4339485Z   show-progress: true
+2026-10-04T16:45:54.4340465Z   lfs: false
+2026-10-04T16:45:54.4341224Z   submodules: false
+2026-10-04T16:45:54.4342054Z   set-safe-directory: true
+2026-10-04T16:45:54.4342996Z   allow-unsafe-pr-checkout: false
+2026-10-04T16:45:54.4344289Z ##[endgroup]
+2026-10-04T16:45:54.5359047Z Syncing repository: PDFly-source/nexdrop
+2026-10-04T16:45:54.5363169Z ##[group]Getting Git version info
+2026-10-04T16:45:54.5365278Z Working directory is '/home/runner/work/nexdrop/nexdrop'
+2026-10-04T16:45:54.5368269Z [command]/usr/bin/git version
+2026-10-04T16:45:54.5416868Z git version 2.55.0
+2026-10-04T16:45:54.5440774Z ##[endgroup]
+2026-10-04T16:45:54.5464752Z Temporarily overriding HOME='/home/runner/work/_temp/7dc9a579-2060-46bc-b171-4139ea72eccc' before making global git config changes
+2026-10-04T16:45:54.5481850Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-04T16:45:54.5486244Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/nexdrop/nexdrop
+2026-10-04T16:45:54.5517224Z Deleting the contents of '/home/runner/work/nexdrop/nexdrop'
+2026-10-04T16:45:54.5524645Z ##[group]Initializing the repository
+2026-10-04T16:45:54.5529400Z [command]/usr/bin/git init /home/runner/work/nexdrop/nexdrop
+2026-10-04T16:45:54.5663651Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-04T16:45:54.5665750Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-04T16:45:54.5667915Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-04T16:45:54.5669362Z hint: call:
+2026-10-04T16:45:54.5670607Z hint:
+2026-10-04T16:45:54.5671559Z hint: 	git config --global init.defaultBranch <name>
+2026-10-04T16:45:54.5672709Z hint:
+2026-10-04T16:45:54.5673792Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-04T16:45:54.5675578Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-04T16:45:54.5676990Z hint:
+2026-10-04T16:45:54.5677751Z hint: 	git branch -m <name>
+2026-10-04T16:45:54.5678627Z hint:
+2026-10-04T16:45:54.5680073Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-04T16:45:54.5687780Z Initialized empty Git repository in /home/runner/work/nexdrop/nexdrop/.git/
+2026-10-04T16:45:54.5699425Z [command]/usr/bin/git remote add origin https://github.com/PDFly-source/nexdrop
+2026-10-04T16:45:54.5768625Z ##[endgroup]
+2026-10-04T16:45:54.5771791Z ##[group]Disabling automatic garbage collection
+2026-10-04T16:45:54.5773957Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-04T16:45:54.5798476Z ##[endgroup]
+2026-10-04T16:45:54.5801253Z ##[group]Setting up auth
+2026-10-04T16:45:54.5805060Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-04T16:45:54.5841653Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-04T16:45:54.6230744Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-04T16:45:54.6273524Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-04T16:45:54.6499699Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-04T16:45:54.6539258Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-04T16:45:54.6767122Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-04T16:45:54.6808770Z ##[endgroup]
+2026-10-04T16:45:54.6810535Z ##[group]Fetching the repository
+2026-10-04T16:45:54.6819726Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +45095d4fd87ffa6cbf53bc479f5b68c55c657bdc:refs/remotes/origin/main
+2026-10-04T16:45:55.6742428Z From https://github.com/PDFly-source/nexdrop
+2026-10-04T16:45:55.6743587Z  * [new ref]         45095d4fd87ffa6cbf53bc479f5b68c55c657bdc -> origin/main
+2026-10-04T16:45:55.6747270Z ##[endgroup]
+2026-10-04T16:45:55.6748113Z ##[group]Determining the checkout info
+2026-10-04T16:45:55.6756111Z ##[endgroup]
+2026-10-04T16:45:55.6756776Z [command]/usr/bin/git sparse-checkout disable
+2026-10-04T16:45:55.6813127Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-04T16:45:55.6845562Z ##[group]Checking out the ref
+2026-10-04T16:45:55.6851403Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-10-04T16:45:55.7144470Z Switched to a new branch 'main'
+2026-10-04T16:45:55.7149595Z branch 'main' set up to track 'origin/main'.
+2026-10-04T16:45:55.7156171Z ##[endgroup]
+2026-10-04T16:45:55.7201224Z [command]/usr/bin/git log -1 --format=%H
+2026-10-04T16:45:55.7227157Z 45095d4fd87ffa6cbf53bc479f5b68c55c657bdc
+2026-10-04T16:45:55.8326176Z ##[group]Run actions/download-artifact@v4
+2026-10-04T16:45:55.8326526Z with:
+2026-10-04T16:45:55.8326744Z   name: NexDrop-release.apk
+2026-10-04T16:45:55.8327006Z   merge-multiple: false
+2026-10-04T16:45:55.8327455Z   repository: PDFly-source/nexdrop
+2026-10-04T16:45:55.8327722Z   run-id: 37217674646
+2026-10-04T16:45:55.8327936Z ##[endgroup]
+2026-10-04T16:45:55.9784100Z Downloading single artifact
+2026-10-04T16:45:55.9960459Z (node:2344) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T16:45:55.9961635Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T16:45:56.2214034Z Preparing to download the following artifacts:
+2026-10-04T16:45:56.2214848Z - NexDrop-release.apk (ID: 11308493497, Size: 3381226, Expected Digest: sha256:836003b1a17106717baae3f2ecac3594c36da234f8cf9be06b547ac5f0d6a909)
+2026-10-04T16:45:56.4000633Z Redirecting to blob download url: https://productionresultssa15.blob.core.windows.net/actions-results/5dc1ed65-b58c-8b57-96d2-c5dd8841815c/workflow-job-run-bcdbb183-2a42-5226-9cd4-a5a53aabdb34/artifacts/0b461358459dc700e110848a55aebf54b0c8821abd85989214fe64e9efc5ef56.zip
+2026-10-04T16:45:56.4002832Z Starting download of artifact to: /home/runner/work/nexdrop/nexdrop
+2026-10-04T16:45:56.6496278Z (node:2344) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-10-04T16:45:57.3316937Z SHA256 digest of downloaded artifact is 836003b1a17106717baae3f2ecac3594c36da234f8cf9be06b547ac5f0d6a909
+2026-10-04T16:45:57.3318152Z Artifact download completed successfully.
+2026-10-04T16:45:57.3318680Z Total of 1 artifact(s) downloaded
+2026-10-04T16:45:57.3322469Z Download artifact has finished successfully
+2026-10-04T16:45:57.3651074Z ##[group]Run sudo chmod 666 /dev/kvm || true
+2026-10-04T16:45:57.3651493Z [36;1msudo chmod 666 /dev/kvm || true[0m
+2026-10-04T16:45:57.3916472Z shell: /usr/bin/bash -e {0}
+2026-10-04T16:45:57.3916869Z ##[endgroup]
+2026-10-04T16:45:57.4315790Z ##[group]Run pip3 install --quiet zxing-cpp pillow
+2026-10-04T16:45:57.4316277Z [36;1mpip3 install --quiet zxing-cpp pillow[0m
+2026-10-04T16:45:57.4316604Z [36;1mnpx --yes tsx --version[0m
+2026-10-04T16:45:57.4377521Z shell: /usr/bin/bash -e {0}
+2026-10-04T16:45:57.4377803Z ##[endgroup]
+2026-10-04T16:46:06.2524984Z tsx v4.23.15
+2026-10-04T16:46:06.2616693Z node v22.23.3
+2026-10-04T16:46:06.3558296Z ##[group]Run reactivecircus/android-emulator-runner@v2
+2026-10-04T16:46:06.3558677Z with:
+2026-10-04T16:46:06.3558885Z   api-level: 36
+2026-10-04T16:46:06.3559091Z   arch: x86_64
+2026-10-04T16:46:06.3559282Z   target: default
+2026-10-04T16:46:06.3559495Z   force-avd-creation: false
+2026-10-04T16:46:06.3560201Z   emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back virtualscene
+2026-10-04T16:46:06.3560724Z   emulator-boot-timeout: 1800
+2026-10-04T16:46:06.3560976Z   disable-animations: true
+2026-10-04T16:46:06.3561297Z   script: bash "$GITHUB_WORKSPACE/.github/scripts/android-smoke.sh"
+2026-10-04T16:46:06.3561636Z   cores: 2
+2026-10-04T16:46:06.3561842Z   avd-name: test
+2026-10-04T16:46:06.3562049Z   emulator-port: 5554
+2026-10-04T16:46:06.3562280Z   disable-spellchecker: false
+2026-10-04T16:46:06.3562570Z   disable-linux-hw-accel: auto
+2026-10-04T16:46:06.3562851Z   enable-hw-keyboard: false
+2026-10-04T16:46:06.3563084Z   channel: stable
+2026-10-04T16:46:06.3563318Z ##[endgroup]
+2026-10-04T16:46:06.4127518Z ##[group]Configure emulator
+2026-10-04T16:46:06.4129352Z API level: 36
+2026-10-04T16:46:06.4129752Z System image API level: 36
+2026-10-04T16:46:06.4131072Z target: default
+2026-10-04T16:46:06.4131954Z CPU architecture: x86_64
+2026-10-04T16:46:06.4132501Z Hardware profile: 
+2026-10-04T16:46:06.4132924Z Cores: 2
+2026-10-04T16:46:06.4133581Z RAM size: 
+2026-10-04T16:46:06.4134262Z Heap size: 
+2026-10-04T16:46:06.4135225Z SD card path or size: 
+2026-10-04T16:46:06.4136441Z Disk size: 
+2026-10-04T16:46:06.4136792Z AVD name: test
+2026-10-04T16:46:06.4137440Z force avd creation: false
+2026-10-04T16:46:06.4138007Z Emulator boot timeout: 1800
+2026-10-04T16:46:06.4138945Z emulator port: 5554
+2026-10-04T16:46:06.4139985Z emulator options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back virtualscene
+2026-10-04T16:46:06.4140902Z disable animations: true
+2026-10-04T16:46:06.4141316Z disable spellchecker: false
+2026-10-04T16:46:06.4141787Z disable Linux hardware acceleration: false
+2026-10-04T16:46:06.4142295Z enable hardware keyboard: false
+2026-10-04T16:46:06.4142890Z Channel: 0 (stable)
+2026-10-04T16:46:06.4144417Z Script:
+2026-10-04T16:46:06.4145029Z bash "$GITHUB_WORKSPACE/.github/scripts/android-smoke.sh"
+2026-10-04T16:46:06.4145486Z Pre emulator launch script:
+2026-10-04T16:46:06.4145995Z ##[endgroup]
+2026-10-04T16:46:06.4147421Z ##[group]Install Android SDK
+2026-10-04T16:46:06.4217109Z [command]/usr/bin/sh -c \yes | sdkmanager --licenses > /dev/null
+2026-10-04T16:46:15.9805160Z Installing latest build tools, platform tools, and platform.
+2026-10-04T16:46:15.9820240Z [command]/usr/bin/sh -c \sdkmanager --install 'build-tools;37.0.0' platform-tools 'platforms;android-36'> /dev/null
+2026-10-04T16:46:17.5916094Z Installing latest emulator.
+2026-10-04T16:46:17.5931410Z [command]/usr/bin/sh -c \sdkmanager --install emulator --channel=0 > /dev/null
+2026-10-04T16:46:25.9221413Z Installing system images.
+2026-10-04T16:46:25.9235868Z [command]/usr/bin/sh -c \sdkmanager --install 'system-images;android-36;default;x86_64' --channel=0 > /dev/null
+2026-10-04T16:46:41.1819969Z ##[endgroup]
+2026-10-04T16:46:41.1821638Z ##[group]Create AVD
+2026-10-04T16:46:41.1822261Z Creating AVD.
+2026-10-04T16:46:41.1842981Z [command]/usr/bin/sh -c \echo no | avdmanager create avd --force -n test --package 'system-images;android-36;default;x86_64'
+2026-10-04T16:46:42.0628327Z Loading local repository...                                                     
+2026-10-04T16:46:42.0628853Z [=========                              ] 25% Loading local repository...       
+2026-10-04T16:46:42.0629244Z [=========                              ] 25% Fetch remote repository...        
+2026-10-04T16:46:42.0630128Z [=======================================] 100% Fetch remote repository...       
+2026-10-04T16:46:42.1439698Z Auto-selecting single ABI x86_64
+2026-10-04T16:46:42.2234084Z Do you wish to create a custom hardware profile? [no] [command]/usr/bin/sh -c \printf 'hw.cpu.ncore=2\n' >> /home/runner/.android/avd/test.avd/config.ini
+2026-10-04T16:46:42.2254884Z ##[endgroup]
+2026-10-04T16:46:42.2257002Z ##[group]Launch Emulator
+2026-10-04T16:46:42.2257416Z Starting emulator.
+2026-10-04T16:46:42.2272238Z [command]/usr/bin/sh -c \/usr/local/lib/android/sdk/emulator/emulator -port 5554 -avd test -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back virtualscene &
+2026-10-04T16:46:42.2386214Z INFO         | Android emulator version 37.2.12.0 (build_id 16428233) (CL:N/A)
+2026-10-04T16:46:42.2387039Z INFO         | Graphics backend: gfxstream
+2026-10-04T16:46:42.2387904Z INFO         | Found systemPath /usr/local/lib/android/sdk/system-images/android-36/default/x86_64/
+2026-10-04T16:46:42.2828672Z INFO         | Saving last run QEMU version for the AVD to 2
+2026-10-04T16:46:42.2829275Z INFO         | Guest usage of host flag 'VulkanVirtualQueue' will be ignored.
+2026-10-04T16:46:42.2829714Z INFO         | Increasing RAM size to 2560MB
+2026-10-04T16:46:42.2830361Z ##############################################################################
+2026-10-04T16:46:42.2830754Z ##                        WARNING - ACTION REQUIRED                         ##
+2026-10-04T16:46:42.2831202Z ##  Consider using the '-metrics-collection' flag to help improve the       ##
+2026-10-04T16:46:42.2831683Z ##  emulator by sending anonymized usage data. Or use the '-no-metrics'     ##
+2026-10-04T16:46:42.2832150Z ##  flag to bypass this warning and turn off the metrics collection.        ##
+2026-10-04T16:46:42.2832612Z ##  In a future release this warning will turn into a one-time blocking     ##
+2026-10-04T16:46:42.2833342Z ##  prompt to ask for explicit user input regarding metrics collection.     ##
+2026-10-04T16:46:42.2834311Z ##                                                                          ##
+2026-10-04T16:46:42.2835007Z ##  Please see '-help-metrics-collection' for more details. You can use     ##
+2026-10-04T16:46:42.2835873Z ##  '-metrics-to-file' or '-metrics-to-console' flags to see what type of   ##
+2026-10-04T16:46:42.2836755Z ##  data is being collected by emulator as part of usage statistics.        ##
+2026-10-04T16:46:42.2837473Z ##############################################################################
+2026-10-04T16:46:42.2838065Z INFO         | Guest GLES Driver: Auto (ext controls)
+2026-10-04T16:46:42.2838945Z INFO         | emuglConfig_init: vulkan_mode_selected:swiftshader gles_mode_selected:swiftshader
+2026-10-04T16:46:42.2840067Z INFO         | Checking system compatibility:
+2026-10-04T16:46:42.2840680Z INFO         |   Checking: hasSufficientDiskSpace
+2026-10-04T16:46:42.2841354Z INFO         |      Ok: Disk space requirements to run avd: `test` are met
+2026-10-04T16:46:42.2842000Z INFO         |   Checking: hasSufficientHwGpu
+2026-10-04T16:46:42.2842632Z INFO         |      Ok: Hardware GPU compatibility checks are not required
+2026-10-04T16:46:42.2843264Z INFO         |   Checking: hasSufficientSystem
+2026-10-04T16:46:42.2843874Z INFO         |      Ok: System requirements to run avd: `test` are met
+2026-10-04T16:46:42.8146801Z WARNING      | Feature QuickbootFileBacked is disabled due to stability issues, if you really want that, the environment variable ANDROID_EMU_FORCE_QUICKBOOT_FILE_BACKED need to set to 1
+2026-10-04T16:46:42.8148232Z ERROR        | Unable to connect to adb daemon on port: 5037
+2026-10-04T16:46:42.8149575Z INFO         | Storing crashdata in: /tmp/android-runner/emu-crash-37.2.12.db, detection is enabled for process: 2762
+2026-10-04T16:46:42.8152851Z INFO         | Initializing gfxstream backend
+2026-10-04T16:46:42.8160542Z INFO         | startOpenglesRendererImpl: gpu info
+2026-10-04T16:46:42.8161088Z INFO         | 
+2026-10-04T16:46:42.8163213Z INFO         | initIcdPaths: ICD set to 'swiftshader', using Swiftshader ICD
+2026-10-04T16:46:42.8164222Z INFO         | Setting ICD filenames for the loader = /usr/local/lib/android/sdk/emulator/lib64/vulkan/vk_swiftshader_icd.json
+2026-10-04T16:46:42.8170258Z INFO         | SharedLibrary::open for [/usr/local/lib/android/sdk/emulator/qemu/linux-x86_64/lib64/vulkan/libvulkan.so]
+2026-10-04T16:46:42.8171617Z INFO         | SharedLibrary::open for [/usr/local/lib/android/sdk/emulator/qemu/linux-x86_64/lib64/vulkan/libvulkan.so.1]
+2026-10-04T16:46:42.8172393Z INFO         | SharedLibrary::open for [/usr/local/lib/android/sdk/emulator/lib64/vulkan/libvulkan.so]
+2026-10-04T16:46:42.8172993Z INFO         | Added library: /usr/local/lib/android/sdk/emulator/lib64/vulkan/libvulkan.so
+2026-10-04T16:46:42.8216840Z INFO         | Selecting Vulkan device: SwiftShader Device (Subzero), Version: 1.3.0
+2026-10-04T16:46:42.8217933Z INFO         | Using Vulkan externalMemoryMode: OpaqueFd for VkEmulation
+2026-10-04T16:46:42.8356571Z INFO         | Format VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16 does not support YCbCr sampler conversion
+2026-10-04T16:46:42.8386519Z INFO         | SharedLibrary::open for [libX11]
+2026-10-04T16:46:42.8391004Z WARNING      | Could not open libX11.so, try libX11.so.6
+2026-10-04T16:46:42.8391497Z INFO         | SharedLibrary::open for [libX11.so.6]
+2026-10-04T16:46:42.8392137Z INFO         | SharedLibrary::open for [libX11-xcb]
+2026-10-04T16:46:42.8392887Z WARNING      | Could not open libX11-xcb.so, try libX11-xcb.so.1
+2026-10-04T16:46:42.8393575Z INFO         | SharedLibrary::open for [libX11-xcb.so.1]
+2026-10-04T16:46:42.8443870Z INFO         | Initializing VkEmulation features:
+2026-10-04T16:46:42.8444854Z INFO         |     glInteropSupported: false
+2026-10-04T16:46:42.8445583Z INFO         |     useDeferredCommands: true
+2026-10-04T16:46:42.8446179Z INFO         |     createResourceWithRequirements: true
+2026-10-04T16:46:42.8446537Z INFO         |     useVulkanComposition: false
+2026-10-04T16:46:42.8447160Z INFO         |     useVulkanNativeSwapchain: false
+2026-10-04T16:46:42.8447485Z INFO         |     enable guestRenderDoc: false
+2026-10-04T16:46:42.8447787Z INFO         |     ASTC LDR emulation mode: Gpu
+2026-10-04T16:46:42.8448078Z INFO         |     enable ETC2 emulation: true
+2026-10-04T16:46:42.8448398Z INFO         |     enable Ycbcr emulation: false
+2026-10-04T16:46:42.8448692Z INFO         |     guestVulkanOnly: false
+2026-10-04T16:46:42.8448990Z INFO         |     useDedicatedAllocations: false
+2026-10-04T16:46:42.8449308Z INFO         |     guestVulkanMaxApiVersion: 1.3.0
+2026-10-04T16:46:42.8449650Z INFO         |     enableProtectedMemoryEmulation: false
+2026-10-04T16:46:42.8454235Z INFO         | Graphics Adapter Vendor Google (Google Inc.)
+2026-10-04T16:46:42.8454816Z INFO         | Graphics Adapter Android Emulator OpenGL ES Translator (Google SwiftShader)
+2026-10-04T16:46:42.8455367Z INFO         | Graphics API Version OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
+2026-10-04T16:46:42.8457499Z INFO         | Graphics API Extensions GL_OES_EGL_sync GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_depth24 GL_OES_depth32 GL_OES_element_index_uint GL_OES_texture_float GL_OES_texture_float_linear GL_OES_compressed_paletted_texture GL_OES_compressed_ETC1_RGB8_texture GL_OES_depth_texture GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_packed_depth_stencil GL_OES_vertex_half_float GL_OES_standard_derivatives GL_OES_texture_npot GL_OES_rgb8_rgba8 GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_texture_format_BGRA8888 GL_APPLE_texture_format_BGRA8888 
+2026-10-04T16:46:42.8459668Z INFO         | Graphics Device Extensions N/A
+2026-10-04T16:46:42.8460402Z INFO         | Disabling sparse binding feature support
+2026-10-04T16:46:42.8514490Z INFO         | Sending adb public key [QAAAABXbscbDY9kCbfGgoZUmOO19rkBkGcVLnKdylON+mtGs1aJZ9mTowRoF7Sx3XJXSYV50OjVH6YuujbYNRpbc9pjR0WMyKAhnNAe7Y64N8SdK8jdXQ5dCzsUVNaQ/Nxz/Dwldjgb6nWTorgH8JMSRiINz+2P2PwyzLAz279ekkWn5jh5jkfSxhiwFx6CJfl+woWDUHGbN9Gzw9eLLiZ55cveGN/MJUrpi2BVRl48xc9e4uaqudO/0BV2mm8YJ+exmhzQJMAz1e69vYm42Isj1KyGYIoeqZUSNZLcpMhr9AOQzZhY9PvllrfNnkDvwgEEa/KdByS7UA3soehC5jueT/E3iTGmogzBZVo8UA+uT/yDZHIVWVsjWw423dLiTY0tSesHSz+8wYHbuhXre/uaMxcqTrOqXC8ncLP8/DhxwEtETYFM6V/WjxKWHpRUWSE0jz/sazNJ24PgE+LBtKtNt47WB7oy7Hu52Nwt/kXGauswp5QoQd+/8d4WSPzcyKcfwz6Ceo01CCWuEY4AT2osVGKcAJQRcNW92SjYDqg+vIv/OIlEFruXPqbfS4ybnr9LuDiOtaodX/rN3vvcpg1kfdxe2ms/YqMaOQESyFW96QkbgU1mdnMka1qbI39Q0FT/mL8eIfOzLtvHwk43qjCrSrYucvkUXrioYgT7SyTTX63QdeJMJewEAAQA= runner@unknown]
+2026-10-04T16:46:42.8517759Z INFO         | Userspace boot properties:
+2026-10-04T16:46:42.8518184Z INFO         |   androidboot.boot_devices=pci0000:00/0000:00:03.0 pci0000:00/0000:00:06.0
+2026-10-04T16:46:42.8518631Z INFO         |   androidboot.dalvik.vm.heapsize=576m
+2026-10-04T16:46:42.8518990Z INFO         |   androidboot.debug.hwui.renderer=skiagl
+2026-10-04T16:46:42.8519341Z INFO         |   androidboot.debug.sf.nobootanimation=1
+2026-10-04T16:46:42.8519668Z INFO         |   androidboot.hardware=ranchu
+2026-10-04T16:46:42.8520327Z INFO         |   androidboot.hardware.gltransport=pipe
+2026-10-04T16:46:42.8520684Z INFO         |   androidboot.hardware.vulkan=ranchu
+2026-10-04T16:46:42.8520993Z INFO         |   androidboot.logcat=*:V
+2026-10-04T16:46:42.8521304Z INFO         |   androidboot.opengles.version=196608
+2026-10-04T16:46:42.8521611Z INFO         |   androidboot.qemu=1
+2026-10-04T16:46:42.8524791Z INFO         |   androidboot.qemu.adb.pubkey=QAAAABXbscbDY9kCbfGgoZUmOO19rkBkGcVLnKdylON+mtGs1aJZ9mTowRoF7Sx3XJXSYV50OjVH6YuujbYNRpbc9pjR0WMyKAhnNAe7Y64N8SdK8jdXQ5dCzsUVNaQ/Nxz/Dwldjgb6nWTorgH8JMSRiINz+2P2PwyzLAz279ekkWn5jh5jkfSxhiwFx6CJfl+woWDUHGbN9Gzw9eLLiZ55cveGN/MJUrpi2BVRl48xc9e4uaqudO/0BV2mm8YJ+exmhzQJMAz1e69vYm42Isj1KyGYIoeqZUSNZLcpMhr9AOQzZhY9PvllrfNnkDvwgEEa/KdByS7UA3soehC5jueT/E3iTGmogzBZVo8UA+uT/yDZHIVWVsjWw423dLiTY0tSesHSz+8wYHbuhXre/uaMxcqTrOqXC8ncLP8/DhxwEtETYFM6V/WjxKWHpRUWSE0jz/sazNJ24PgE+LBtKtNt47WB7oy7Hu52Nwt/kXGauswp5QoQd+/8d4WSPzcyKcfwz6Ceo01CCWuEY4AT2osVGKcAJQRcNW92SjYDqg+vIv/OIlEFruXPqbfS4ybnr9LuDiOtaodX/rN3vvcpg1kfdxe2ms/YqMaOQESyFW96QkbgU1mdnMka1qbI39Q0FT/mL8eIfOzLtvHwk43qjCrSrYucvkUXrioYgT7SyTTX63QdeJMJewEAAQA= runner@unknown
+2026-10-04T16:46:42.8528192Z INFO         |   androidboot.qemu.avd_name=test
+2026-10-04T16:46:42.8528553Z INFO         |   androidboot.qemu.camera_hq_edge_processing=0
+2026-10-04T16:46:42.8528911Z INFO         |   androidboot.qemu.camera_protocol_ver=1
+2026-10-04T16:46:42.8529267Z INFO         |   androidboot.qemu.cpuvulkan.version=4206592
+2026-10-04T16:46:42.8529674Z INFO         |   androidboot.qemu.gltransport.drawFlushInterval=800
+2026-10-04T16:46:42.8530530Z INFO         |   androidboot.qemu.gltransport.name=pipe
+2026-10-04T16:46:42.8530878Z INFO         |   androidboot.qemu.hwcodec.avcdec=2
+2026-10-04T16:46:42.8531209Z INFO         |   androidboot.qemu.hwcodec.hevcdec=2
+2026-10-04T16:46:42.8531534Z INFO         |   androidboot.qemu.hwcodec.vpxdec=2
+2026-10-04T16:46:42.8531939Z INFO         |   androidboot.qemu.settings.system.screen_off_timeout=2147483647
+2026-10-04T16:46:42.8532354Z INFO         |   androidboot.qemu.skin=320x640
+2026-10-04T16:46:42.8532829Z INFO         |   androidboot.qemu.virtiowifi=1
+2026-10-04T16:46:42.8533165Z INFO         |   androidboot.qemu.vsync=60
+2026-10-04T16:46:42.8533481Z INFO         |   androidboot.serialno=EMULATOR37X2X12X0
+2026-10-04T16:46:42.8533996Z INFO         |   androidboot.vbmeta.digest=d691872627a6e6bd3bceb7dac3a30a498d305819c117349424d61aae8093028f
+2026-10-04T16:46:42.8534533Z INFO         |   androidboot.vbmeta.hash_alg=sha256
+2026-10-04T16:46:42.8534850Z INFO         |   androidboot.vbmeta.size=6848
+2026-10-04T16:46:42.8535161Z INFO         |   androidboot.veritymode=enforcing
+2026-10-04T16:46:42.8693966Z WARNING: cannnot unmap ptr 0x7f1b2ec01000 as it is in the protected range from 0x7f1a8ec00000 to 0x7f1b2ee00000
+2026-10-04T16:46:42.8851420Z INFO         | Monitoring duration of emulator setup.
+2026-10-04T16:46:43.8974176Z INFO         | Activated packet streamer for uwb emulation
+2026-10-04T16:46:43.8976246Z INFO         | Successfully initialized netsim WiFi
+2026-10-04T16:46:43.8977057Z INFO         | Activated packet streamer for bluetooth emulation
+2026-10-04T16:46:43.9031620Z INFO         | Setting display: 0 configuration to: 320x640, dpi: 160x160 
+2026-10-04T16:46:43.9032605Z INFO         | setDisplayActiveConfig: id:0, 320x640
+2026-10-04T16:46:43.9033510Z WARNING      | getEnvironmentConfig: No environment config is provided
+2026-10-04T16:46:43.9034394Z INFO         | getEnvironmentConfig: Using default virtual scene mode for the environment.
+2026-10-04T16:46:43.9035450Z INFO         | getEnvironmentConfig: Using default configuration for mode mesh3d for the environment.
+2026-10-04T16:46:43.9036486Z INFO         | Initializing a scene with mode: mesh3d, argument: Toren1BD.obj
+2026-10-04T16:46:43.9439062Z INFO         | Loading snapshot 'default_boot'...
+2026-10-04T16:46:43.9440540Z WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
+2026-10-04T16:46:43.9564310Z WARNING      | Device 'cache' does not have the requested snapshot 'default_boot'
+2026-10-04T16:46:43.9564952Z 
+2026-10-04T16:46:43.9565215Z WARNING      | Failed to load snapshot 'default_boot'
+2026-10-04T16:46:43.9566655Z USER_INFO    | The emulator is performing a cold boot without a saved state because there's no snapshot and you have configured it not to save on exit.
+2026-10-04T16:46:44.1510217Z WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
+2026-10-04T16:46:52.2321550Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:46:52.2361225Z * daemon not running; starting now at tcp:5037
+2026-10-04T16:46:52.3802242Z * daemon started successfully
+2026-10-04T16:46:52.3812264Z adb: device offline
+2026-10-04T16:46:52.3813317Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-10-04T16:46:54.3858462Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:46:54.3899200Z adb: device offline
+2026-10-04T16:46:54.3905809Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-10-04T16:46:56.3952028Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:46:56.3980813Z adb: device offline
+2026-10-04T16:46:56.3987919Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-10-04T16:46:58.4034633Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:46:58.4071677Z adb: device offline
+2026-10-04T16:46:58.4077759Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-10-04T16:47:00.4123353Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:00.4164229Z adb: device offline
+2026-10-04T16:47:00.4170826Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-10-04T16:47:02.4200263Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:02.4235899Z adb: device offline
+2026-10-04T16:47:02.4241583Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+2026-10-04T16:47:04.4326153Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:04.4767725Z 
+2026-10-04T16:47:06.4825085Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:06.5172705Z 
+2026-10-04T16:47:08.5232066Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:08.5440568Z 
+2026-10-04T16:47:10.5511654Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:10.5930472Z 
+2026-10-04T16:47:12.5969636Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:12.6589708Z 
+2026-10-04T16:47:14.6673650Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:14.7007768Z 
+2026-10-04T16:47:16.7071388Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:16.7362063Z 
+2026-10-04T16:47:18.7405596Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:18.7710110Z 
+2026-10-04T16:47:20.7791381Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:20.8329313Z 
+2026-10-04T16:47:22.8375461Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:22.9655022Z 
+2026-10-04T16:47:24.9770102Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:25.1273338Z 
+2026-10-04T16:47:26.4061957Z INFO         | Boot completed in 44141 ms
+2026-10-04T16:47:26.4064647Z INFO         | Increasing screen off timeout, logcat buffer size to 2M.
+2026-10-04T16:47:27.1321448Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+2026-10-04T16:47:27.2267952Z 1
+2026-10-04T16:47:27.2285384Z Emulator booted.
+2026-10-04T16:47:27.2298309Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell input keyevent 82
+2026-10-04T16:47:29.5344206Z Disabling animations.
+2026-10-04T16:47:29.5367086Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell settings put global window_animation_scale 0.0
+2026-10-04T16:47:29.6825919Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell settings put global transition_animation_scale 0.0
+2026-10-04T16:47:29.8385060Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell settings put global animator_duration_scale 0.0
+2026-10-04T16:47:29.9059388Z ##[endgroup]
+2026-10-04T16:47:29.9114743Z [command]/usr/bin/sh -c bash "$GITHUB_WORKSPACE/.github/scripts/android-smoke.sh"
+2026-10-04T16:47:29.9158119Z == 1) first launch: 01 Welcome, then GET STARTED -> 02 Home ==
+2026-10-04T16:47:31.6203950Z Performing Streamed Install
+2026-10-04T16:47:31.6204637Z Success
+2026-10-04T16:47:31.7894041Z Starting: Intent { cmp=com.nexdrop.ndt1/.MainActivity }
+2026-10-04T16:47:33.3275379Z Status: ok
+2026-10-04T16:47:33.3277397Z LaunchState: COLD
+2026-10-04T16:47:33.3278251Z Activity: com.nexdrop.ndt1/.MainActivity
+2026-10-04T16:47:33.3278983Z TotalTime: 1541
+2026-10-04T16:47:33.3280133Z WaitTime: 1545
+2026-10-04T16:47:33.3281319Z Complete
+2026-10-04T16:47:41.4886857Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 8.3 MB/s (8037 bytes in 0.001s)
+2026-10-04T16:47:41.6693819Z   [shot] screenshots/01-welcome.png
+2026-10-04T16:47:43.6782759Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 7.6 MB/s (8037 bytes in 0.001s)
+2026-10-04T16:47:43.7024944Z adb shell input tap 160 498
+2026-10-04T16:47:49.7276032Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 22.6 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:47:49.7500532Z Welcome -> Home OK — mockup 01+02 live, no debug controls
+2026-10-04T16:47:51.8364994Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 0.5 MB/s (22435 bytes in 0.042s)
+2026-10-04T16:47:51.8608038Z LAYOUT OK: 63 nodes within screen, nav clean
+2026-10-04T16:47:52.0233348Z   [shot] screenshots/02-home.png
+2026-10-04T16:47:52.0435870Z == 2) 03 Send files: opens WITHOUT the scanner (file-first flow) ==
+2026-10-04T16:47:54.0498270Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 26.4 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:47:54.0752685Z adb shell input tap 68 273
+2026-10-04T16:48:00.0915709Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 18.3 MB/s (17842 bytes in 0.001s)
+2026-10-04T16:48:02.1447363Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 7.0 MB/s (17842 bytes in 0.002s)
+2026-10-04T16:48:02.1693849Z adb shell input tap 159 442
+2026-10-04T16:48:05.3915815Z   [shot] screenshots/03-send-files.png
+2026-10-04T16:48:05.4071589Z Send files OK — no scanner until a real file is picked
+2026-10-04T16:48:05.4072958Z == 2b) Back affordance: real history, never Home-only, never cancels ==
+2026-10-04T16:48:07.4064668Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 20.3 MB/s (17842 bytes in 0.001s)
+2026-10-04T16:48:09.4050061Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 18.5 MB/s (17842 bytes in 0.001s)
+2026-10-04T16:48:09.4289700Z adb shell input tap 38 62
+2026-10-04T16:48:15.4451902Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 25.9 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:48:15.4491664Z on-screen Back OK — returned to Home (previous screen)
+2026-10-04T16:48:17.4588560Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 20.7 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:48:17.4824319Z adb shell input tap 97 575
+2026-10-04T16:48:23.5323794Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.0 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:48:25.5355520Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 19.7 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:48:25.5590920Z adb shell input tap 159 575
+2026-10-04T16:48:31.6157012Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 20.2 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:48:31.6183382Z Back history OK — system + on-screen back share one stack
+2026-10-04T16:48:31.6184168Z == 3) 04 Receive: ONE QR + truthful LOCAL DIRECT + real expiry ==
+2026-10-04T16:48:33.6443331Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.5 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:48:33.6689756Z adb shell input tap 207 273
+2026-10-04T16:48:46.5337254Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 15.3 MB/s (12585 bytes in 0.001s)
+2026-10-04T16:48:52.5567684Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 13.6 MB/s (12585 bytes in 0.001s)
+2026-10-04T16:48:52.5818251Z LAYOUT OK: 35 nodes within screen
+2026-10-04T16:48:52.7440561Z   [shot] screenshots/04-receive-qr.png
+2026-10-04T16:48:56.5415339Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 14.5 MB/s (12585 bytes in 0.001s)
+2026-10-04T16:48:56.5662271Z adb shell input tap 251 499
+2026-10-04T16:49:02.5987470Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 6.3 MB/s (6216 bytes in 0.001s)
+2026-10-04T16:49:02.7508075Z   [shot] screenshots/05-receive-details.png
+2026-10-04T16:49:04.7794084Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 7.4 MB/s (6216 bytes in 0.001s)
+2026-10-04T16:49:04.8038153Z adb shell input tap 258 420
+2026-10-04T16:49:09.8588335Z Receive OK — ONE QR, truthful transport card + details
+2026-10-04T16:49:09.8590452Z == 4) 08 Your NexDrop + History + Settings via bottom nav ==
+2026-10-04T16:49:11.8586156Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.1 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:49:11.8820794Z adb shell input tap 159 575
+2026-10-04T16:49:15.9021952Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.5 MB/s (23091 bytes in 0.001s)
+2026-10-04T16:49:17.9241127Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 19.1 MB/s (23091 bytes in 0.001s)
+2026-10-04T16:49:17.9480348Z LAYOUT OK: 65 nodes within screen, nav clean
+2026-10-04T16:49:18.1156588Z   [shot] screenshots/08-devices.png
+2026-10-04T16:49:20.1286179Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 23.0 MB/s (23091 bytes in 0.001s)
+2026-10-04T16:49:20.1518730Z adb shell input tap 221 575
+2026-10-04T16:49:24.1696255Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 12.3 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:49:26.1887780Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 12.7 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:49:26.2125273Z LAYOUT OK: 33 nodes within screen, nav clean
+2026-10-04T16:49:26.3740115Z   [shot] screenshots/06-history.png
+2026-10-04T16:49:28.3801380Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 12.2 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:49:28.4030325Z adb shell input tap 284 575
+2026-10-04T16:49:32.4597980Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.0 MB/s (24937 bytes in 0.001s)
+2026-10-04T16:49:32.4837891Z LAYOUT OK: 70 nodes within screen, nav clean
+2026-10-04T16:49:32.6393344Z   [shot] screenshots/07-settings-top.png
+2026-10-04T16:49:34.6628665Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 23.4 MB/s (24937 bytes in 0.001s)
+2026-10-04T16:49:38.0123462Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 26.2 MB/s (27102 bytes in 0.001s)
+2026-10-04T16:49:38.1733949Z   [shot] screenshots/07-settings.png
+2026-10-04T16:49:38.1898771Z nav tabs OK
+2026-10-04T16:49:38.1900348Z == 5) Device Test: engineering tools live BEHIND Settings ==
+2026-10-04T16:49:40.1913744Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 28.8 MB/s (27102 bytes in 0.001s)
+2026-10-04T16:49:40.2150430Z adb shell input tap 159 532
+2026-10-04T16:49:46.2268122Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 7.9 MB/s (7835 bytes in 0.001s)
+2026-10-04T16:49:46.2305215Z Device Test OK — benchmarks hidden behind Settings
+2026-10-04T16:49:46.3773953Z   [shot] screenshots/09-device-test.png
+2026-10-04T16:49:46.3926949Z == 6) benchmark path: scanner opens once CAMERA is granted ==
+2026-10-04T16:49:48.4077482Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 8.6 MB/s (7835 bytes in 0.001s)
+2026-10-04T16:49:48.4308363Z adb shell input tap 160 131
+2026-10-04T16:49:48.6800213Z INFO         | Initialized camera with name: environment
+2026-10-04T16:49:48.6887876Z INFO         | VER: Using Vulkan device: llvmpipe (LLVM 21.0.0, 256 bits), driver name: llvmpipe, driver version: 104865796
+2026-10-04T16:49:48.9491190Z INFO         | createView
+2026-10-04T16:49:53.6054370Z INFO         | removeView: view=0x56041c031340
+2026-10-04T16:49:54.5561588Z == 7) REAL-DATA pass: live NDT1 transfers into the app via emulator tunnel ==
+2026-10-04T16:50:00.5637246Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 8.0 MB/s (7835 bytes in 0.001s)
+2026-10-04T16:50:04.6104182Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.9 MB/s (24937 bytes in 0.001s)
+2026-10-04T16:50:08.6235082Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 14.8 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:50:12.6400110Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 25.8 MB/s (23091 bytes in 0.001s)
+2026-10-04T16:50:16.6686132Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 23.6 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:50:18.6633397Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.5 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:50:20.6637156Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 27.7 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:50:20.6868884Z adb shell input tap 207 273
+2026-10-04T16:50:31.8753104Z   [shot] screenshots/10-probe-qr.png
+2026-10-04T16:50:31.9707859Z   QR decoded: 10.0.2.15:42213 (session 71869b55)
+2026-10-04T16:50:39.6114880Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 0.5 MB/s (22142 bytes in 0.041s)
+2026-10-04T16:50:39.7814734Z   [shot] screenshots/10-probe-incoming-sheet.png
+2026-10-04T16:50:43.5837643Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.5 MB/s (22142 bytes in 0.001s)
+2026-10-04T16:50:43.6088134Z adb shell input tap 221 554
+2026-10-04T16:50:47.7092868Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 6.1 MB/s (15407 bytes in 0.002s)
+2026-10-04T16:50:47.7126494Z Hashing nd-probe.bin (2.0 MB)...
+2026-10-04T16:50:47.7127082Z (node:3588) Warning: Closing file descriptor 38 on garbage collection
+2026-10-04T16:50:47.7127599Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:50:47.7128865Z (node:3588) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:50:47.7130508Z Connected to 127.0.0.1:42213 — streaming...
+2026-10-04T16:50:47.7130888Z Done in 10.5s — average 0.2 MB/s — integrity PASS
+2026-10-04T16:50:49.8324710Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 0.4 MB/s (15407 bytes in 0.042s)
+2026-10-04T16:50:50.0404486Z   [shot] screenshots/10-probe-complete.png
+2026-10-04T16:50:52.1624243Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 0.3 MB/s (15407 bytes in 0.042s)
+2026-10-04T16:50:52.1910666Z adb shell input tap 234 462
+2026-10-04T16:50:56.2209453Z REAL_SEND_OK /tmp/nd-probe.bin
+2026-10-04T16:50:59.2531759Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 19.7 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:50:59.2766361Z adb shell input tap 207 273
+2026-10-04T16:51:10.4630627Z   [shot] screenshots/11-big-qr.png
+2026-10-04T16:51:10.5635973Z   QR decoded: 10.0.2.15:41433 (session a5365abd)
+2026-10-04T16:51:18.1687905Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 23.5 MB/s (22166 bytes in 0.001s)
+2026-10-04T16:51:18.3136601Z   [shot] screenshots/11-big-incoming-sheet.png
+2026-10-04T16:51:22.1658818Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 18.5 MB/s (22166 bytes in 0.001s)
+2026-10-04T16:51:22.1917704Z adb shell input tap 221 554
+2026-10-04T16:51:35.4161966Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 9.8 MB/s (22166 bytes in 0.002s)
+2026-10-04T16:51:42.5094047Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 18.1 MB/s (15431 bytes in 0.001s)
+2026-10-04T16:51:42.5128558Z Hashing Device-backup-341MB-full-final.apk (342.0 MB)...
+2026-10-04T16:51:42.5129574Z (node:3760) Warning: Closing file descriptor 23 on garbage collection
+2026-10-04T16:51:42.5130681Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:51:42.5132792Z (node:3760) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:51:42.5135076Z Connected to 127.0.0.1:41433 — streaming...
+2026-10-04T16:51:42.5135727Z Done in 23.7s — average 14.5 MB/s — integrity PASS
+2026-10-04T16:51:44.5915887Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 6.4 MB/s (15431 bytes in 0.002s)
+2026-10-04T16:51:44.7903024Z   [shot] screenshots/11-big-complete.png
+2026-10-04T16:51:46.8765678Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 6.0 MB/s (15431 bytes in 0.002s)
+2026-10-04T16:51:46.9031301Z adb shell input tap 234 462
+2026-10-04T16:51:50.9337306Z REAL_SEND_OK /tmp/Device-backup-341MB-full-final.apk
+2026-10-04T16:51:51.0904718Z   [shot] screenshots/11-big-live.png
+2026-10-04T16:51:53.1164993Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.3 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:51:53.1413328Z adb shell input tap 207 273
+2026-10-04T16:52:04.3421867Z   [shot] screenshots/12-trip-qr.png
+2026-10-04T16:52:04.4469856Z   QR decoded: 10.0.2.15:36305 (session c9a016d7)
+2026-10-04T16:52:12.0343981Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 20.8 MB/s (22151 bytes in 0.001s)
+2026-10-04T16:52:12.1773335Z   [shot] screenshots/12-trip-incoming-sheet.png
+2026-10-04T16:52:16.0444566Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.5 MB/s (22151 bytes in 0.001s)
+2026-10-04T16:52:16.0706974Z adb shell input tap 221 554
+2026-10-04T16:52:20.1745138Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 4.3 MB/s (15415 bytes in 0.003s)
+2026-10-04T16:52:20.1795622Z Hashing Trip-photos-March.zip (3.0 MB)...
+2026-10-04T16:52:20.1796497Z Connected to 127.0.0.1:36305 — streaming...
+2026-10-04T16:52:20.1799449Z (node:3897) Warning: Closing file descriptor 23 on garbage collection
+2026-10-04T16:52:20.1800354Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:52:20.1801561Z (node:3897) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:52:20.1802773Z Done in 10.6s — average 0.3 MB/s — integrity PASS
+2026-10-04T16:52:22.2845377Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 0.3 MB/s (15415 bytes in 0.043s)
+2026-10-04T16:52:22.4787241Z   [shot] screenshots/12-trip-complete.png
+2026-10-04T16:52:24.5625462Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 14.4 MB/s (15415 bytes in 0.001s)
+2026-10-04T16:52:24.5917162Z adb shell input tap 234 462
+2026-10-04T16:52:28.6219325Z REAL_SEND_OK /tmp/Trip-photos-March.zip
+2026-10-04T16:52:30.6288100Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 18.0 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:52:30.6525042Z adb shell input tap 207 273
+2026-10-04T16:52:41.8500059Z   [shot] screenshots/13-resume-qr.png
+2026-10-04T16:52:41.9502924Z   QR decoded: 10.0.2.15:40875 (session 62fec47a)
+2026-10-04T16:52:49.5529042Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 20.3 MB/s (22149 bytes in 0.001s)
+2026-10-04T16:52:49.7437945Z   [shot] screenshots/13-resume-incoming-sheet.png
+2026-10-04T16:52:53.5482276Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 22.8 MB/s (22149 bytes in 0.001s)
+2026-10-04T16:52:53.5761201Z adb shell input tap 221 554
+2026-10-04T16:52:57.6783183Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 15.6 MB/s (15413 bytes in 0.001s)
+2026-10-04T16:52:57.6821829Z Hashing resume-final-v2.pdf (2.0 MB)...
+2026-10-04T16:52:57.6822741Z Connected to 127.0.0.1:40875 — streaming...
+2026-10-04T16:52:57.6827086Z (node:4017) Warning: Closing file descriptor 23 on garbage collection
+2026-10-04T16:52:57.6828093Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:52:57.6829657Z (node:4017) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:52:57.6853620Z Done in 10.6s — average 0.2 MB/s — integrity PASS
+2026-10-04T16:52:59.7614376Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 9.5 MB/s (15413 bytes in 0.002s)
+2026-10-04T16:52:59.9648639Z   [shot] screenshots/13-resume-complete.png
+2026-10-04T16:53:02.0631808Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 13.2 MB/s (15413 bytes in 0.001s)
+2026-10-04T16:53:02.0929510Z adb shell input tap 234 462
+2026-10-04T16:53:06.1241221Z REAL_SEND_OK /tmp/resume-final-v2.pdf
+2026-10-04T16:53:08.1462804Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 22.8 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:53:08.1731124Z adb shell input tap 207 273
+2026-10-04T16:53:19.3734720Z   [shot] screenshots/14-demo-qr.png
+2026-10-04T16:53:19.4787432Z   QR decoded: 10.0.2.15:45117 (session 6969db10)
+2026-10-04T16:53:27.0623438Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 19.4 MB/s (22147 bytes in 0.001s)
+2026-10-04T16:53:27.2103025Z   [shot] screenshots/14-demo-incoming-sheet.png
+2026-10-04T16:53:31.0679407Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 20.0 MB/s (22147 bytes in 0.001s)
+2026-10-04T16:53:31.0951936Z adb shell input tap 221 554
+2026-10-04T16:53:35.2147652Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 13.8 MB/s (15411 bytes in 0.001s)
+2026-10-04T16:53:35.2187936Z Hashing workshop-demo.mp4 (5.0 MB)...
+2026-10-04T16:53:35.2189417Z Connected to 127.0.0.1:45117 — streaming...
+2026-10-04T16:53:35.2190628Z (node:4139) Warning: Closing file descriptor 23 on garbage collection
+2026-10-04T16:53:35.2191778Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:53:35.2192961Z (node:4139) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:53:35.2194185Z Done in 10.7s — average 0.5 MB/s — integrity PASS
+2026-10-04T16:53:37.2978790Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 13.6 MB/s (15411 bytes in 0.001s)
+2026-10-04T16:53:37.5045463Z   [shot] screenshots/14-demo-complete.png
+2026-10-04T16:53:39.6128804Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 9.0 MB/s (15411 bytes in 0.002s)
+2026-10-04T16:53:39.6400821Z adb shell input tap 234 462
+2026-10-04T16:53:43.6723826Z REAL_SEND_OK /tmp/workshop-demo.mp4
+2026-10-04T16:53:45.6854162Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 9.0 MB/s (22435 bytes in 0.002s)
+2026-10-04T16:53:45.7095945Z adb shell input tap 207 273
+2026-10-04T16:53:56.9042847Z   [shot] screenshots/15-notes-qr.png
+2026-10-04T16:53:57.0061262Z   QR decoded: 10.0.2.15:42541 (session dc6760ca)
+2026-10-04T16:54:04.6050911Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 19.2 MB/s (22149 bytes in 0.001s)
+2026-10-04T16:54:04.7630248Z   [shot] screenshots/15-notes-incoming-sheet.png
+2026-10-04T16:54:08.6229615Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 22.1 MB/s (22149 bytes in 0.001s)
+2026-10-04T16:54:08.6473724Z adb shell input tap 221 554
+2026-10-04T16:54:12.8476205Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 14.9 MB/s (15413 bytes in 0.001s)
+2026-10-04T16:54:12.8515406Z Hashing notes-and-ideas.txt (1.0 MB)...
+2026-10-04T16:54:12.8518993Z Connected to 127.0.0.1:42541 — streaming...
+2026-10-04T16:54:12.8519429Z (node:4261) Warning: Closing file descriptor 23 on garbage collection
+2026-10-04T16:54:12.8520210Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-04T16:54:12.8521389Z (node:4261) [DEP0137] DeprecationWarning: Closing a FileHandle object on garbage collection is deprecated. Please close FileHandle objects explicitly using FileHandle.prototype.close(). In the future, an error will be thrown if a file descriptor is closed during garbage collection.
+2026-10-04T16:54:12.8522579Z Done in 10.6s — average 0.1 MB/s — integrity PASS
+2026-10-04T16:54:14.9507924Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 14.6 MB/s (15413 bytes in 0.001s)
+2026-10-04T16:54:15.1470427Z   [shot] screenshots/15-notes-complete.png
+2026-10-04T16:54:17.3024942Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 0.4 MB/s (15413 bytes in 0.041s)
+2026-10-04T16:54:17.3296069Z adb shell input tap 234 462
+2026-10-04T16:54:21.3611197Z REAL_SEND_OK /tmp/notes-and-ideas.txt
+2026-10-04T16:54:21.3611956Z == 7b) populated state: History 5 real transfers, Devices connected ==
+2026-10-04T16:54:23.3666590Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 18.3 MB/s (22435 bytes in 0.001s)
+2026-10-04T16:54:23.3920424Z adb shell input tap 221 575
+2026-10-04T16:54:27.4274601Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 22.3 MB/s (24231 bytes in 0.001s)
+2026-10-04T16:54:27.6023495Z   [shot] screenshots/16-history-populated.png
+2026-10-04T16:54:32.2855671Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 9.0 MB/s (24231 bytes in 0.003s)
+2026-10-04T16:54:34.3175210Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 22.7 MB/s (24231 bytes in 0.001s)
+2026-10-04T16:54:34.3419423Z LAYOUT OK: 68 nodes within screen, nav clean
+2026-10-04T16:54:34.5135195Z   [shot] screenshots/17-history-scrolled.png
+2026-10-04T16:54:36.5462341Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 24.3 MB/s (24231 bytes in 0.001s)
+2026-10-04T16:54:36.5728869Z adb shell input tap 159 575
+2026-10-04T16:54:40.6043813Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 29.2 MB/s (29106 bytes in 0.001s)
+2026-10-04T16:54:42.6353568Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 25.0 MB/s (29106 bytes in 0.001s)
+2026-10-04T16:54:42.6608576Z LAYOUT OK: 82 nodes within screen, nav clean
+2026-10-04T16:54:42.8378724Z   [shot] screenshots/18-devices-connected.png
+2026-10-04T16:54:42.8557155Z == 7c) Clear transfer history: back to the real empty state ==
+2026-10-04T16:54:44.8708132Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 25.1 MB/s (29106 bytes in 0.001s)
+2026-10-04T16:54:44.8953324Z adb shell input tap 284 575
+2026-10-04T16:54:48.9357794Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 20.6 MB/s (24933 bytes in 0.001s)
+2026-10-04T16:54:48.9601414Z   (label 'Clear transfer history' not visible — scrolling down, attempt 1)
+2026-10-04T16:54:52.3132626Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 26.7 MB/s (27108 bytes in 0.001s)
+2026-10-04T16:54:52.3386733Z adb shell input tap 160 94
+2026-10-04T16:54:58.3807487Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 21.6 MB/s (24933 bytes in 0.001s)
+2026-10-04T16:54:58.4060890Z adb shell input tap 221 575
+2026-10-04T16:55:02.4345955Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 13.4 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:55:04.4628645Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 11.7 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:55:04.4891627Z LAYOUT OK: 33 nodes within screen, nav clean
+2026-10-04T16:55:04.6964224Z   [shot] screenshots/19-history-cleared.png
+2026-10-04T16:55:04.7136200Z REAL-DATA PASS OK — 6 live NDT1 transfers (incl. 341 MB) accepted, verified, recorded, then cleared
+2026-10-04T16:55:07.7351450Z == 8) FONT-SCALE 1.3: long-text / large-font layout robustness ==
+2026-10-04T16:55:13.7626425Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 13.0 MB/s (11844 bytes in 0.001s)
+2026-10-04T16:55:13.7874442Z adb shell input tap 159 575
+2026-10-04T16:55:17.8472641Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 20.2 MB/s (23088 bytes in 0.001s)
+2026-10-04T16:55:17.8717110Z LAYOUT OK: 65 nodes within screen, nav clean
+2026-10-04T16:55:18.0514430Z   [shot] screenshots/20-devices-font130.png
+2026-10-04T16:55:20.0788275Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 22.3 MB/s (23088 bytes in 0.001s)
+2026-10-04T16:55:20.1039074Z adb shell input tap 221 564
+2026-10-04T16:55:24.1540013Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 12.0 MB/s (11846 bytes in 0.001s)
+2026-10-04T16:55:24.1782743Z LAYOUT OK: 33 nodes within screen, nav clean
+2026-10-04T16:55:24.3428124Z   [shot] screenshots/21-history-font130.png
+2026-10-04T16:55:26.3562831Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 11.8 MB/s (11846 bytes in 0.001s)
+2026-10-04T16:55:26.3794561Z adb shell input tap 284 564
+2026-10-04T16:55:31.4333639Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 24.0 MB/s (19608 bytes in 0.001s)
+2026-10-04T16:55:31.4571021Z LAYOUT OK: 55 nodes within screen, nav clean
+2026-10-04T16:55:31.6178251Z   [shot] screenshots/22-settings-font130.png
+2026-10-04T16:55:33.6316639Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 15.8 MB/s (19608 bytes in 0.001s)
+2026-10-04T16:55:33.6557511Z adb shell input tap 35 564
+2026-10-04T16:55:37.7112553Z /sdcard/ui.xml: 1 file pulled, 0 skipped. 19.6 MB/s (22434 bytes in 0.001s)
+2026-10-04T16:55:37.7374346Z LAYOUT OK: 63 nodes within screen, nav clean
+2026-10-04T16:55:37.9009380Z   [shot] screenshots/23-home-font130.png
+2026-10-04T16:55:40.9401856Z FONT-SCALE PASS OK — no overflow, no nav overlap at 130% system font
+2026-10-04T16:55:40.9402487Z == 9) final: no crash anywhere in the whole run ==
+2026-10-04T16:55:41.1936995Z SMOKE TEST PASSED — mockup UI 01–08 on the real NDT1 engine: Back stack, layout audit, real-data pass (when tunnel reachable) and font-scale 1.3 all verified
+2026-10-04T16:55:41.1942909Z ##[group]Terminate Emulator
+2026-10-04T16:55:41.1956421Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 emu kill
+2026-10-04T16:55:41.2021015Z OK: killing emulator, bye bye
+2026-10-04T16:55:41.2021481Z OK
+2026-10-04T16:55:41.2022321Z INFO         | Wait for emulator (pid 2762) 20 seconds to shutdown gracefully before kill;you can set environment variable ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL(in seconds) to change the default value (20 seconds)
+2026-10-04T16:55:41.2023062Z 
+2026-10-04T16:55:41.2023522Z ##[endgroup]
+2026-10-04T16:55:43.9174986Z INFO         | Saving with gfxstream=1
+2026-10-04T16:55:43.9471479Z INFO         | Saving snapshot 'default_boot' took 2738 ms
+2026-10-04T16:55:44.9427069Z ERROR        | stop: Not implemented
+2026-10-04T16:55:44.9427895Z WARNING      | Emulator client has not yet been configured.. Call configure me first!
+2026-10-04T16:55:44.9721909Z INFO         | removeScene: scene=0x56041db157a0
+2026-10-04T16:55:44.9926762Z INFO         | removeAll
+2026-10-04T16:55:45.0431845Z WARNING      | Netsim Wifi dns:///localhost:42961 is gone due to Stream removed (CANCELLED)
+2026-10-04T16:55:45.5811370Z ##[group]Run actions/upload-artifact@v4
+2026-10-04T16:55:45.5811686Z with:
+2026-10-04T16:55:45.5811889Z   name: smoke-screenshots
+2026-10-04T16:55:45.5812131Z   path: screenshots/
+2026-10-04T16:55:45.5812351Z   if-no-files-found: ignore
+2026-10-04T16:55:45.5812590Z   compression-level: 6
+2026-10-04T16:55:45.5812804Z   overwrite: false
+2026-10-04T16:55:45.5813019Z   include-hidden-files: false
+2026-10-04T16:55:45.5813259Z env:
+2026-10-04T16:55:45.5813476Z   ANDROID_AVD_HOME: /home/runner/.android/avd
+2026-10-04T16:55:45.5813760Z ##[endgroup]
+2026-10-04T16:55:45.7518852Z (node:4656) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T16:55:45.7519864Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T16:55:45.7790858Z With the provided path, there will be 37 files uploaded
+2026-10-04T16:55:45.7791675Z Artifact name is valid!
+2026-10-04T16:55:45.7792141Z Root directory input is valid!
+2026-10-04T16:55:46.0794041Z Beginning upload of artifact content to blob storage
+2026-10-04T16:55:46.2262444Z (node:4656) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-04T16:55:46.8540029Z Uploaded bytes 3060621
+2026-10-04T16:55:46.9277228Z Finished uploading artifact content to blob storage!
+2026-10-04T16:55:46.9278418Z SHA256 digest of uploaded artifact zip is b9f57ce55e000d86e1e4ce340d1502b9562164477eea07620fe6261c79f71ba7
+2026-10-04T16:55:46.9280562Z Finalizing artifact upload
+2026-10-04T16:55:47.1743575Z Artifact smoke-screenshots.zip successfully finalized. Artifact ID 11308874994
+2026-10-04T16:55:47.1745078Z Artifact smoke-screenshots has been successfully uploaded! Final size is 3060621 bytes. Artifact ID is 11308874994
+2026-10-04T16:55:47.1751391Z Artifact download URL: https://github.com/PDFly-source/nexdrop/actions/runs/37217674646/artifacts/11308874994
+2026-10-04T16:55:47.2477814Z Post job cleanup.
+2026-10-04T16:55:47.3386731Z [command]/usr/bin/git version
+2026-10-04T16:55:47.3431215Z git version 2.55.0
+2026-10-04T16:55:47.3470090Z Temporarily overriding HOME='/home/runner/work/_temp/a6103453-a80c-4696-b407-82a104ff420f' before making global git config changes
+2026-10-04T16:55:47.3471467Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-04T16:55:47.3475569Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/nexdrop/nexdrop
+2026-10-04T16:55:47.3518049Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-04T16:55:47.3554725Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-04T16:55:47.3805952Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-04T16:55:47.3838731Z http.https://github.com/.extraheader
+2026-10-04T16:55:47.3851129Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-04T16:55:47.3886184Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-04T16:55:47.4217821Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-04T16:55:47.4273453Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-04T16:55:47.4715061Z Cleaning up orphan processes
+2026-10-04T16:55:47.5163259Z Terminate orphan process: pid (2879) (adb)
+2026-10-04T16:55:47.5202126Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/download-artifact@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -1,0 +1,93 @@
+﻿2026-10-04T15:36:13.7450382Z ##[group]Run ./gradlew --no-daemon --stacktrace :app:assembleDebug
+2026-10-04T15:36:13.7450807Z [36;1m./gradlew --no-daemon --stacktrace :app:assembleDebug[0m
+2026-10-04T15:36:13.7512063Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:36:13.7512300Z env:
+2026-10-04T15:36:13.7512562Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:36:13.7512965Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:36:13.7513293Z ##[endgroup]
+2026-10-04T15:36:14.2378910Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.7/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-04T15:36:14.8385892Z Daemon will be stopped at the end of the build 
+2026-10-04T15:36:20.2382442Z > Task :app:preBuild UP-TO-DATE
+2026-10-04T15:36:20.2383100Z > Task :app:preDebugBuild UP-TO-DATE
+2026-10-04T15:36:20.3412550Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+2026-10-04T15:36:20.3422225Z > Task :app:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T15:36:20.3422725Z > Task :ndt1:preBuild UP-TO-DATE
+2026-10-04T15:36:20.3422994Z > Task :ndt1:preDebugBuild UP-TO-DATE
+2026-10-04T15:36:20.3423251Z > Task :app:generateDebugResValues
+2026-10-04T15:36:20.4365643Z > Task :ndt1:writeDebugAarMetadata
+2026-10-04T15:36:20.4367020Z > Task :ndt1:generateDebugResValues UP-TO-DATE
+2026-10-04T15:36:26.0372574Z > Task :ndt1:generateDebugResources UP-TO-DATE
+2026-10-04T15:36:26.0392265Z > Task :app:checkDebugAarMetadata
+2026-10-04T15:36:26.0392917Z > Task :ndt1:packageDebugResources UP-TO-DATE
+2026-10-04T15:36:26.1373175Z > Task :app:mapDebugSourceSetPaths
+2026-10-04T15:36:26.1380477Z > Task :app:generateDebugResources
+2026-10-04T15:36:26.6392539Z > Task :app:packageDebugResources
+2026-10-04T15:36:26.9382246Z > Task :app:createDebugCompatibleScreenManifests
+2026-10-04T15:36:26.9385079Z > Task :app:extractDeepLinksDebug
+2026-10-04T15:36:26.9385487Z > Task :ndt1:extractDeepLinksDebug
+2026-10-04T15:36:26.9385813Z > Task :app:parseDebugLocalResources
+2026-10-04T15:36:27.0370132Z > Task :ndt1:processDebugManifest
+2026-10-04T15:36:27.0370617Z > Task :app:mergeDebugResources
+2026-10-04T15:36:27.2382625Z > Task :ndt1:compileDebugLibraryResources
+2026-10-04T15:36:27.3407247Z 
+2026-10-04T15:36:27.3432896Z > Task :app:processDebugMainManifest
+2026-10-04T15:36:27.3462616Z /home/runner/work/nexdrop/nexdrop/android/app/src/main/AndroidManifest.xml Warning:
+2026-10-04T15:36:27.3470294Z 	Namespace 'com.nexdrop.ndt1' is used in multiple modules and/or libraries: AndroidManifest.xml, :ndt1. Please ensure that all modules and libraries have a unique namespace. For more information, See https://developer.android.com/studio/build/configure-app-module#set-namespace
+2026-10-04T15:36:27.4368398Z 
+2026-10-04T15:36:27.4370456Z > Task :app:processDebugManifest
+2026-10-04T15:36:27.4371033Z > Task :ndt1:parseDebugLocalResources UP-TO-DATE
+2026-10-04T15:36:27.4371689Z > Task :ndt1:generateDebugRFile UP-TO-DATE
+2026-10-04T15:36:27.4372168Z > Task :ndt1:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T15:36:27.5377224Z > Task :ndt1:compileDebugKotlin UP-TO-DATE
+2026-10-04T15:36:27.5412125Z > Task :ndt1:javaPreCompileDebug UP-TO-DATE
+2026-10-04T15:36:27.5442495Z > Task :ndt1:compileDebugJavaWithJavac NO-SOURCE
+2026-10-04T15:36:27.5472331Z > Task :ndt1:bundleLibCompileToJarDebug UP-TO-DATE
+2026-10-04T15:36:27.5502502Z > Task :app:javaPreCompileDebug
+2026-10-04T15:36:27.5512005Z > Task :app:mergeDebugShaders
+2026-10-04T15:36:27.5522015Z > Task :app:compileDebugShaders NO-SOURCE
+2026-10-04T15:36:27.5532011Z > Task :app:generateDebugAssets UP-TO-DATE
+2026-10-04T15:36:27.5532302Z > Task :ndt1:mergeDebugShaders
+2026-10-04T15:36:27.5532538Z > Task :ndt1:compileDebugShaders NO-SOURCE
+2026-10-04T15:36:27.5533178Z > Task :ndt1:generateDebugAssets UP-TO-DATE
+2026-10-04T15:36:27.5533441Z > Task :ndt1:packageDebugAssets
+2026-10-04T15:36:27.5533626Z > Task :app:mergeDebugAssets
+2026-10-04T15:36:27.6364954Z > Task :app:compressDebugAssets
+2026-10-04T15:36:27.6365458Z > Task :ndt1:bundleLibRuntimeToJarDebug UP-TO-DATE
+2026-10-04T15:36:27.6365833Z > Task :app:desugarDebugFileDependencies
+2026-10-04T15:36:27.6372356Z > Task :ndt1:processDebugJavaRes UP-TO-DATE
+2026-10-04T15:36:28.1365793Z > Task :app:mergeDebugStartupProfile
+2026-10-04T15:36:28.1400275Z > Task :app:checkDebugDuplicateClasses
+2026-10-04T15:36:29.9401299Z > Task :ndt1:bundleLibRuntimeToDirDebug
+2026-10-04T15:36:39.6382575Z > Task :app:processDebugManifestForPackage
+2026-10-04T15:36:40.5369764Z > Task :app:mergeDebugJniLibFolders
+2026-10-04T15:36:40.5412179Z > Task :ndt1:mergeDebugJniLibFolders
+2026-10-04T15:36:40.5438933Z > Task :ndt1:mergeDebugNativeLibs NO-SOURCE
+2026-10-04T15:36:40.6368670Z > Task :app:mergeLibDexDebug
+2026-10-04T15:36:40.6412126Z > Task :ndt1:copyDebugJniLibsProjectOnly
+2026-10-04T15:36:40.9412388Z > Task :app:processDebugResources
+2026-10-04T15:36:41.4390760Z > Task :app:validateSigningDebug
+2026-10-04T15:36:42.0375915Z > Task :app:mergeExtDexDebug
+2026-10-04T15:36:42.4388259Z > Task :app:mergeDebugNativeLibs NO-SOURCE
+2026-10-04T15:36:42.4389124Z > Task :app:stripDebugDebugSymbols NO-SOURCE
+2026-10-04T15:36:42.4431758Z > Task :app:writeDebugAppMetadata
+2026-10-04T15:36:42.5368982Z > Task :app:writeDebugSigningConfigVersions
+2026-10-04T15:36:55.7372057Z 
+2026-10-04T15:36:55.7406363Z > Task :app:compileDebugKotlin
+2026-10-04T15:36:55.7422225Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:638:9 Variable 'ep' is never used
+2026-10-04T15:36:55.7432195Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:771:11 Variable 'm' is never used
+2026-10-04T15:36:55.7465977Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1305:60 'versionCode: Int' is deprecated. Deprecated in Java
+2026-10-04T15:36:55.7492837Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1525:32 The corresponding parameter in the supertype 'Listener' is named 'peerIp'. This may cause problems when calling this function with named arguments.
+2026-10-04T15:36:55.7523189Z w: file:///home/runner/work/nexdrop/nexdrop/android/app/src/main/java/com/nexdrop/ndt1/MainActivity.kt:1682:43 'getter for allNetworks: Array<(out) Network!>' is deprecated. Deprecated in Java
+2026-10-04T15:36:55.7551833Z 
+2026-10-04T15:36:55.7561034Z > Task :app:compileDebugJavaWithJavac NO-SOURCE
+2026-10-04T15:36:56.4372543Z > Task :app:dexBuilderDebug
+2026-10-04T15:36:56.5364507Z > Task :app:mergeDebugGlobalSynthetics
+2026-10-04T15:36:56.5368925Z > Task :app:processDebugJavaRes
+2026-10-04T15:36:56.7372733Z > Task :app:mergeProjectDexDebug
+2026-10-04T15:36:56.9375144Z > Task :app:mergeDebugJavaResource
+2026-10-04T15:36:57.1364939Z > Task :app:packageDebug
+2026-10-04T15:36:57.1367838Z > Task :app:createDebugApkListingFileRedirect
+2026-10-04T15:36:57.1382455Z > Task :app:assembleDebug
+2026-10-04T15:36:57.1382735Z 
+2026-10-04T15:36:57.1382986Z BUILD SUCCESSFUL in 43s
+2026-10-04T15:36:57.1383289Z 55 actionable tasks: 45 executed, 10 up-to-date

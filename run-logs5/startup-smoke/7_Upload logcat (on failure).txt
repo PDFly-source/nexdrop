@@ -1,0 +1,29 @@
+﻿2026-10-04T15:33:56.4930198Z ##[group]Run actions/upload-artifact@v4
+2026-10-04T15:33:56.4930515Z with:
+2026-10-04T15:33:56.4930706Z   name: smoke-logcat
+2026-10-04T15:33:56.4930926Z   path: logcat.txt
+ui.xml
+
+2026-10-04T15:33:56.4931167Z   if-no-files-found: ignore
+2026-10-04T15:33:56.4931425Z   compression-level: 6
+2026-10-04T15:33:56.4931635Z   overwrite: false
+2026-10-04T15:33:56.4931845Z   include-hidden-files: false
+2026-10-04T15:33:56.4932073Z env:
+2026-10-04T15:33:56.4932280Z   ANDROID_AVD_HOME: /home/runner/.android/avd
+2026-10-04T15:33:56.4932563Z ##[endgroup]
+2026-10-04T15:33:56.6759535Z (node:3365) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T15:33:56.6760519Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T15:33:56.6810691Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-04T15:33:56.6819863Z The least common ancestor is /home/runner/work/nexdrop/nexdrop. This will be the root directory of the artifact
+2026-10-04T15:33:56.6821466Z With the provided path, there will be 1 file uploaded
+2026-10-04T15:33:56.6822726Z Artifact name is valid!
+2026-10-04T15:33:56.6829262Z Root directory input is valid!
+2026-10-04T15:33:56.8799398Z Beginning upload of artifact content to blob storage
+2026-10-04T15:33:56.9008045Z (node:3365) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-04T15:33:56.9231568Z Uploaded bytes 1670
+2026-10-04T15:33:56.9423180Z Finished uploading artifact content to blob storage!
+2026-10-04T15:33:56.9424560Z SHA256 digest of uploaded artifact zip is 9b730fd0f43f900831b81f3e9b7197016a10584dfd5c6b7ab576cbb339bbb7a3
+2026-10-04T15:33:56.9427305Z Finalizing artifact upload
+2026-10-04T15:33:57.1444047Z Artifact smoke-logcat.zip successfully finalized. Artifact ID 11307731372
+2026-10-04T15:33:57.1445181Z Artifact smoke-logcat has been successfully uploaded! Final size is 1670 bytes. Artifact ID is 11307731372
+2026-10-04T15:33:57.1451364Z Artifact download URL: https://github.com/PDFly-source/nexdrop/actions/runs/37212905970/artifacts/11307731372

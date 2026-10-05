@@ -1,0 +1,85 @@
+﻿2026-10-04T16:13:35.6815783Z ##[group]Run ./gradlew --no-daemon --stacktrace :tv:assembleDebug
+2026-10-04T16:13:35.6816189Z [36;1m./gradlew --no-daemon --stacktrace :tv:assembleDebug[0m
+2026-10-04T16:13:35.6880854Z shell: /usr/bin/bash -e {0}
+2026-10-04T16:13:35.6881078Z env:
+2026-10-04T16:13:35.6881351Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T16:13:35.6881760Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T16:13:35.6882081Z ##[endgroup]
+2026-10-04T16:13:36.0494785Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.7/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-04T16:13:36.7493535Z Daemon will be stopped at the end of the build 
+2026-10-04T16:13:41.5483597Z > Task :tv:preBuild UP-TO-DATE
+2026-10-04T16:13:41.5493114Z > Task :tv:preDebugBuild UP-TO-DATE
+2026-10-04T16:13:41.5516325Z > Task :tv:mergeDebugNativeDebugMetadata NO-SOURCE
+2026-10-04T16:13:41.5522768Z > Task :ndt1:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T16:13:41.5523213Z > Task :ndt1:preBuild UP-TO-DATE
+2026-10-04T16:13:41.5541583Z > Task :ndt1:preDebugBuild UP-TO-DATE
+2026-10-04T16:13:41.5546421Z > Task :ndt1:generateDebugResValues UP-TO-DATE
+2026-10-04T16:13:41.5548696Z > Task :ndt1:generateDebugResources UP-TO-DATE
+2026-10-04T16:13:41.5549441Z > Task :ndt1:packageDebugResources UP-TO-DATE
+2026-10-04T16:13:41.5549870Z > Task :ndt1:parseDebugLocalResources UP-TO-DATE
+2026-10-04T16:13:41.5550282Z > Task :ndt1:generateDebugRFile UP-TO-DATE
+2026-10-04T16:13:41.6473699Z > Task :ndt1:compileDebugKotlin UP-TO-DATE
+2026-10-04T16:13:41.6493427Z > Task :ndt1:javaPreCompileDebug UP-TO-DATE
+2026-10-04T16:13:41.6494172Z > Task :ndt1:compileDebugJavaWithJavac NO-SOURCE
+2026-10-04T16:13:41.6494757Z > Task :ndt1:bundleLibCompileToJarDebug UP-TO-DATE
+2026-10-04T16:13:41.6495258Z > Task :tv:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T16:13:41.6495781Z > Task :ndt1:compileDebugLibraryResources UP-TO-DATE
+2026-10-04T16:13:41.6496240Z > Task :ndt1:writeDebugAarMetadata UP-TO-DATE
+2026-10-04T16:13:43.4473606Z > Task :tv:generateDebugResValues
+2026-10-04T16:13:43.4474236Z > Task :tv:checkDebugAarMetadata
+2026-10-04T16:13:43.4474595Z > Task :tv:mapDebugSourceSetPaths
+2026-10-04T16:13:43.4474943Z > Task :tv:generateDebugResources
+2026-10-04T16:13:44.3469881Z > Task :tv:packageDebugResources
+2026-10-04T16:13:44.3473424Z > Task :tv:createDebugCompatibleScreenManifests
+2026-10-04T16:13:44.3474068Z > Task :ndt1:extractDeepLinksDebug UP-TO-DATE
+2026-10-04T16:13:44.3518651Z > Task :ndt1:processDebugManifest UP-TO-DATE
+2026-10-04T16:13:44.3529978Z > Task :tv:extractDeepLinksDebug
+2026-10-04T16:13:44.4503508Z > Task :tv:parseDebugLocalResources
+2026-10-04T16:13:44.5489354Z > Task :tv:mergeDebugResources
+2026-10-04T16:13:44.6498358Z > Task :tv:processDebugMainManifest
+2026-10-04T16:13:44.6506338Z > Task :tv:processDebugManifest
+2026-10-04T16:13:44.6508847Z > Task :tv:processDebugManifestForPackage
+2026-10-04T16:13:44.6532983Z > Task :tv:javaPreCompileDebug
+2026-10-04T16:13:45.0475422Z > Task :ndt1:mergeDebugShaders UP-TO-DATE
+2026-10-04T16:13:45.0497738Z > Task :ndt1:compileDebugShaders NO-SOURCE
+2026-10-04T16:13:45.0498266Z > Task :ndt1:generateDebugAssets UP-TO-DATE
+2026-10-04T16:13:45.0498682Z > Task :ndt1:packageDebugAssets UP-TO-DATE
+2026-10-04T16:13:45.0499081Z > Task :tv:mergeDebugShaders
+2026-10-04T16:13:45.0499444Z > Task :tv:compileDebugShaders NO-SOURCE
+2026-10-04T16:13:45.0499833Z > Task :tv:generateDebugAssets UP-TO-DATE
+2026-10-04T16:13:45.0501373Z > Task :tv:mergeDebugAssets
+2026-10-04T16:13:45.0501736Z > Task :tv:compressDebugAssets
+2026-10-04T16:13:45.0502128Z > Task :ndt1:bundleLibRuntimeToJarDebug UP-TO-DATE
+2026-10-04T16:13:45.0502697Z > Task :tv:desugarDebugFileDependencies
+2026-10-04T16:13:45.1482438Z > Task :ndt1:processDebugJavaRes UP-TO-DATE
+2026-10-04T16:13:45.3470739Z > Task :tv:mergeDebugStartupProfile
+2026-10-04T16:13:45.3471485Z > Task :ndt1:bundleLibRuntimeToDirDebug UP-TO-DATE
+2026-10-04T16:13:45.4476041Z > Task :tv:checkDebugDuplicateClasses
+2026-10-04T16:13:45.4482919Z > Task :ndt1:mergeDebugJniLibFolders UP-TO-DATE
+2026-10-04T16:13:45.4483480Z > Task :tv:processDebugResources
+2026-10-04T16:13:50.0478651Z > Task :ndt1:mergeDebugNativeLibs NO-SOURCE
+2026-10-04T16:13:50.0503076Z > Task :ndt1:copyDebugJniLibsProjectOnly UP-TO-DATE
+2026-10-04T16:13:50.0532951Z > Task :tv:mergeDebugJniLibFolders
+2026-10-04T16:13:50.1487340Z > Task :tv:mergeDebugNativeLibs NO-SOURCE
+2026-10-04T16:13:50.1513276Z > Task :tv:stripDebugDebugSymbols NO-SOURCE
+2026-10-04T16:13:50.1542982Z > Task :tv:mergeLibDexDebug
+2026-10-04T16:13:50.1543396Z > Task :tv:validateSigningDebug
+2026-10-04T16:13:50.1573020Z > Task :tv:writeDebugAppMetadata
+2026-10-04T16:13:50.2523468Z > Task :tv:writeDebugSigningConfigVersions
+2026-10-04T16:13:52.0470026Z > Task :tv:mergeExtDexDebug
+2026-10-04T16:13:55.4483106Z 
+2026-10-04T16:13:55.4483666Z > Task :tv:compileDebugKotlin
+2026-10-04T16:13:55.4484339Z w: file:///home/runner/work/nexdrop/nexdrop/android/tv/src/main/java/com/nexdrop/tv/ReceiveActivity.kt:147:32 The corresponding parameter in the supertype 'Listener' is named 'peerIp'. This may cause problems when calling this function with named arguments.
+2026-10-04T16:13:55.4484846Z 
+2026-10-04T16:13:55.6527567Z > Task :tv:compileDebugJavaWithJavac NO-SOURCE
+2026-10-04T16:13:55.6527986Z > Task :tv:dexBuilderDebug
+2026-10-04T16:13:55.7471040Z > Task :tv:mergeDebugGlobalSynthetics
+2026-10-04T16:13:55.7493250Z > Task :tv:processDebugJavaRes
+2026-10-04T16:13:55.8509986Z > Task :tv:mergeProjectDexDebug
+2026-10-04T16:13:56.1473599Z > Task :tv:mergeDebugJavaResource
+2026-10-04T16:13:56.4470358Z > Task :tv:packageDebug
+2026-10-04T16:13:56.4498585Z > Task :tv:createDebugApkListingFileRedirect
+2026-10-04T16:13:56.4502679Z > Task :tv:assembleDebug
+2026-10-04T16:13:56.4502948Z 
+2026-10-04T16:13:56.4503205Z BUILD SUCCESSFUL in 20s
+2026-10-04T16:13:56.4503571Z 55 actionable tasks: 36 executed, 19 up-to-date

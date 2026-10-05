@@ -1,0 +1,19 @@
+﻿2026-10-04T16:55:54.5598922Z ##[group]Run actions/download-artifact@v4
+2026-10-04T16:55:54.5599904Z with:
+2026-10-04T16:55:54.5600301Z   name: NexDrop-debug.apk
+2026-10-04T16:55:54.5600728Z   merge-multiple: false
+2026-10-04T16:55:54.5601170Z   repository: PDFly-source/nexdrop
+2026-10-04T16:55:54.5601620Z   run-id: 37217674646
+2026-10-04T16:55:54.5602149Z ##[endgroup]
+2026-10-04T16:55:54.6866545Z Downloading single artifact
+2026-10-04T16:55:54.6957175Z (node:1966) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-04T16:55:54.6958428Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-04T16:55:54.9156273Z Preparing to download the following artifacts:
+2026-10-04T16:55:54.9161967Z - NexDrop-debug.apk (ID: 11308204381, Size: 4136946, Expected Digest: sha256:c0dac58b3fa6c0547be8f45abddc9c5a0b9061422a58b82240961e7f5a31ba7c)
+2026-10-04T16:55:55.1436331Z Redirecting to blob download url: https://productionresultssa15.blob.core.windows.net/actions-results/5dc1ed65-b58c-8b57-96d2-c5dd8841815c/workflow-job-run-bcdbb183-2a42-5226-9cd4-a5a53aabdb34/artifacts/877ec34c522ba0b90eef42426f15992b1397725becf68beda7b8b3e0922e326a.zip
+2026-10-04T16:55:55.1438422Z Starting download of artifact to: /home/runner/work/nexdrop/nexdrop
+2026-10-04T16:55:55.3872435Z (node:1966) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-10-04T16:55:56.0106930Z SHA256 digest of downloaded artifact is c0dac58b3fa6c0547be8f45abddc9c5a0b9061422a58b82240961e7f5a31ba7c
+2026-10-04T16:55:56.0108797Z Artifact download completed successfully.
+2026-10-04T16:55:56.0109538Z Total of 1 artifact(s) downloaded
+2026-10-04T16:55:56.0111398Z Download artifact has finished successfully

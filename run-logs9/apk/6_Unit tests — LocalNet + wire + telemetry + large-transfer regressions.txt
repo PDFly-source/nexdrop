@@ -1,0 +1,40 @@
+﻿2026-10-04T16:26:37.6498191Z ##[group]Run ./gradlew --no-daemon --stacktrace :ndt1:testDebugUnitTest
+2026-10-04T16:26:37.6498622Z [36;1m./gradlew --no-daemon --stacktrace :ndt1:testDebugUnitTest[0m
+2026-10-04T16:26:37.6554538Z shell: /usr/bin/bash -e {0}
+2026-10-04T16:26:37.6554764Z env:
+2026-10-04T16:26:37.6555015Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T16:26:37.6555402Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T16:26:37.6555711Z ##[endgroup]
+2026-10-04T16:26:38.1720340Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.7/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-04T16:26:38.9690327Z Daemon will be stopped at the end of the build 
+2026-10-04T16:27:23.6730852Z > Task :ndt1:checkKotlinGradlePluginConfigurationErrors
+2026-10-04T16:27:23.6746057Z > Task :ndt1:preBuild UP-TO-DATE
+2026-10-04T16:27:23.6767765Z > Task :ndt1:preDebugBuild UP-TO-DATE
+2026-10-04T16:27:23.6768460Z > Task :ndt1:generateDebugResValues
+2026-10-04T16:27:23.7689367Z > Task :ndt1:generateDebugResources
+2026-10-04T16:27:23.7689893Z > Task :ndt1:packageDebugResources
+2026-10-04T16:27:24.6700090Z > Task :ndt1:preDebugUnitTestBuild UP-TO-DATE
+2026-10-04T16:27:24.6700738Z > Task :ndt1:javaPreCompileDebug
+2026-10-04T16:27:24.6703375Z > Task :ndt1:javaPreCompileDebugUnitTest
+2026-10-04T16:27:24.7688812Z > Task :ndt1:parseDebugLocalResources
+2026-10-04T16:27:24.7689285Z > Task :ndt1:generateDebugRFile
+2026-10-04T16:27:27.4688672Z > Task :ndt1:generateDebugUnitTestStubRFile
+2026-10-04T16:27:35.3706646Z 
+2026-10-04T16:27:35.3713620Z > Task :ndt1:compileDebugKotlin
+2026-10-04T16:27:35.3714961Z w: file:///home/runner/work/nexdrop/nexdrop/android/ndt1/src/main/java/com/nexdrop/ndt1/TurboReceiver.kt:163:22 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, ByteArray>
+2026-10-04T16:27:35.3719481Z w: file:///home/runner/work/nexdrop/nexdrop/android/ndt1/src/main/java/com/nexdrop/ndt1/TurboReceiver.kt:165:39 Unnecessary non-null assertion (!!) on a non-null receiver of type Pair<Int, ByteArray>
+2026-10-04T16:27:35.3754361Z 
+2026-10-04T16:27:35.3754574Z > Task :ndt1:compileDebugJavaWithJavac NO-SOURCE
+2026-10-04T16:27:35.3755015Z > Task :ndt1:bundleLibRuntimeToJarDebug
+2026-10-04T16:27:35.3755400Z > Task :ndt1:bundleLibCompileToJarDebug
+2026-10-04T16:27:35.3755774Z > Task :ndt1:processDebugJavaRes
+2026-10-04T16:27:37.8689786Z 
+2026-10-04T16:27:37.8709883Z > Task :ndt1:compileDebugUnitTestKotlin
+2026-10-04T16:27:37.8739846Z w: file:///home/runner/work/nexdrop/nexdrop/android/ndt1/src/test/java/com/nexdrop/ndt1/Ndt1TcpBothWaysTest.kt:104:24 Variable 'verifyType' initializer is redundant
+2026-10-04T16:27:37.8749103Z 
+2026-10-04T16:27:37.8769314Z > Task :ndt1:compileDebugUnitTestJavaWithJavac NO-SOURCE
+2026-10-04T16:27:37.8799242Z > Task :ndt1:processDebugUnitTestJavaRes
+2026-10-04T16:27:59.8689307Z > Task :ndt1:testDebugUnitTest
+2026-10-04T16:27:59.8704603Z 
+2026-10-04T16:27:59.8729807Z BUILD SUCCESSFUL in 1m 22s
+2026-10-04T16:27:59.8759565Z 16 actionable tasks: 16 executed

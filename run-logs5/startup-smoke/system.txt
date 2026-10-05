@@ -1,0 +1,8 @@
+2026-10-04T15:29:59.9680000Z Requested labels: ubuntu-latest
+2026-10-04T15:29:59.9680000Z Job defined at: PDFly-source/nexdrop/.github/workflows/android-build.yml@refs/heads/main
+2026-10-04T15:29:59.9680000Z Waiting for a runner to pick up this job...
+2026-10-04T15:29:59.9680000Z Evaluating startup-smoke.if
+2026-10-04T15:29:59.9680000Z Evaluating: success()
+2026-10-04T15:29:59.9680000Z Result: true
+2026-10-04T15:30:00.2260000Z Job is waiting for a hosted runner to come online.
+2026-10-04T15:30:00.2270000Z Job is about to start running on the hosted runner: GitHub Actions 1000001090

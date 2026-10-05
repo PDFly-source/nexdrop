@@ -1,0 +1,18 @@
+﻿2026-10-04T15:37:20.4151362Z ##[group]Run set -eu
+2026-10-04T15:37:20.4151880Z [36;1mset -eu[0m
+2026-10-04T15:37:20.4152029Z [36;1mAPK=app/build/outputs/apk/debug/app-debug.apk[0m
+2026-10-04T15:37:20.4152216Z [36;1mtest -s "$APK"[0m
+2026-10-04T15:37:20.4152368Z [36;1m# The real NDT1 classes must be inside the APK[0m
+2026-10-04T15:37:20.4152579Z [36;1munzip -o -q "$APK" 'classes*.dex' -d /tmp/apkcheck[0m
+2026-10-04T15:37:20.4152888Z [36;1mfor token in "com/nexdrop/ndt1/TurboSender" "com/nexdrop/ndt1/TurboReceiver" "com/nexdrop/ndt1/MainActivity"; do[0m
+2026-10-04T15:37:20.4153218Z [36;1m  if ! grep -qa "$token" /tmp/apkcheck/classes*.dex; then[0m
+2026-10-04T15:37:20.4153464Z [36;1m    echo "MISSING $token in APK — refusing to upload a fake APK"; exit 1[0m
+2026-10-04T15:37:20.4153667Z [36;1m  fi[0m
+2026-10-04T15:37:20.4153778Z [36;1mdone[0m
+2026-10-04T15:37:20.4153945Z [36;1mecho "APK verified: real NDT1 sender/receiver + phone UI present"[0m
+2026-10-04T15:37:20.4204184Z shell: /usr/bin/bash -e {0}
+2026-10-04T15:37:20.4204446Z env:
+2026-10-04T15:37:20.4204611Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:37:20.4204867Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-04T15:37:20.4205068Z ##[endgroup]
+2026-10-04T15:37:20.5048118Z APK verified: real NDT1 sender/receiver + phone UI present
