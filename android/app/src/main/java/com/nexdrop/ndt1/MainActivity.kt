@@ -1507,8 +1507,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         addView(sm("None yet — after a verified transfer, the sender can be trusted from the completion screen"))
       } else trusted.forEach { t ->
         val r = row()
-        r.addView(icBox(R.drawable.ic_shield).apply {
+        r.addView(ImageView(this@MainActivity).apply {
+          setImageResource(R.drawable.ic_shield)
           imageTintList = android.content.res.ColorStateList.valueOf(D.OK)
+          layoutParams = LinearLayout.LayoutParams(dp(24), dp(24))
         })
         r.addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
         val c = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
