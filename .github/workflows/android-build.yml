@@ -12,6 +12,11 @@ on:
     branches: ['main']
     paths: ['android/**', '.github/workflows/android-build.yml', '.github/scripts/android-smoke.sh']
   workflow_dispatch:
+    inputs:
+      internal:
+        description: 'Internal diagnostic build — build+test but do NOT publish a release'
+        type: boolean
+        default: false
 
 permissions:
   contents: write # create the Release with the attached APK
@@ -266,6 +271,9 @@ jobs:
 
   release:
     needs: [apk, startup-smoke]
+    # v1.4.1-rc1: internal diagnostic builds (dispatch with internal=true)
+    # build + test on any branch but never publish a release or tag.
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.internal }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

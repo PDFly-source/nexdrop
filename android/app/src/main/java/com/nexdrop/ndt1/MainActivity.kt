@@ -1454,6 +1454,16 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     })
     content.addView(statRow)
 
+    // Phase 11: REAL conditions captured at transfer start — so every
+    // benchmark number comes with its honest environmental context.
+    if (runConditions.isNotEmpty()) {
+      content.addView(sm(runConditions).apply {
+        setTextColor(D.MUTED); gravity = Gravity.CENTER
+        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f)
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(4) }
+      })
+    }
+
     // PEAK (Phase 5): the engine's measured sustained peak — never a burst.
     val peakRow = row().apply { (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(8) }
     peakRow.addView(glassCard(pad = 14f).apply {
@@ -1923,6 +1933,33 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         setTextColor(D.TEXT); setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
       })
     })
+    // DISCOVERY BEACON (v1.4.1-rc1): REAL counters, read from the live
+    // beacon objects — the honest answer to "why was trust unavailable?"
+    content.addView(sm("DISCOVERY BEACON (REAL)").apply {
+      setTextColor(D.MUTED); letterSpacing = 0.10f
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(14); bottomMargin = dp(6) }
+    })
+    content.addView(glassCard(pad = 12f).apply {
+      val idStats = beaconIdentity?.stats()
+      val sesStats = beaconSession?.stats()
+      srow(this, R.drawable.ic_wifi, "Identity beacon",
+        idStats?.let { "running — port ${it.portBound} — sent ${it.sentPackets}" } ?: "not running")
+      srow(this, R.drawable.ic_wifi, "Session beacon",
+        sesStats?.let { "running — port ${it.portBound} — sent ${it.sentPackets} — received ${it.receivedPackets}" } ?: "not running")
+      srow(this, R.drawable.ic_dev, "This device ID", deviceIdPref().take(18) + "…")
+      val peer = peerIdentity()
+      srow(this, R.drawable.ic_dev, "Peer identity",
+        if (peerIp == null) "no peer connection yet"
+        else if (peer == null) "NOT SEEN from $peerIp — no fresh beacon packets"
+        else "seen — ${peer.deviceName} — devid ${peer.deviceId.take(10)}… — age ${System.currentTimeMillis() - (identityByIp[peerIp!!]?.atMs ?: 0L)} ms")
+      srow(this, R.drawable.ic_shield, "Trust resolution",
+        if (peerIp == null) "n/a — no transfer yet"
+        else when {
+          peer != null && peer.deviceId.isNotEmpty() && isTrusted(peer.deviceId) -> "trusted — auto-accept eligible"
+          peer != null && peer.deviceId.isNotEmpty() -> "identity known — trust can be offered"
+          else -> "unavailable — beacon identity missing or stale (>15 s)"
+        })
+    })
     content.addView(btn("Back to Settings", "text", height = 36) { backOr(Screen.SETTINGS) }.apply {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36))
     })
@@ -2156,8 +2193,32 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     applyKeepAwake()
   }
 
+  /**
+   * v1.4.1-rc1 (Phase 11): REAL physical conditions at transfer start —
+   * battery, charging, temperature, power saver. Read from the system,
+   * never guessed; recorded once per transfer (never in the hot path).
+   */
+  @Volatile private var runConditions: String = ""
+  private fun transferConditions(): String = try {
+    val bm = registerReceiver(null, android.content.IntentFilter(android.os.BatteryManager.ACTION_BATTERY_CHANGED))
+    val level = bm?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+    val scale = bm?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100) ?: 100
+    val status = bm?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
+    val temp = (bm?.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1) / 10.0
+    val charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
+      status == android.os.BatteryManager.BATTERY_STATUS_FULL
+    val pm = getSystemService(POWER_SERVICE) as? android.os.PowerManager
+    val pct = if (level >= 0 && scale > 0) level * 100 / scale else -1
+    buildString {
+      if (pct >= 0) append("battery $pct%").append(if (charging) " (charging)" else "")
+      if (temp > 0) append("  ·  battery temp ${temp}°C")
+      append("  ·  power saver ").append(if (pm?.isPowerSaveMode == true) "ON" else "off")
+    }
+  } catch (_: Exception) { "conditions unavailable" }
+
   private fun beginTransfer() {
     setTransferActive(true)
+    runConditions = transferConditions() // Phase 11: real conditions, once per transfer
     transferStartNanos = System.nanoTime()
     paused = false
     transferGotFirstProgress = false

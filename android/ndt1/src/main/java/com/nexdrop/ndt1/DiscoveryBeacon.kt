@@ -28,6 +28,22 @@ class DiscoveryBeacon(
 ) {
   private var sock: DatagramSocket? = null
   private var running = false
+
+  // v1.4.1-rc1 REAL diagnostic counters (control plane only — never the
+  // transfer engine). Exposed read-only so Device Test can show honest
+  // discovery state instead of guessing why trust was unavailable.
+  private val sentPackets = java.util.concurrent.atomic.AtomicLong(0)
+  private val receivedPackets = java.util.concurrent.atomic.AtomicLong(0)
+
+  data class BeaconStats(
+    val sentPackets: Long, val receivedPackets: Long,
+    val running: Boolean, val portBound: Int,
+  )
+
+  fun stats(): BeaconStats = BeaconStats(
+    sentPackets.get(), receivedPackets.get(),
+    running, sock?.localPort ?: -1,
+  )
   private val seen = HashMap<String, DiscoveredDevice>()
 
   data class DiscoveredDevice(
@@ -46,6 +62,7 @@ class DiscoveryBeacon(
         try {
           val pkt = DatagramPacket(buf, buf.size)
           sock!!.receive(pkt)
+          receivedPackets.incrementAndGet()
           val host = pkt.address.hostAddress ?: return@Thread
           val parsed = parseBeacon(buf.copyOf(pkt.length), host)
           if (parsed != null && parsed.sessionId != session.sessionId) {
@@ -66,7 +83,8 @@ class DiscoveryBeacon(
         val packet = buildBeacon()
         while (running) {
           try {
-            sock!!.send(DatagramPacket(packet, packet.size, InetAddress.getByName("255.255.255.255"), Ndt1.DISCOVERY_PORT))
+            sentPackets.incrementAndGet()
+          sock!!.send(DatagramPacket(packet, packet.size, InetAddress.getByName("255.255.255.255"), Ndt1.DISCOVERY_PORT))
           } catch (_: Exception) { /* best-effort */ }
           Thread.sleep(1000)
         }
@@ -80,7 +98,7 @@ class DiscoveryBeacon(
     sock = null
   }
 
-  private fun buildBeacon(): ByteArray {
+  internal fun buildBeacon(): ByteArray {
     val body = JSONObject().apply {
       put("deviceName", deviceName)
       put("deviceType", deviceType)
