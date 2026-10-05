@@ -43,7 +43,18 @@ object Ndt1Tunables {
   @Volatile var frameBytes: Int = Ndt1.FRAME_BYTES        // 512 KiB
   @Volatile var windowBytes: Int = Ndt1.WINDOW_BYTES      // 8 MiB
   @Volatile var socketBufferBytes: Int = 2 * 1024 * 1024  // 2 MiB
-  fun reset() { frameBytes = Ndt1.FRAME_BYTES; windowBytes = Ndt1.WINDOW_BYTES; socketBufferBytes = 2 * 1024 * 1024 }
+  // v1.4.2 PERF LAB: durability batch = bytes per fsync+PROGRESS cycle.
+  // Default is the measured spec (512 KiB). Larger batches keep the SAME
+  // contract — durableOffset only advances past fsynced data, PROGRESS/
+  // CREDIT never acknowledge beyond durable — with fewer storage round
+  // trips. Wire-compatible: PROGRESS cadence is receiver-side behavior.
+  @Volatile var progressCadenceBytes: Int = Ndt1.PROGRESS_CADENCE
+  fun reset() {
+    frameBytes = Ndt1.FRAME_BYTES
+    windowBytes = Ndt1.WINDOW_BYTES
+    socketBufferBytes = 2 * 1024 * 1024
+    progressCadenceBytes = Ndt1.PROGRESS_CADENCE
+  }
 }
 
 object Ndt1 {
@@ -87,15 +98,17 @@ fun encodeHeader(type: Int, payloadLen: Int, flags: Int = 0): ByteArray {
   return h
 }
 
-fun parseHeader(buf: ByteArray): NdtHeader {
-  if (buf.size < Ndt1.HEADER_SIZE) throw Ndt1Exception("short header")
-  if (readU32(buf, 0) != Ndt1.MAGIC) throw Ndt1Exception("bad magic (not NDT1)")
-  if (buf[4].toInt() != Ndt1.VERSION) throw Ndt1Exception("unsupported version ${buf[4]}")
-  val type = buf[5].toInt() and 0xff
-  val length = readU32(buf, 8)
+fun parseHeader(buf: ByteArray): NdtHeader = parseHeaderAt(buf, 0)
+
+fun parseHeaderAt(buf: ByteArray, off: Int): NdtHeader {
+  if (buf.size - off < Ndt1.HEADER_SIZE) throw Ndt1Exception("short header")
+  if (readU32(buf, off) != Ndt1.MAGIC) throw Ndt1Exception("bad magic (not NDT1)")
+  if (buf[off + 4].toInt() != Ndt1.VERSION) throw Ndt1Exception("unsupported version ${buf[off + 4]}")
+  val type = buf[off + 5].toInt() and 0xff
+  val length = readU32(buf, off + 8)
   if (length > Ndt1.MAX_PAYLOAD) throw Ndt1Exception("frame length $length exceeds cap")
-  if (crc32(buf, 0, 12) != readU32(buf, 12)) throw Ndt1Exception("header CRC mismatch")
-  return NdtHeader(type, readU16(buf, 6), length)
+  if (crc32(buf, off, off + 12) != readU32(buf, off + 12)) throw Ndt1Exception("header CRC mismatch")
+  return NdtHeader(type, readU16(buf, off + 6), length)
 }
 
 /**
@@ -103,25 +116,66 @@ fun parseHeader(buf: ByteArray): NdtHeader {
  * frames. Bounded: at most one payload buffered (<= 8 MiB + header).
  */
 class FrameDecoder {
-  private var buf = ByteArray(0)
+  // v1.4.2 turbo: single-copy accumulation. The v1.4 decoder CONCATENATED
+  // the pending buffer with every socket chunk (buf + chunk) — O(frame²/
+  // chunk) memcpy, ~9x byte amplification per DATA frame at 64 KiB reads.
+  // This decoder appends each chunk once into a growable buffer, parses
+  // complete frames out of it, and parses directly from the caller's
+  // chunk (zero copy) whenever nothing is pending. Wire format unchanged.
+  private var acc = ByteArray(64 * 1024)
+  private var accLen = 0
   var bufferedBytesHighWater = 0; private set
 
-  fun push(chunk: ByteArray): List<Pair<Int, ByteArray>> {
-    buf = if (buf.isEmpty()) chunk else buf + chunk
-    if (buf.size > bufferedBytesHighWater) bufferedBytesHighWater = buf.size
+  fun push(chunk: ByteArray): List<Pair<Int, ByteArray>> = push(chunk, chunk.size)
+
+  /** len lets callers reuse one socket-read buffer without a per-read copy. */
+  fun push(chunk: ByteArray, len: Int): List<Pair<Int, ByteArray>> {
+    if (len <= 0) return emptyList()
     val out = ArrayList<Pair<Int, ByteArray>>()
-    while (true) {
-      if (buf.size < Ndt1.HEADER_SIZE) break
-      val header = try { parseHeader(buf) } catch (e: Ndt1Exception) {
-        buf = ByteArray(0); throw e
+    if (accLen == 0) {
+      var pos = 0
+      while (true) {
+        val remaining = len - pos
+        if (remaining < Ndt1.HEADER_SIZE) break
+        val header = try { parseHeaderAt(chunk, pos) } catch (e: Ndt1Exception) {
+          accLen = 0; throw e
+        }
+        val total = Ndt1.HEADER_SIZE + header.length
+        if (remaining < total) break
+        out.add(header.type to chunk.copyOfRange(pos + Ndt1.HEADER_SIZE, pos + total))
+        pos += total
+      }
+      if (pos < len) append(chunk, pos, len)
+      return out
+    }
+    append(chunk, 0, len)
+    var consumed = 0
+    while (accLen - consumed >= Ndt1.HEADER_SIZE) {
+      val header = try { parseHeaderAt(acc, consumed) } catch (e: Ndt1Exception) {
+        accLen = 0; throw e
       }
       val total = Ndt1.HEADER_SIZE + header.length
-      if (buf.size < total) break
-      val payload = buf.copyOfRange(Ndt1.HEADER_SIZE, total)
-      buf = if (buf.size == total) ByteArray(0) else buf.copyOfRange(total, buf.size)
-      out.add(header.type to payload)
+      if (accLen - consumed < total) break
+      out.add(header.type to acc.copyOfRange(consumed + Ndt1.HEADER_SIZE, consumed + total))
+      consumed += total
+    }
+    if (consumed > 0) {
+      System.arraycopy(acc, consumed, acc, 0, accLen - consumed)
+      accLen -= consumed
     }
     return out
+  }
+
+  private fun append(chunk: ByteArray, from: Int, to: Int) {
+    val n = to - from
+    if (acc.size - accLen < n) {
+      var cap = acc.size
+      while (cap - accLen < n) cap = cap shl 1
+      acc = acc.copyOf(cap)
+    }
+    System.arraycopy(chunk, from, acc, accLen, n)
+    accLen += n
+    if (accLen > bufferedBytesHighWater) bufferedBytesHighWater = accLen
   }
 }
 

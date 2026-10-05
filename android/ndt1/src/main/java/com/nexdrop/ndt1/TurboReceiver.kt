@@ -38,6 +38,27 @@ class TurboReceiver(
     fun onPeerConnected(peerIp: String) {}
   }
 
+  /**
+   * v1.4.2 Phase 1: REAL receive-side stage timings, read after the
+   * transfer (or a drop) — fsync vs disk-write vs SHA vs socket-read-wait
+   * tells the truth about the physical bottleneck. Never a guess.
+   */
+  class ReceiverProfile {
+    @Volatile var frames = 0; internal set
+    @Volatile var bytesIn = 0L; internal set
+    @Volatile var readBlockMs = 0.0; internal set
+    @Volatile var fsyncCount = 0; internal set
+    @Volatile var fsyncTotalMs = 0.0; internal set
+    @Volatile var fsyncMaxMs = 0.0; internal set
+    @Volatile var writeTotalMs = 0.0; internal set
+    @Volatile var hashTotalMs = 0.0; internal set
+    fun textSummary(): String =
+      "RX — $frames frames · fsync $fsyncCount× ${"%.1f".format(fsyncTotalMs)}s (max ${"%.0f".format(fsyncMaxMs)} ms) · " +
+        "disk write ${"%.1f".format(writeTotalMs)}s · SHA ${"%.1f".format(hashTotalMs)}s · socket read-wait ${"%.1f".format(readBlockMs)}s"
+  }
+
+  @Volatile var lastProfile = ReceiverProfile(); private set
+
   private var server: ServerSocket? = null
   private val stopped = AtomicBoolean(false)
   @Volatile private var activePart: File? = null
@@ -109,6 +130,7 @@ class TurboReceiver(
 
   private fun handleConnection(sock: Socket) {
     userCancelled.set(false)
+    lastProfile = ReceiverProfile()
     try {
       sock.use { s ->
         val out = s.getOutputStream()
@@ -120,9 +142,11 @@ class TurboReceiver(
 
         fun readFrame(): Pair<Int, ByteArray>? {
           while (pendingFrames.isEmpty()) {
+            val t0 = System.nanoTime()
             val n = input.read(buf)
+            lastProfile.readBlockMs += (System.nanoTime() - t0) / 1e6
             if (n < 0) return null
-            decoder.push(buf.copyOf(n)).forEach(pendingFrames::addLast)
+            decoder.push(buf, n).forEach(pendingFrames::addLast) // zero-copy feed (v1.4.2)
           }
           return pendingFrames.removeFirst()
         }
@@ -166,7 +190,9 @@ class TurboReceiver(
               if (d.fileId != offer.fileId) continue@loop
               writer.write(d.offset, d.bytes, d.bytes.size)
               sinceProgress += d.bytes.size
-              if (sinceProgress >= Ndt1.PROGRESS_CADENCE) {
+              lastProfile.frames++
+              lastProfile.bytesIn += d.bytes.size.toLong()
+              if (sinceProgress >= Ndt1Tunables.progressCadenceBytes) {
                 sinceProgress = 0
                 val durable = writer.fsyncDurable()
                 synchronized(out) {
@@ -187,6 +213,7 @@ class TurboReceiver(
             FrameType.CANCEL -> { writer.close(); partFile.delete(); return }
             FrameType.COMPLETE -> {
               val durable = writer.fsyncDurable()
+              snapshotProfile(writer)
               listener.onProgress(durable, offer.sizeBytes)
               val (_, senderSha) = decodeComplete(frame.second)
               val receiverSha = writer.sha256Hex()
@@ -223,7 +250,17 @@ class TurboReceiver(
         activeWriter = null
         activePart = null
       }
+      activeWriter?.let { if (it != null) snapshotProfile(it) }
     }
+  }
+
+  /** Fold the durable-writer's real storage counters into the profile. */
+  private fun snapshotProfile(writer: DurableWriter) {
+    lastProfile.fsyncCount = writer.fsyncCount
+    lastProfile.fsyncTotalMs = writer.fsyncTotalMs
+    lastProfile.fsyncMaxMs = writer.fsyncMaxMs
+    lastProfile.writeTotalMs = writer.writeTotalMs
+    lastProfile.hashTotalMs = writer.hashTotalMs
   }
 
   private fun sendReject(out: java.io.OutputStream, reason: Int) {

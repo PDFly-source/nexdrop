@@ -1460,6 +1460,15 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       content.addView(sm(runConditions).apply {
         setTextColor(D.MUTED); gravity = Gravity.CENTER
         setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f)
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(2) }
+      })
+    }
+    // v1.4.2 Phase 1: REAL engine profile — where the seconds actually went.
+    val profileLine = if (role == Role.SEND) lastTxProfileText else lastRxProfileText
+    if (profileLine.isNotEmpty()) {
+      content.addView(sm(profileLine).apply {
+        setTextColor(D.MUTED); gravity = Gravity.CENTER
+        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f)
         layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(4) }
       })
     }
@@ -1960,9 +1969,85 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
           else -> "unavailable — beacon identity missing or stale (>15 s)"
         })
     })
+    // TRANSFER PROFILE (v1.4.2 Phase 1): REAL per-stage timings of the
+    // last transfers — the honest answer to "what is the bottleneck?".
+    // fsync high = storage paced you; read-wait high = sender/network
+    // paced you. Never a guess — measured inside the engine.
+    content.addView(sm("TRANSFER PROFILE (REAL)").apply {
+      setTextColor(D.MUTED); letterSpacing = 0.10f
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(14); bottomMargin = dp(6) }
+    })
+    content.addView(glassCard(pad = 12f).apply {
+      addView(sm(lastTxProfileText.ifEmpty { "no TX transfer yet" }).apply {
+        setTextColor(D.TEXT); setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f)
+      })
+      addView(sm(lastRxProfileText.ifEmpty { "no RX transfer yet" }).apply {
+        setTextColor(D.TEXT); setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f)
+        setPadding(0, dp(6), 0, 0)
+      })
+    })
+
+    // PERF LAB (v1.4.2 Phase 3): live, wire-compatible A/B configuration —
+    // the physical experiment matrix without rebuilding. Defaults are the
+    // measured spec; every change applies to the NEXT transfer only.
+    content.addView(sm("PERF LAB (REAL A/B)").apply {
+      setTextColor(D.MUTED); letterSpacing = 0.10f
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(14); bottomMargin = dp(6) }
+    })
+    content.addView(glassCard(pad = 12f).apply {
+      fun chips(parent: LinearLayout, label: String, opts: List<Pair<String, Long>>, current: Long, set: (Long) -> Unit) {
+        parent.addView(sm(label).apply { setTextColor(D.MUTED); setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f) })
+        val r = row().apply {
+          layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(4); bottomMargin = dp(6) }
+        }
+        opts.forEach { (t, v) -> r.addView(chipView(t, v == current) { set(v); renderDeviceTest() }) }
+        parent.addView(r)
+      }
+      chips(this, "Durability batch (fsync + PROGRESS)",
+        listOf("512 KiB" to 524288L, "1 MiB" to 1048576L, "2 MiB" to 2097152L, "4 MiB" to 4194304L),
+        Ndt1Tunables.progressCadenceBytes.toLong()) { Ndt1Tunables.progressCadenceBytes = it.toInt() }
+      chips(this, "In-flight window",
+        listOf("8 MiB" to 8388608L, "16 MiB" to 16777216L, "32 MiB" to 33554432L),
+        Ndt1Tunables.windowBytes.toLong()) { Ndt1Tunables.windowBytes = it.toInt() }
+      chips(this, "Socket buffers",
+        listOf("2 MiB" to 2097152L, "4 MiB" to 4194304L),
+        Ndt1Tunables.socketBufferBytes.toLong()) { Ndt1Tunables.socketBufferBytes = it.toInt() }
+      chips(this, "DATA frame",
+        listOf("256 KiB" to 262144L, "512 KiB" to 524288L, "1 MiB" to 1048576L),
+        Ndt1Tunables.frameBytes.toLong()) { Ndt1Tunables.frameBytes = it.toInt() }
+      addView(sm("Wire-compatible NDT1 v1 — applies to the NEXT transfer. Defaults = measured spec. " +
+          "Larger durability batches keep the same contract: acknowledged data is never beyond durable data.")
+        .apply { setTextColor(D.MUTED); setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10f); setPadding(0, dp(2), 0, 0) })
+      addView(btn("Reset to spec", "text", height = 32) { Ndt1Tunables.reset(); renderDeviceTest() }.apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(32)).apply { topMargin = dp(8) }
+      })
+    })
+
     content.addView(btn("Back to Settings", "text", height = 36) { backOr(Screen.SETTINGS) }.apply {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36))
     })
+  }
+
+  /** v1.4.2 PERF LAB chip — compact selectable toggle. */
+  private fun chipView(label: String, active: Boolean, onClick: () -> Unit): android.view.View {
+    return android.widget.TextView(this).apply {
+      text = label
+      setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f)
+      setTextColor(if (active) D.PRIMARY else D.MUTED)
+      typeface = com.nexdrop.ndt1.ui.Fonts.sora(this@MainActivity, if (active) 700 else 500)
+      letterSpacing = 0.02f
+      gravity = Gravity.CENTER
+      setPadding(dp(10), dp(6), dp(10), dp(6))
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+        marginEnd = dp(6)
+      }
+      background = android.graphics.drawable.GradientDrawable().apply {
+        cornerRadius = dp(16).toFloat()
+        setStroke(dp(1).toFloat(), if (active) D.PRIMARY else D.argb(51, D.MUTED))
+        setColor(if (active) D.argb(26, D.PRIMARY) else android.graphics.Color.TRANSPARENT)
+      }
+      setOnClickListener { onClick() }
+    }
   }
 
   // ================= FAILED (honest) =================
@@ -2109,6 +2194,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       item.state = "Done"
       queueBytesDone += item.size
       peerIp = pairing.ip
+      sender?.lastProfile?.let { lastTxProfileText = it.textSummary() }
       runOnUiThread {
         completedSha = sha256
         completedStats = stats
@@ -2199,6 +2285,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
    * never guessed; recorded once per transfer (never in the hot path).
    */
   @Volatile private var runConditions: String = ""
+  // v1.4.2 Phase 1: REAL engine profile summaries from the last transfers
+  // (sender/receiver pump stage timings — honest bottleneck evidence).
+  @Volatile private var lastTxProfileText: String = ""
+  @Volatile private var lastRxProfileText: String = ""
   private fun transferConditions(): String = try {
     val bm = registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
     val level = bm?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
@@ -2338,6 +2428,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   }
 
   override fun onComplete(file: File, sha256: String, stats: ThroughputSampler.Stats) {
+    receiver?.lastProfile?.let { lastRxProfileText = it.textSummary() }
     runOnUiThread {
       completedSha = sha256
       completedStats = stats
@@ -2502,6 +2593,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
           object : TurboSender.Listener {
             override fun onProgress(durable: Long, total: Long) = this@MainActivity.onProgress(durable, total)
             override fun onComplete(sha256: String, stats: ThroughputSampler.Stats) {
+              sender?.lastProfile?.let { lastTxProfileText = it.textSummary() }
               runOnUiThread {
                 hideTransferUi()
                 completedSha = sha256

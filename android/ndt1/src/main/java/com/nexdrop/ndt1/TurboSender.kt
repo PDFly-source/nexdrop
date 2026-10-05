@@ -35,6 +35,25 @@ class TurboSender(private val context: Context) {
     fun onError(message: String)
   }
 
+  /**
+   * v1.4.2 Phase 1: REAL per-stage timings of the last send, measured
+   * inside the pump (never displayed until the transfer ends). This is
+   * the honest bottleneck evidence for the physical A/B matrix.
+   */
+  class SenderProfile {
+    @Volatile var preHashMs = 0.0; internal set
+    @Volatile var readMs = 0.0; internal set
+    @Volatile var writeMs = 0.0; internal set
+    @Volatile var windowWaits = 0; internal set
+    @Volatile var windowWaitMs = 0.0; internal set
+    @Volatile var frames = 0; internal set
+    fun textSummary(): String =
+      "TX — pre-hash SHA ${"%.1f".format(preHashMs)}s · file read ${"%.1f".format(readMs)}s · " +
+        "socket write ${"%.1f".format(writeMs)}s · window waits $windowWaits× ${"%.1f".format(windowWaitMs)}s · $frames frames"
+  }
+
+  @Volatile var lastProfile = SenderProfile(); private set
+
   private val paused = ReentrantLock()
   private val pauseGate = paused.newCondition()
   private val cancelled = AtomicBoolean(false)
@@ -54,6 +73,7 @@ class TurboSender(private val context: Context) {
     require(!active) { "sender busy" }
     active = true
     cancelled.set(false)
+    lastProfile = SenderProfile()
     thread(name = "ndt1-sender") {
       try {
         Socket().use { sock ->
@@ -85,6 +105,7 @@ class TurboSender(private val context: Context) {
           //      authoritative — VERIFY_FAIL carries it back. ----
           val sha = MessageDigest.getInstance("SHA-256")
           val hashBuf = ByteArray(1024 * 1024)
+          val hashT0 = System.nanoTime()
           ContentResolverStream(context, uri).use { src ->
             while (true) {
               val n = src.read(hashBuf)
@@ -92,6 +113,7 @@ class TurboSender(private val context: Context) {
               sha.update(hashBuf, 0, n)
             }
           }
+          lastProfile.preHashMs = (System.nanoTime() - hashT0) / 1e6
           val shaHex = sha.digest().joinToString("") { "%02x".format(it) }
           val fileId = 1
           val offer = encodeOffer(fileId, sizeBytes, displayName, shaHex)
@@ -120,8 +142,12 @@ class TurboSender(private val context: Context) {
 
               val space = Ndt1Tunables.windowBytes - (sent - durable)
               if (space <= 0) {
-                // window full: wait for PROGRESS/CREDIT
+                // window full: wait for PROGRESS/CREDIT (timed — this is
+                // the honest credit-starvation counter for the A/B matrix)
+                val waitT0 = System.nanoTime()
                 val f = nextFrame(decoder, input, readBuf) ?: throw Ndt1Exception("peer closed mid-transfer")
+                lastProfile.windowWaits++
+                lastProfile.windowWaitMs += (System.nanoTime() - waitT0) / 1e6
                 when (f.first) {
                   FrameType.PROGRESS -> durable = decodeOffset(f.second).second
                   FrameType.CREDIT -> {} // window headroom explicit grant
@@ -131,11 +157,17 @@ class TurboSender(private val context: Context) {
                 }
               } else {
                 val want = minOf(Ndt1Tunables.frameBytes.toLong(), sizeBytes - sent).toInt()
+                val readT0 = System.nanoTime()
                 val n = src.read(readBuf, 0, want)
                 if (n <= 0) throw Ndt1Exception("source stream ended early at $sent")
                 // DATA frame: header + {fileId, offset, size, len, bytes}
                 encodeDataFrameInto(frameBuf, fileId, sent, sizeBytes, readBuf, n)
+                val writeT0 = System.nanoTime()
                 out.write(frameBuf, 0, Ndt1.HEADER_SIZE + 24 + n)
+                val writeT1 = System.nanoTime()
+                lastProfile.readMs += (writeT0 - readT0) / 1e6
+                lastProfile.writeMs += (writeT1 - writeT0) / 1e6
+                lastProfile.frames++
                 sent += n
 
                 // sampler + throttled UI (max 10 Hz — never per-chunk)
@@ -200,7 +232,7 @@ class TurboSender(private val context: Context) {
     while (true) {
       val n = input.read(buf)
       if (n < 0) return null
-      decoder.push(buf.copyOf(n)).forEach(pending::addLast)
+      decoder.push(buf, n).forEach(pending::addLast) // zero-copy feed (v1.4.2)
       if (pending.isNotEmpty()) return pending.removeFirst()
     }
   }
