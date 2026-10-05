@@ -1576,48 +1576,6 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       addView(pill("LOCAL DIRECT"))
     })
 
-    // TRUSTED DEVICES (v1.4): real local trust store, built only from
-    // SHA-256-verified transfers with beacon-known identity.
-    val trusted = trustedDevices()
-    content.addView(sm("TRUSTED DEVICES").apply {
-      setTextColor(D.MUTED); letterSpacing = 0.10f
-      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(14); bottomMargin = dp(6) }
-    })
-    content.addView(glassCard(pad = 12f).apply {
-      if (trusted.isEmpty()) {
-        addView(sm("None yet — after a verified transfer, the sender can be trusted from the completion screen"))
-      } else trusted.forEach { t ->
-        val r = row()
-        r.addView(ImageView(this@MainActivity).apply {
-          setImageResource(R.drawable.ic_shield)
-          imageTintList = android.content.res.ColorStateList.valueOf(D.OK)
-          layoutParams = LinearLayout.LayoutParams(dp(24), dp(24))
-        })
-        r.addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
-        val c = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
-        c.addView(textView(t.name, 13f, D.TEXT, 700))
-        c.addView(sm("trusted " + HistoryStore.dayLabel(t.atMs)))
-        r.addView(c)
-        r.addView(btn("Remove", "text", height = 34) { untrustDevice(t.devid); toast("Trust removed"); render() }.apply {
-          layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(34))
-        })
-        addView(r)
-        addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(6)) })
-      }
-    })
-
-    // HONEST CAPABILITIES (v1.4 matrix): what Android genuinely allows.
-    content.addView(sm("CAPABILITIES").apply {
-      setTextColor(D.MUTED); letterSpacing = 0.10f
-      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(14); bottomMargin = dp(6) }
-    })
-    content.addView(glassCard(pad = 12f).apply {
-      srow(this, R.drawable.ic_wifi, "Nearby discovery", "Available — local UDP, no internet")
-      srow(this, R.drawable.ic_swap, "Group drop", "Not supported yet — one receiver per session")
-      srow(this, R.drawable.ic_dev, "NFC pairing", "Unavailable — Android Beam was removed in Android 10+")
-      srow(this, R.drawable.ic_wifi, "Hotspot mode", "Unavailable — Android reserves tethering control to system apps")
-    })
-
     // Recent transfers — REAL history, newest first
     val history = HistoryStore.list(this).sortedByDescending { it.atMs }
     content.addView(sm("Recent transfers").apply {
@@ -1661,9 +1619,54 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       setting(R.drawable.ic_bell, "Notifications", if (Build.VERSION.SDK_INT >= 33 && hasPermission(Manifest.permission.POST_NOTIFICATIONS)) "On" else "Tap to allow") {
         if (Build.VERSION.SDK_INT >= 33) askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
       }
-      setting(R.drawable.ic_sun, "Appearance", "Dark")
+      setting(R.drawable.ic_sun, "Appearance", themePref().replaceFirstChar { it.uppercase() }) { go(Screen.SETTINGS) }
       setting(R.drawable.ic_spd, "Diagnostics", "Open") { go(Screen.DEVICE_TEST) }
     })
+    // v1.4 sections follow the v1.3.0 core — below the fold on small
+    // screens, reachable by scroll. Core content (recent transfers +
+    // settings shortcuts) stays where the smoke and the mockup expect it.
+    // TRUSTED DEVICES (v1.4): real local trust store, built only from
+    // SHA-256-verified transfers with beacon-known identity.
+    val trusted = trustedDevices()
+    content.addView(sm("TRUSTED DEVICES").apply {
+      setTextColor(D.MUTED); letterSpacing = 0.10f
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(14); bottomMargin = dp(6) }
+    })
+    content.addView(glassCard(pad = 12f).apply {
+      if (trusted.isEmpty()) {
+        addView(sm("None yet — after a verified transfer, the sender can be trusted from the completion screen"))
+      } else trusted.forEach { t ->
+        val r = row()
+        r.addView(ImageView(this@MainActivity).apply {
+          setImageResource(R.drawable.ic_shield)
+          imageTintList = android.content.res.ColorStateList.valueOf(D.OK)
+          layoutParams = LinearLayout.LayoutParams(dp(24), dp(24))
+        })
+        r.addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
+        val c = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
+        c.addView(textView(t.name, 13f, D.TEXT, 700))
+        c.addView(sm("trusted " + HistoryStore.dayLabel(t.atMs)))
+        r.addView(c)
+        r.addView(btn("Remove", "text", height = 34) { untrustDevice(t.devid); toast("Trust removed"); render() }.apply {
+          layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(34))
+        })
+        addView(r)
+        addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(6)) })
+      }
+    })
+
+    // HONEST CAPABILITIES (v1.4 matrix): what Android genuinely allows.
+    content.addView(sm("CAPABILITIES").apply {
+      setTextColor(D.MUTED); letterSpacing = 0.10f
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(14); bottomMargin = dp(6) }
+    })
+    content.addView(glassCard(pad = 12f).apply {
+      srow(this, R.drawable.ic_wifi, "Nearby discovery", "Available — local UDP, no internet")
+      srow(this, R.drawable.ic_swap, "Group drop", "Not supported yet — one receiver per session")
+      srow(this, R.drawable.ic_dev, "NFC pairing", "Unavailable — Android Beam was removed in Android 10+")
+      srow(this, R.drawable.ic_wifi, "Hotspot mode", "Unavailable — Android reserves tethering control to system apps")
+    })
+
     nav(2)
   }
 
