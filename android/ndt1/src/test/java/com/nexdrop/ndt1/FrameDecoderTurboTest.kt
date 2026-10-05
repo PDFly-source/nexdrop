@@ -80,11 +80,17 @@ class FrameDecoderTurboTest {
   @Test
   fun `high water stays bounded and bad magic resets the accumulator`() {
     val d = FrameDecoder()
-    // partial frame first (header only — waits for its payload)
-    assertTrue(d.push(encodeHeader(FrameType.DATA, 1 shl 20).copyOf(16)).isEmpty())
-    assertEquals(1, d.push(frame(FrameType.PING, ByteArray(4))).size)
-    // a pending partial frame is at most a header+body of ONE frame
-    assertTrue(d.bufferedBytesHighWater in 16..(16 + 4))
+    // partial HEADER (8 of 16 bytes) — decoder buffers, emits nothing
+    val ping = frame(FrameType.PING, byteArrayOf(1, 2, 3, 4))
+    assertTrue(d.push(ping.copyOf(8)).isEmpty())
+    // remaining bytes complete PING; a second frame rides the same chunk
+    val pong = frame(FrameType.PONG, byteArrayOf(9))
+    val out = d.push(ping.copyOfRange(8, ping.size) + pong)
+    assertEquals(2, out.size)
+    assertEquals(FrameType.PING, out[0].first)
+    assertEquals(FrameType.PONG, out[1].first)
+    // pending accumulation is bounded: both buffered frames, nothing more
+    assertTrue(d.bufferedBytesHighWater in 8..(ping.size + pong.size))
 
     val bad = FrameDecoder()
     try {
