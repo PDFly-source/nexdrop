@@ -235,7 +235,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     return id
   }
 
-  fun deviceLabel(): String = Build.MODEL
+  /** Real device name shown to other devices (QR + NDD1 beacon). */
+  fun deviceLabel(): String =
+    getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_DEVICE_NAME, null)?.takeIf { it.isNotBlank() } ?: Build.MODEL
 
   private fun autoAcceptPref(): Boolean =
     getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_AUTO_ACCEPT, false)
@@ -354,6 +356,28 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   // ---- keep-screen-awake (real window flag, user preference) ----
   @Volatile private var transferActive = false
 
+  /** v1.4 Phase 6 — appearance: system (default) / light / dark. */
+  private fun themePref(): String =
+    getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_THEME, "system") ?: "system"
+
+  private fun systemIsLightNow(): Boolean {
+    val m = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+    return m != android.content.res.Configuration.UI_MODE_NIGHT_YES
+  }
+
+  private fun themeIsLight(): Boolean = when (themePref()) {
+    "light" -> true
+    "dark" -> false
+    else -> systemIsLightNow()
+  }
+
+  /** Apply the theme before ANY view/token read; also repaint system bars. */
+  private fun applyThemeNow() {
+    D.apply(themeIsLight())
+    window.statusBarColor = D.BG
+    window.navigationBarColor = D.BG
+  }
+
   private fun keepAwakePref(): Boolean =
     getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_KEEP_AWAKE, true)
 
@@ -417,8 +441,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    window.statusBarColor = D.BG
-    window.navigationBarColor = D.BG
+    applyThemeNow()
     val welcomed = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_WELCOMED, false)
     screen = if (welcomed) Screen.HOME else Screen.WELCOME
     handleShareIntent(intent)
@@ -467,6 +490,13 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     if (added.isEmpty()) { toast("Could not read the shared item(s)"); return }
     goRoot(Screen.SEND)
     toast(if (added.size == 1) "Added ${added[0]} to the send queue" else "Added ${added.size} files to the send queue")
+  }
+
+  override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+    super.onConfigurationChanged(newConfig)
+    // System dark/light flipped while we're alive (uiMode is in
+    // configChanges, so no recreation): re-skin only when following system.
+    if (themePref() == "system") { applyThemeNow(); render() }
   }
 
   override fun onDestroy() {
@@ -976,7 +1006,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     qrExpiresAtMs = System.currentTimeMillis() + Ndt1.AUTH_TTL_MS
     screen = Screen.RECEIVE
     render()
-    showQr(QrPairing.encode(session, endpoint.ip, port, Build.MODEL))
+    showQr(QrPairing.encode(session, endpoint.ip, port, deviceLabel()))
     startSessionBeacon(session, port) // nearby senders can now find this session without the QR
     if (Build.VERSION.SDK_INT >= 33 && !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
       askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
@@ -1197,9 +1227,20 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     sheet.addView(transportRow)
 
     val btns = row().apply { setPadding(0, dp(12), 0, dp(6)) }
+    // Honest storage check (Phase 8): real free bytes on the REAL save dir.
+    val dlDir = File(getExternalFilesDir(null) ?: filesDir, "downloads")
+    val availBytes = try { android.os.StatFs(dlDir.path).availableBytes } catch (_: Exception) { -1L }
+    val short = availBytes >= 0 && availBytes < offer.sizeBytes
+    if (short) sheet.addView(sm(
+      "Not enough storage: needs ${SpeedFormat.bytesText(offer.sizeBytes)}, " +
+      "only ${SpeedFormat.bytesText(availBytes)} free. Free up space and ask the sender to try again."
+    ).apply { setTextColor(D.AMBER); setPadding(dp(18), dp(6), dp(18), 0) })
     btns.addView(btn("DECLINE", "outline") { decide(false) })
     btns.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
-    btns.addView(btn("ACCEPT", "primary", weight = 1.4f) { decide(true) })
+    btns.addView(btn("ACCEPT", "primary", weight = 1.4f) {
+      if (short) { toast("Not enough storage for this file"); decide(false) }
+      else decide(true)
+    })
     sheet.addView(btns)
 
     // Sheet bottom-anchored INSIDE a ScrollView: when a long filename / large
@@ -1412,7 +1453,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     content.addView(statRow)
 
     // PEAK (Phase 5): the engine's measured sustained peak — never a burst.
-    val peakRow = row().apply { bottomMargin = dp(8) }
+    val peakRow = row().apply { (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(8) }
     peakRow.addView(glassCard(pad = 14f).apply {
       layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
       addView(sm("Peak (sustained)"))
@@ -1705,6 +1746,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     section("CONNECTION")
     content.addView(glassCard(pad = 12f).apply {
       srow(this, R.drawable.ic_wifi, "Native Local", if (localOk) "On" else "Unavailable") { if (localOk) go(Screen.DEVICES) else go(Screen.UNAVAILABLE) }
+      srow(this, R.drawable.ic_wifi, "Wi-Fi / Hotspot", "Auto — same network")
+      srow(this, R.drawable.ic_file, "Save location", "App storage · downloads")
       srow(this, R.drawable.ic_swap, "PWA fallback", "Auto") { openPwa() }
       srow(this, R.drawable.ic_swap, "Preferred transport", "Auto — NDT1 → PWA")
       srow(this, R.drawable.ic_dev, "Connection status", if (peerIp != null) "Connected" else "Not connected")
@@ -1734,6 +1777,20 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       srow(this, R.drawable.ic_bell, "Transfer notifications", if (notifOn) "On" else "Tap to allow") {
         if (Build.VERSION.SDK_INT >= 33) askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
       }
+    })
+
+    section("PREFERENCES")
+    content.addView(glassCard(pad = 12f).apply {
+      srow(this, R.drawable.ic_sun, "Appearance", themePref().replaceFirstChar { it.uppercase() }) {
+        val next = when (themePref()) { "system" -> "light"; "light" -> "dark"; else -> "system" }
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_THEME, next).apply()
+        applyThemeNow(); render()
+        toast(when (next) {
+          "system" -> "Following system dark/light"
+          "light" -> "Light theme"
+          else -> "Dark theme" })
+      }
+      srow(this, R.drawable.ic_gear, "Language", "Follows system")
     })
 
     section("STORAGE")
@@ -1767,6 +1824,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     content.addView(glassCard(pad = 12f).apply {
       srow(this, R.drawable.ic_shield, "Direct device-to-device", "On — local network only")
       srow(this, R.drawable.ic_shield, "SHA-256 verification", "On")
+      srow(this, R.drawable.ic_dev, "Trusted devices", if (trustedDevices().isEmpty()) "None yet" else "${trustedDevices().size} trusted") { go(Screen.DEVICES) }
+      srow(this, R.drawable.ic_qr, "QR pairing expiry", "${Ndt1.AUTH_TTL_MS / 60000} minutes — single-use token")
+      srow(this, R.drawable.ic_lock, "App lock", "Not in v1.4") {
+        toast("App lock is planned for a later version — not implemented yet")
+      }
       srow(this, R.drawable.ic_dev, "Cloud upload", "None")
       srow(this, R.drawable.ic_dev, "Accounts", "Not required")
       srow(this, R.drawable.ic_swap, "Clear session data", "Clear") {
@@ -1775,9 +1837,45 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       }
     })
 
-    section("APPEARANCE")
+    section("DEVICE")
     content.addView(glassCard(pad = 12f).apply {
-      srow(this, R.drawable.ic_sun, "Theme", "Dark — NexDrop premium")
+      srow(this, R.drawable.ic_dev, "Device name", deviceLabel()) {
+        val input = EditText(this@MainActivity).apply {
+          setText(deviceLabel()); setTextColor(D.TEXT); setHintTextColor(D.MUTED)
+          setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        AlertDialog.Builder(this@MainActivity, android.R.style.Theme_Material_Dialog)
+          .setTitle("Device name")
+          .setView(input)
+          .setPositiveButton("Save") { _, _ ->
+            val nm = input.text.toString().trim().take(40)
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+              .putString(KEY_DEVICE_NAME, nm.ifBlank { null }).apply()
+            toast("Device name updated — QR and nearby discovery now show it")
+            render()
+          }
+          .setNegativeButton("Cancel", null).show()
+      }
+      srow(this, R.drawable.ic_qr, "Visibility", "Discoverable while Receive or Send is open")
+      srow(this, R.drawable.ic_bell, "Discovery status",
+        when { beaconSession != null -> "Advertising — receivers can find you"
+               beaconIdentity != null -> "Browsing — looking for receivers"
+               else -> "Idle — not discoverable" })
+    })
+
+    section("SYSTEM")
+    content.addView(glassCard(pad = 12f).apply {
+      srow(this, R.drawable.ic_file, "Storage", "Downloads · App storage") { /* STORAGE section below has the live numbers */ }
+      srow(this, R.drawable.ic_check, "Clear cache", "App cache only — transfers untouched") {
+        val before = cacheDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+        try { cacheDir.deleteRecursively(); cacheDir.mkdirs() } catch (_: Exception) {}
+        toast("Cache cleared — ${SpeedFormat.bytesText(before)}")
+        render()
+      }
+      srow(this, R.drawable.ic_spd, "Diagnostics", "Device Test") { go(Screen.DEVICE_TEST) }
+      srow(this, R.drawable.ic_swap, "Check for updates", "GitHub releases") {
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/PDFly-source/nexdrop/releases"))) } catch (_: Exception) {}
+      }
     })
 
     section("DIAGNOSTICS")
@@ -2466,7 +2564,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     private const val KEY_AUTO_RESUME = "auto_resume"
     private const val KEY_AUTO_ACCEPT = "auto_accept"
     private const val KEY_DEVICE_ID = "device_id"
+    private const val KEY_DEVICE_NAME = "device_name"
     private const val KEY_TRUSTED = "trusted_devices"
+    private const val KEY_THEME = "theme" // "system" | "light" | "dark"
     private const val REQ_NOTIF = 2
     private const val REQ_CAMERA = 3
   }

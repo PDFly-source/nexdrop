@@ -38,24 +38,56 @@ import com.nexdrop.ndt1.R
  *   --ok #35D07F  --t #F5F7FA  --m #9AA6B2  --ln rgba(255,255,255,.08)
  *   fonts: Sora (display, 500/600/700) + Manrope (body, 400-700)
  */
+/**
+ * Design tokens. Theme-aware (v1.4 Phase 6): the values are MUTABLE so a
+ * theme switch re-skins the whole programmatic UI on the next render —
+ * every view reads tokens at build/draw time, nothing is baked in.
+ * DARK is the shipped NexDrop look (unchanged); LIGHT is a proper high-
+ * contrast inverse — no white-on-white, no dark-on-dark.
+ */
 object D {
-  const val BG = 0xFF070A10.toInt()
-  const val SURFACE = 0xFF101722.toInt()
-  const val ELEVATED = 0xFF151E2B.toInt()
-  const val PRIMARY = 0xFF18D6C5.toInt()
-  const val PRIMARY_LIGHT = 0xFF34F0DE.toInt()
-  const val BLUE = 0xFF4C8DFF.toInt()
-  const val BLUE_LIGHT = 0xFF3F86F7.toInt()
-  const val OK = 0xFF35D07F.toInt()
-  const val TEXT = 0xFFF5F7FA.toInt()
-  const val MUTED = 0xFF9AA6B2.toInt()
-  const val NAV_IDLE = 0xFF6B7785.toInt()
-  const val BTN_TEXT = 0xFF021A1A.toInt()
-  const val DANGER = 0xFFFF7A7A.toInt()
-  const val AMBER = 0xFFD97706.toInt()
-  const val RED = 0xFFB91C1C.toInt()
-  const val QR_DARK = 0xFF0B1220.toInt()
-  const val LINE = 0x14FFFFFF // rgba(255,255,255,.08)
+  var BG = 0xFF070A10.toInt()
+  var SURFACE = 0xFF101722.toInt()
+  var ELEVATED = 0xFF151E2B.toInt()
+  var PRIMARY = 0xFF18D6C5.toInt()
+  var PRIMARY_LIGHT = 0xFF34F0DE.toInt()
+  var BLUE = 0xFF4C8DFF.toInt()
+  var BLUE_LIGHT = 0xFF3F86F7.toInt()
+  var OK = 0xFF35D07F.toInt()
+  var TEXT = 0xFFF5F7FA.toInt()
+  var MUTED = 0xFF9AA6B2.toInt()
+  var NAV_IDLE = 0xFF6B7785.toInt()
+  var BTN_TEXT = 0xFF021A1A.toInt()
+  var DANGER = 0xFFFF7A7A.toInt()
+  var AMBER = 0xFFD97706.toInt()
+  var RED = 0xFFB91C1C.toInt()
+  var QR_DARK = 0xFF0B1220.toInt() // QR modules are ALWAYS dark-on-white
+  var LINE = 0x14FFFFFF // rgba(255,255,255,.08) on dark; inverted for light
+
+  var isLight = false
+
+  /** Switch palette. Call before any view is built (render re-skins). */
+  fun apply(light: Boolean) {
+    isLight = light
+    if (!light) {
+      BG = 0xFF070A10.toInt(); SURFACE = 0xFF101722.toInt(); ELEVATED = 0xFF151E2B.toInt()
+      PRIMARY = 0xFF18D6C5.toInt(); PRIMARY_LIGHT = 0xFF34F0DE.toInt()
+      BLUE = 0xFF4C8DFF.toInt(); BLUE_LIGHT = 0xFF3F86F7.toInt()
+      OK = 0xFF35D07F.toInt(); TEXT = 0xFFF5F7FA.toInt(); MUTED = 0xFF9AA6B2.toInt()
+      NAV_IDLE = 0xFF6B7785.toInt(); BTN_TEXT = 0xFF021A1A.toInt()
+      DANGER = 0xFFFF7A7A.toInt(); AMBER = 0xFFD97706.toInt(); RED = 0xFFB91C1C.toInt()
+      LINE = 0x14FFFFFF
+    } else {
+      BG = 0xFFF4F6F8.toInt(); SURFACE = 0xFFFFFFFF.toInt(); ELEVATED = 0xFFEAEEF2.toInt()
+      // darker teal/blue/green for WCAG-grade contrast on light surfaces
+      PRIMARY = 0xFF0FA394.toInt(); PRIMARY_LIGHT = 0xFF18D6C5.toInt()
+      BLUE = 0xFF2E66D9.toInt(); BLUE_LIGHT = 0xFF4C8DFF.toInt()
+      OK = 0xFF15803D.toInt(); TEXT = 0xFF0B1220.toInt(); MUTED = 0xFF5B6770.toInt()
+      NAV_IDLE = 0xFF8B97A3.toInt(); BTN_TEXT = 0xFF021A1A.toInt()
+      DANGER = 0xFFDC2626.toInt(); AMBER = 0xFFB45309.toInt(); RED = 0xFFB91C1C.toInt()
+      LINE = 0x14000000
+    }
+  }
 
   fun argb(a: Int, rgb: Int): Int = (a shl 24) or (rgb and 0xFFFFFF)
 }

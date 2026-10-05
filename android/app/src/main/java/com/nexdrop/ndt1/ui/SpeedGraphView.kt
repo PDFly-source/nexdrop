@@ -20,7 +20,7 @@ class SpeedGraphView(context: Context) : View(context) {
   private var maxSamples = 72               // ~ last 72 ticks (caller-paced)
   private val paintLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     style = Paint.Style.STROKE
-    strokeWidth = dp(2).toFloat()
+    strokeWidth = context.dp(2).toFloat()
     strokeCap = Paint.Cap.ROUND
     strokeJoin = Paint.Join.ROUND
     color = D.PRIMARY
@@ -36,7 +36,7 @@ class SpeedGraphView(context: Context) : View(context) {
   }
   private val paintText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = D.MUTED
-    textSize = dp(9).toFloat()
+    textSize = context.dp(9).toFloat()
     isFakeBoldText = false
   }
 
@@ -75,6 +75,6 @@ class SpeedGraphView(context: Context) : View(context) {
     c.drawPath(fill, paintFill)
     c.drawPath(path, paintLine)
     // honest max label — the CURRENT graph scale, real sample maximum
-    c.drawText(UiSpeed.speedText(max.toDouble()), dp(2).toFloat(), dp(10).toFloat(), paintText)
+    c.drawText(UiSpeed.speedText(max.toDouble()), context.dp(2).toFloat(), context.dp(10).toFloat(), paintText)
   }
 }
