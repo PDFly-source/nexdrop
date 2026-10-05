@@ -21,6 +21,10 @@ class DiscoveryBeacon(
   private val deviceType: String, // "android" | "tv" | "desktop"
   private val port: Int,
   private val session: SessionToken,
+  // v1.4 (control-plane only, never the transfer engine): stable per-install
+  // identity for Trusted Devices. Identity-only beacons (empty session) omit
+  // token/sessionId — they advertise PRESENCE, not a pairable endpoint.
+  private val deviceId: String = "",
 ) {
   private var sock: DatagramSocket? = null
   private var running = false
@@ -29,9 +33,10 @@ class DiscoveryBeacon(
   data class DiscoveredDevice(
     val address: String, val port: Int, val deviceName: String,
     val deviceType: String, val sessionId: String, val token: String,
+    val deviceId: String = "",
   )
 
-  fun start(onPeers: (List<DiscoveredDevice>) -> Unit) {
+  fun start(onPeers: (List<DiscoveredDevice>) -> Unit, advertise: Boolean = true) {
     running = true
     sock = DatagramSocket(Ndt1.DISCOVERY_PORT).also { it.broadcast = true }
     // listener thread
@@ -44,22 +49,29 @@ class DiscoveryBeacon(
           val host = pkt.address.hostAddress ?: return@Thread
           val parsed = parseBeacon(buf.copyOf(pkt.length), host)
           if (parsed != null && parsed.sessionId != session.sessionId) {
-            seen[parsed.sessionId] = parsed
+            // identity-only beacons (no token) share the "" key with each
+            // other — key by address+devid so each identity peer stays
+            // distinct in the seen table.
+            val key = if (parsed.token.isEmpty()) "id:${parsed.address}:${parsed.deviceId}" else parsed.sessionId
+            seen[key] = parsed
             onPeers(seen.values.toList())
           }
         } catch (_: Exception) { /* best-effort */ }
       }
     }.start()
-    // advertiser thread, 1 Hz
-    Thread {
-      val packet = buildBeacon()
-      while (running) {
-        try {
-          sock!!.send(DatagramPacket(packet, packet.size, InetAddress.getByName("255.255.255.255"), Ndt1.DISCOVERY_PORT))
-        } catch (_: Exception) { /* best-effort */ }
-        Thread.sleep(1000)
-      }
-    }.start()
+    // advertiser thread, 1 Hz (only when this side offers a real session;
+    // browse-only senders still listen but advertise nothing pairable)
+    if (advertise) {
+      Thread {
+        val packet = buildBeacon()
+        while (running) {
+          try {
+            sock!!.send(DatagramPacket(packet, packet.size, InetAddress.getByName("255.255.255.255"), Ndt1.DISCOVERY_PORT))
+          } catch (_: Exception) { /* best-effort */ }
+          Thread.sleep(1000)
+        }
+      }.start()
+    }
   }
 
   fun stop() {
@@ -75,8 +87,11 @@ class DiscoveryBeacon(
       put("capabilities", JSONObject().apply {
         put("lanTcp", true); put("wifiDirect", false); put("nativeLocal", true); put("webrtc", false)
       })
-      put("sessionId", session.sessionId)
-      put("token", session.base64Url)
+      if (deviceId.isNotEmpty()) put("devid", deviceId)
+      if (session.base64Url.isNotEmpty()) {
+        put("sessionId", session.sessionId)
+        put("token", session.base64Url)
+      }
       put("nonce", Handshake.randomNonce().toString())
     }.toString().toByteArray(Charsets.UTF_8)
     val pkt = ByteArray(12 + body.size)
@@ -98,7 +113,7 @@ class DiscoveryBeacon(
     val body = JSONObject(String(pkt, 12, pkt.size - 12, Charsets.UTF_8))
     return DiscoveredDevice(
       from, port, body.optString("deviceName"), body.optString("deviceType"),
-      body.optString("sessionId"), body.optString("token"),
+      body.optString("sessionId"), body.optString("token"), body.optString("devid"),
     )
   }
 }

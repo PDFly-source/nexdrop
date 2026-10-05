@@ -167,6 +167,19 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   @Volatile private var reconnecting = false
   @Volatile private var acceptedOfferKey: String? = null
 
+  // ---- NEARBY DEVICES (v1.4): REAL NDD1 discovery only. One beacon socket
+  //      at a time: the receiver advertises a real pairable session; a
+  //      sender on the Send screen advertises an identity-only beacon
+  //      (no token — never claims to be pairable) while listening for
+  //      receivers. No fake peers, no fake distance, no fake names. ----
+  private var beaconSession: DiscoveryBeacon? = null   // receiver mode: advertise token + listen
+  private var beaconIdentity: DiscoveryBeacon? = null  // send mode: identity presence + listen
+  private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+  private data class SeenPeer(val dev: DiscoveryBeacon.DiscoveredDevice, val atMs: Long)
+  private val identityByIp = java.util.concurrent.ConcurrentHashMap<String, SeenPeer>()
+  private var nearbySignature = ""
+  private var lastTrustPromptDevid: String? = null
+
   private fun queueTotalBytes(): Long = sendQueue.sumOf { it.size }
 
   private fun addToQueue(uri: Uri, displayOverride: String?) {
@@ -207,6 +220,136 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   private fun autoResumePref(): Boolean =
     getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_AUTO_RESUME, true)
+
+  // ================= v1.4 NEARBY DEVICES + TRUSTED DEVICES =================
+
+  /** Stable per-install identity (random UUID, local only, never leaves the LAN beacon). */
+  private fun deviceIdPref(): String {
+    val sp = getSharedPreferences(PREFS, MODE_PRIVATE)
+    var id = sp.getString(KEY_DEVICE_ID, null)
+    if (id == null) {
+      id = java.util.UUID.randomUUID().toString()
+      sp.edit().putString(KEY_DEVICE_ID, id).apply()
+    }
+    return id
+  }
+
+  fun deviceLabel(): String = Build.MODEL
+
+  private fun autoAcceptPref(): Boolean =
+    getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_AUTO_ACCEPT, false)
+
+  private fun acquireMulticastLock() {
+    if (multicastLock?.isHeld == true) return
+    val wm = applicationContext.getSystemService(WIFI_SERVICE) as? android.net.wifi.WifiManager
+    multicastLock = wm?.createMulticastLock("nexdrop-discovery")?.apply {
+      setReferenceCounted(false); acquire()
+    }
+  }
+
+  private fun releaseMulticastLock() {
+    try { multicastLock?.release() } catch (_: Exception) {}
+    multicastLock = null
+  }
+
+  /** Beacon packet handler — updates the real peer table from real packets. */
+  private fun onBeaconPeers(peers: List<DiscoveryBeacon.DiscoveredDevice>) {
+    runOnUiThread {
+      val now = System.currentTimeMillis()
+      peers.forEach { dev -> if (dev.deviceId != deviceIdPref()) identityByIp[dev.address] = SeenPeer(dev, now) }
+      identityByIp.keys.removeAll { now - (identityByIp[it]?.atMs ?: 0) > 15_000 } // beacon is 1 Hz; stale = gone
+      if (screen == Screen.SEND) {
+        val sig = pairablePeers().joinToString("|") { "${it.dev.deviceName}@${it.dev.address}" }
+        if (sig != nearbySignature) { nearbySignature = sig; render() }
+      }
+    }
+  }
+
+  /** Receivers with a REAL pairable token — identity-only peers are excluded. */
+  private fun pairablePeers(): List<SeenPeer> =
+    identityByIp.values
+      .filter { it.dev.token.isNotEmpty() && it.dev.sessionId.isNotEmpty() && nowFresh(it) }
+      .sortedBy { it.dev.deviceName.lowercase() }
+
+  private fun nowFresh(p: SeenPeer): Boolean =
+    System.currentTimeMillis() - p.atMs <= 15_000
+
+  /** Sender-side presence beacon: identity only — honest, never pairable. */
+  private fun startIdentityBeacon() {
+    if (beaconIdentity != null || beaconSession != null) return // one socket (port is fixed)
+    try {
+      acquireMulticastLock()
+      beaconIdentity = DiscoveryBeacon(deviceLabel(), "android", 0,
+        SessionToken(ByteArray(0), "", ""), deviceIdPref()).also {
+        it.start({ peers -> onBeaconPeers(peers) })
+      }
+    } catch (_: Exception) { beaconIdentity = null } // honest: QR pairing still works
+  }
+
+  private fun stopIdentityBeacon() {
+    beaconIdentity?.stop(); beaconIdentity = null
+    if (beaconSession == null) releaseMulticastLock()
+    // NOTE: never wipe identity-only peers here — on a receiving device those
+    // ARE the live sender identities (accept sheet + trusted auto-accept).
+    // Staleness is handled by the 15 s prune + nowFresh() checks.
+  }
+
+  /** Receiver advertisement: real session token — this side IS pairable. */
+  private fun startSessionBeacon(session: SessionToken, port: Int) {
+    if (beaconSession != null) return
+    try {
+      acquireMulticastLock()
+      beaconSession = DiscoveryBeacon(deviceLabel(), "android", port, session, deviceIdPref()).also {
+        it.start({ peers -> onBeaconPeers(peers) })
+      }
+    } catch (_: Exception) { beaconSession = null } // QR pairing unaffected
+  }
+
+  private fun stopSessionBeacon() {
+    beaconSession?.stop(); beaconSession = null
+    if (beaconIdentity == null) releaseMulticastLock()
+  }
+
+  /** Pair to a REAL discovered receiver — same path as a scanned QR. */
+  private fun pairFromDiscovery(p: SeenPeer) {
+    if (sendQueue.isEmpty()) { toast("Choose files first — then tap the device again"); return }
+    val dev = p.dev
+    val pairing = QrPairing.Pairing(dev.address, dev.port, dev.sessionId, dev.token, expired = false)
+    toast("Connecting to ${dev.deviceName}…")
+    sendQueueStart(pairing)
+  }
+
+  // ---- Trusted devices: local, written ONLY after a SHA-256-verified transfer ----
+  data class TrustedDevice(val devid: String, val name: String, val atMs: Long)
+
+  private fun trustedDevices(): List<TrustedDevice> = try {
+    val arr = org.json.JSONArray(getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_TRUSTED, "[]"))
+    (0 until arr.length()).map { i ->
+      val o = arr.getJSONObject(i)
+      TrustedDevice(o.getString("devid"), o.optString("name"), o.optLong("atMs"))
+    }
+  } catch (_: Exception) { emptyList() }
+
+  private fun isTrusted(devid: String): Boolean =
+    devid.isNotEmpty() && trustedDevices().any { it.devid == devid }
+
+  private fun trustDevice(devid: String, name: String) {
+    if (devid.isEmpty()) return
+    val list = trustedDevices().filter { it.devid != devid } + TrustedDevice(devid, name, System.currentTimeMillis())
+    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+      .putString(KEY_TRUSTED, org.json.JSONArray(list.map { org.json.JSONObject().put("devid", it.devid).put("name", it.name).put("atMs", it.atMs) }).toString())
+      .apply()
+  }
+
+  private fun untrustDevice(devid: String) {
+    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+      .putString(KEY_TRUSTED, org.json.JSONArray(trustedDevices().filter { it.devid != devid }.map { org.json.JSONObject().put("devid", it.devid).put("name", it.name).put("atMs", it.atMs) }).toString())
+      .apply()
+  }
+
+  /** Resolve the live sender's identity from the beacon table (real packets). */
+  private fun peerIdentity(): DiscoveryBeacon.DiscoveredDevice? =
+    peerIp?.let { ip -> identityByIp[ip]?.takeIf { nowFresh(it) }?.dev }
   // ---- keep-screen-awake (real window flag, user preference) ----
   @Volatile private var transferActive = false
 
@@ -271,6 +414,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     window.navigationBarColor = D.BG
     val welcomed = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_WELCOMED, false)
     screen = if (welcomed) Screen.HOME else Screen.WELCOME
+    handleShareIntent(intent)
     // Mockup navigation: BACK returns to Home from any sub-screen (Android
     // convention for a hub activity); it never loses an active transfer.
     // System Back follows the SAME stack as the on-screen back affordance:
@@ -287,8 +431,42 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     render()
   }
 
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    handleShareIntent(intent)
+  }
+
+  /**
+   * Android Share Sheet (v1.4): ACTION_SEND / ACTION_SEND_MULTIPLE uris go
+   * through the SAME queue as hand-picked files — real SAF content uris,
+   * real sizes, real engine flow. Text-only shares are not silently
+   * converted: they are answered honestly (the in-app send-text flow is
+   * on the Send screen).
+   */
+  private fun handleShareIntent(intent: Intent?) {
+    val action = intent?.action ?: return
+    if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
+    val uris: List<Uri> = if (action == Intent.ACTION_SEND) {
+      listOfNotNull(androidx.core.content.IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
+    } else {
+      (androidx.core.content.IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) ?: ArrayList()).filterNotNull()
+    }
+    if (uris.isEmpty()) { toast("Nothing shareable in that request"); return }
+    val added = ArrayList<String>()
+    uris.forEach { u ->
+      val name = queryName(u)
+      if (name != null) { addToQueue(u, name); added.add(name) }
+    }
+    if (added.isEmpty()) { toast("Could not read the shared item(s)"); return }
+    goRoot(Screen.SEND)
+    toast(if (added.size == 1) "Added ${added[0]} to the send queue" else "Added ${added.size} files to the send queue")
+  }
+
   override fun onDestroy() {
     ticker?.let { ui.removeCallbacks(it) }
+    stopIdentityBeacon()
+    stopSessionBeacon()
+    releaseMulticastLock()
     super.onDestroy()
   }
 
@@ -306,6 +484,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       val h = dp(10); val v = dp(16)
       setPadding(v, h, v, h)
     }
+    if (screen == Screen.SEND || screen == Screen.TRANSFER) startIdentityBeacon()
     when (screen) {
       Screen.WELCOME -> renderWelcome()
       Screen.HOME -> renderHome()
@@ -320,6 +499,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       Screen.SETTINGS -> renderSettings()
       Screen.DEVICE_TEST -> renderDeviceTest()
     }
+    // Nearby presence: the sender advertises its identity (and listens for
+    // receivers) while on the Send/Transfer screens, so a receiving device
+    // can show a REAL sender name and honor trusted auto-accept. Nowhere else.
+    if (screen != Screen.SEND && screen != Screen.TRANSFER) stopIdentityBeacon()
     val scroll = ScrollView(this).apply {
       isVerticalScrollBarEnabled = false
       addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -672,6 +855,48 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     }
     content.addView(chips)
 
+    // NEARBY DEVICES (v1.4): real NDD1 discovery — receivers running on this
+    // network appear here automatically. No peers = honest empty state, and
+    // QR pairing always remains. No radar rings: Android exposes no honest
+    // distance for arbitrary peers, so none is implied.
+    content.addView(sm("NEARBY DEVICES").apply {
+      setTextColor(D.MUTED); letterSpacing = 0.10f
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
+    })
+    val nearby = pairablePeers()
+    content.addView(glassCard(pad = 12f).apply {
+      if (nearby.isEmpty()) {
+        if (beaconIdentity == null && beaconSession == null) {
+          addView(textView("Discovery unavailable", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
+          addView(sm("Another local socket holds the discovery port, or multicast is blocked. Scan the receiver's QR instead — pairing is identical."))
+        } else {
+          addView(textView("No NexDrop receivers found", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
+          addView(sm("A device on this network shows up here when it opens the Receive screen. QR pairing always works too."))
+        }
+      } else {
+        nearby.forEach { p ->
+          val dev = p.dev
+          val r = row().apply { setOnClickListener { pairFromDiscovery(p) } }
+          r.addView(icBox(R.drawable.ic_dev).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+              cornerRadius = dp(13).toFloat(); setColor(D.argb(31, D.PRIMARY)); setStroke(dp(1), D.argb(51, D.PRIMARY))
+            }
+          })
+          r.addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
+          val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
+          t.addView(textView(if (isTrusted(dev.deviceId)) "${dev.deviceName} · trusted" else dev.deviceName, 13f, D.TEXT, 700))
+          t.addView(sm("${dev.address} · ready to receive"))
+          r.addView(t)
+          r.addView(pill(if (isTrusted(dev.deviceId)) "TRUSTED" else "LOCAL"))
+          addView(r)
+          addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(6)) })
+        }
+        addView(sm("Tap a device to send the ${if (sendQueue.isEmpty()) "queue" else "whole queue"} without scanning a QR.").apply {
+          setPadding(0, dp(2), 0, 0)
+        })
+      }
+    })
+
     // SEND QUEUE (PRIORITY 1): real totals, per-item states, add/remove/reorder
     val queued = sendQueue.toList()
     content.addView(sm(if (queued.isEmpty()) "No files selected"
@@ -745,6 +970,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     screen = Screen.RECEIVE
     render()
     showQr(QrPairing.encode(session, endpoint.ip, port, Build.MODEL))
+    startSessionBeacon(session, port) // nearby senders can now find this session without the QR
     if (Build.VERSION.SDK_INT >= 33 && !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
       askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
     }
@@ -914,7 +1140,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     head.addView(h2("Incoming transfer").apply {
       gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0)
     })
-    head.addView(sm("from Nearby Android device"))
+    val senderName = peerIdentity()?.deviceName
+    head.addView(sm(if (senderName.isNullOrEmpty()) "from a nearby device" else "from $senderName"))
     sheet.addView(head)
 
     sheet.addView(glassCard(pad = 14f).apply {
@@ -947,7 +1174,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
     })
     shaRow.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(6), 1) })
-    shaRow.addView(textView("SHA-256 verification enabled", 12.5f, D.OK, 600))
+    shaRow.addView(textView("SHA-256 ${offer.sha256.take(16)}… · verified on completion", 12.5f, D.OK, 600))
     sheet.addView(shaRow)
 
     val transportRow = row()
@@ -1220,6 +1447,32 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36))
       setPadding(0, dp(2), 0, dp(2))
     })
+
+    // TRUSTED DEVICES (v1.4): offered only after a SHA-256-verified transfer
+    // from a sender whose stable identity arrived via real beacon packets.
+    if (role == Role.RECEIVE && completedSha != null) {
+      val peer = peerIdentity()
+      if (peer != null && peer.deviceId.isNotEmpty()) {
+        if (isTrusted(peer.deviceId)) {
+          content.addView(sm("Trusted: ${peer.deviceName} can be auto-accepted (Settings controls this).").apply {
+            setPadding(0, dp(8), 0, 0); gravity = Gravity.CENTER
+          })
+        } else if (lastTrustPromptDevid != peer.deviceId) {
+          content.addView(btn("TRUST ${peer.deviceName.uppercase()}", "outline", height = 42) {
+            trustDevice(peer.deviceId, peer.deviceName)
+            lastTrustPromptDevid = peer.deviceId
+            toast("${peer.deviceName} trusted — auto-accept can be enabled in Settings")
+            render()
+          }.apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(42)).apply { topMargin = dp(8) }
+          })
+        }
+      } else {
+        content.addView(sm("Sender identity not seen — trust is only offered for devices discovered on this network.").apply {
+          setPadding(0, dp(8), 0, 0); gravity = Gravity.CENTER; setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f)
+        })
+      }
+    }
   }
 
   // ================= 08 YOUR NEXDROP =================
@@ -1240,6 +1493,46 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       })
       addView(t)
       addView(pill("LOCAL DIRECT"))
+    })
+
+    // TRUSTED DEVICES (v1.4): real local trust store, built only from
+    // SHA-256-verified transfers with beacon-known identity.
+    val trusted = trustedDevices()
+    content.addView(sm("TRUSTED DEVICES").apply {
+      setTextColor(D.MUTED); letterSpacing = 0.10f
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(14); bottomMargin = dp(6) }
+    })
+    content.addView(glassCard(pad = 12f).apply {
+      if (trusted.isEmpty()) {
+        addView(sm("None yet — after a verified transfer, the sender can be trusted from the completion screen"))
+      } else trusted.forEach { t ->
+        val r = row()
+        r.addView(icBox(R.drawable.ic_shield).apply {
+          imageTintList = android.content.res.ColorStateList.valueOf(D.OK)
+        })
+        r.addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
+        val c = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
+        c.addView(textView(t.name, 13f, D.TEXT, 700))
+        c.addView(sm("trusted " + HistoryStore.dayLabel(t.atMs)))
+        r.addView(c)
+        r.addView(btn("Remove", "text", height = 34) { untrustDevice(t.devid); toast("Trust removed"); render() }.apply {
+          layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(34))
+        })
+        addView(r)
+        addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(6)) })
+      }
+    })
+
+    // HONEST CAPABILITIES (v1.4 matrix): what Android genuinely allows.
+    content.addView(sm("CAPABILITIES").apply {
+      setTextColor(D.MUTED); letterSpacing = 0.10f
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(14); bottomMargin = dp(6) }
+    })
+    content.addView(glassCard(pad = 12f).apply {
+      srow(this, R.drawable.ic_wifi, "Nearby discovery", "Available — local UDP, no internet")
+      srow(this, R.drawable.ic_swap, "Group drop", "Not supported yet — one receiver per session")
+      srow(this, R.drawable.ic_dev, "NFC pairing", "Unavailable — Android Beam was removed in Android 10+")
+      srow(this, R.drawable.ic_wifi, "Hotspot mode", "Unavailable — Android reserves tethering control to system apps")
     })
 
     // Recent transfers — REAL history, newest first
@@ -1383,6 +1676,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       srow(this, R.drawable.ic_hist, "Automatic resume", if (autoResumePref()) "On — durable offset, 5 tries" else "Off") {
         getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_AUTO_RESUME, !autoResumePref()).apply()
         toast(if (autoResumePref()) "Automatic resume on" else "Automatic resume off")
+        render()
+      }
+      srow(this, R.drawable.ic_check, "Auto-accept from trusted", if (autoAcceptPref()) "On — trusted devices only" else "Off") {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_AUTO_ACCEPT, !autoAcceptPref()).apply()
+        toast(if (autoAcceptPref()) "Auto-accept on — only devices you trusted after a verified transfer" else "Auto-accept off")
         render()
       }
       srow(this, R.drawable.ic_swap, "Pause / resume", "Supported")
@@ -1531,6 +1829,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   // ================= engine wiring (unchanged NDT1 flow) =================
 
   private fun stopReceiving() {
+    stopSessionBeacon()
     receiver?.stop(); receiver = null; localEndpoint = null
     TransferService.stop(this)
   }
@@ -1749,6 +2048,23 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         toast("Resuming ${offer.name} from durable offset")
       }
       return true
+    }
+    // TRUSTED AUTO-ACCEPT (v1.4): only when the sender's stable identity is
+    // known from REAL beacon packets AND that device is in the local trust
+    // store AND the user turned auto-accept on. Anything less → normal sheet.
+    if (autoAcceptPref()) {
+      val peer = peerIdentity()
+      if (peer != null && isTrusted(peer.deviceId)) {
+        acceptedOfferKey = key
+        runOnUiThread {
+          currentName = offer.name
+          currentSize = offer.sizeBytes
+          transferGotFirstProgress = false
+          beginTransfer()
+          toast("Auto-accepted from trusted ${peer.deviceName}")
+        }
+        return true
+      }
     }
     val queue = ArrayBlockingQueue<Boolean>(1)
     runOnUiThread {
@@ -2037,6 +2353,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     private const val KEY_WELCOMED = "welcomed"
   private const val KEY_KEEP_AWAKE = "keep_awake"
     private const val KEY_AUTO_RESUME = "auto_resume"
+    private const val KEY_AUTO_ACCEPT = "auto_accept"
+    private const val KEY_DEVICE_ID = "device_id"
+    private const val KEY_TRUSTED = "trusted_devices"
     private const val REQ_NOTIF = 2
     private const val REQ_CAMERA = 3
   }
