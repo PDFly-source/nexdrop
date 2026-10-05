@@ -54,7 +54,21 @@ class DiscoveryBeacon(
 
   fun start(onPeers: (List<DiscoveredDevice>) -> Unit, advertise: Boolean = true) {
     running = true
-    sock = DatagramSocket(Ndt1.DISCOVERY_PORT).also { it.broadcast = true }
+    // v1.4.2: bounded bind retry. Restarting a beacon right after stop()
+    // can race the OS releasing the UDP port (flaked CI once); production
+    // Send/Receive screen restarts benefit from the same robustness.
+    var s: DatagramSocket? = null
+    var attempt = 0
+    while (s == null) {
+      try {
+        s = DatagramSocket(Ndt1.DISCOVERY_PORT).also { it.broadcast = true }
+      } catch (e: java.net.BindException) {
+        attempt++
+        if (attempt >= 20 || !running) throw e
+        Thread.sleep(100)
+      }
+    }
+    sock = s
     // listener thread
     Thread {
       val buf = ByteArray(2048)
