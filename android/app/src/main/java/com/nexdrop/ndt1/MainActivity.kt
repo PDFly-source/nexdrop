@@ -2004,16 +2004,16 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         parent.addView(r)
       }
       chips(this, "Durability batch (fsync + PROGRESS)",
-        listOf("512 KiB" to 524288L, "1 MiB" to 1048576L, "2 MiB" to 2097152L, "4 MiB" to 4194304L),
+        listOf("512 KiB" to 524288L, "1 MiB" to 1048576L, "2 MiB" to 2097152L, "4 MiB" to 4194304L, "8 MiB" to 8388608L),
         Ndt1Tunables.progressCadenceBytes.toLong()) { Ndt1Tunables.progressCadenceBytes = it.toInt() }
       chips(this, "In-flight window",
-        listOf("8 MiB" to 8388608L, "16 MiB" to 16777216L, "32 MiB" to 33554432L),
+        listOf("8 MiB" to 8388608L, "16 MiB" to 16777216L, "32 MiB" to 33554432L, "64 MiB" to 67108864L),
         Ndt1Tunables.windowBytes.toLong()) { Ndt1Tunables.windowBytes = it.toInt() }
       chips(this, "Socket buffers",
-        listOf("2 MiB" to 2097152L, "4 MiB" to 4194304L),
+        listOf("2 MiB" to 2097152L, "4 MiB" to 4194304L, "8 MiB" to 8388608L),
         Ndt1Tunables.socketBufferBytes.toLong()) { Ndt1Tunables.socketBufferBytes = it.toInt() }
       chips(this, "DATA frame",
-        listOf("256 KiB" to 262144L, "512 KiB" to 524288L, "1 MiB" to 1048576L),
+        listOf("256 KiB" to 262144L, "512 KiB" to 524288L, "1 MiB" to 1048576L, "2 MiB" to 2097152L),
         Ndt1Tunables.frameBytes.toLong()) { Ndt1Tunables.frameBytes = it.toInt() }
       addView(sm("Wire-compatible NDT1 v1 — applies to the NEXT transfer. Defaults = measured spec. " +
           "Larger durability batches keep the same contract: acknowledged data is never beyond durable data.")

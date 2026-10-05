@@ -47,9 +47,11 @@ class TurboSender(private val context: Context) {
     @Volatile var windowWaits = 0; internal set
     @Volatile var windowWaitMs = 0.0; internal set
     @Volatile var frames = 0; internal set
+    // v1.4.2-rc2 UNITS FIX: counters are MILLISECONDS; the summary divides
+    // by 1000 — displayed values are true seconds (measurements untouched).
     fun textSummary(): String =
-      "TX — pre-hash SHA ${"%.1f".format(preHashMs)}s · file read ${"%.1f".format(readMs)}s · " +
-        "socket write ${"%.1f".format(writeMs)}s · window waits $windowWaits× ${"%.1f".format(windowWaitMs)}s · $frames frames"
+      "TX — pre-hash SHA ${"%.2f".format(preHashMs / 1000.0)}s · file read ${"%.2f".format(readMs / 1000.0)}s · " +
+        "socket write ${"%.2f".format(writeMs / 1000.0)}s · window waits $windowWaits× ${"%.2f".format(windowWaitMs / 1000.0)}s (avg ${"%.0f".format(if (windowWaits > 0) windowWaitMs / windowWaits else 0.0)} ms) · $frames frames"
   }
 
   @Volatile var lastProfile = SenderProfile(); private set

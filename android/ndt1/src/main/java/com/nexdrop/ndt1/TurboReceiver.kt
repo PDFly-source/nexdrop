@@ -52,9 +52,13 @@ class TurboReceiver(
     @Volatile var fsyncMaxMs = 0.0; internal set
     @Volatile var writeTotalMs = 0.0; internal set
     @Volatile var hashTotalMs = 0.0; internal set
+    // v1.4.2-rc2 UNITS FIX: all counters are MILLISECONDS; the summary
+    // divides by 1000 — displayed values are true seconds (measurements
+    // untouched). fsync also shows per-call average: the honest read of
+    // "storage-paced vs network-paced" for the physical matrix.
     fun textSummary(): String =
-      "RX — $frames frames · fsync $fsyncCount× ${"%.1f".format(fsyncTotalMs)}s (max ${"%.0f".format(fsyncMaxMs)} ms) · " +
-        "disk write ${"%.1f".format(writeTotalMs)}s · SHA ${"%.1f".format(hashTotalMs)}s · socket read-wait ${"%.1f".format(readBlockMs)}s"
+      "RX — $frames frames · fsync $fsyncCount× ${"%.2f".format(fsyncTotalMs / 1000.0)}s (avg ${"%.0f".format(if (fsyncCount > 0) fsyncTotalMs / fsyncCount else 0.0)} ms, max ${"%.0f".format(fsyncMaxMs)} ms) · " +
+        "disk write ${"%.2f".format(writeTotalMs / 1000.0)}s · SHA ${"%.2f".format(hashTotalMs / 1000.0)}s · socket read-wait ${"%.2f".format(readBlockMs / 1000.0)}s"
   }
 
   @Volatile var lastProfile = ReceiverProfile(); private set
@@ -244,13 +248,15 @@ class TurboReceiver(
       // Mission §5: a USER cancel removes the incomplete part file on EVERY
       // exit path (EOF, IO error, wire CANCEL) — a connection drop alone
       // (no cancel) still retains the part for durable-offset resume.
+      // v1.4.2-rc2: fold storage counters on EVERY exit path (drop, error,
+      // cancel) — before the cancel branch nulls the writer reference.
+      activeWriter?.let { snapshotProfile(it) }
       if (userCancelled.get()) {
         activeWriter?.close()
         activePart?.delete()
         activeWriter = null
         activePart = null
       }
-      activeWriter?.let { if (it != null) snapshotProfile(it) }
     }
   }
 
