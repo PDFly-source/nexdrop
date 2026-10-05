@@ -2200,7 +2200,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
    */
   @Volatile private var runConditions: String = ""
   private fun transferConditions(): String = try {
-    val bm = registerReceiver(null, android.content.IntentFilter(android.os.BatteryManager.ACTION_BATTERY_CHANGED))
+    val bm = registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
     val level = bm?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
     val scale = bm?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100) ?: 100
     val status = bm?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
