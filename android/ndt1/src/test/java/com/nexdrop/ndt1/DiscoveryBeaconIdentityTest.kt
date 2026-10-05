@@ -34,7 +34,7 @@ class DiscoveryBeaconIdentityTest {
     val got = CountDownLatch(1)
     val receiver = DiscoveryBeacon(
       "recv-phone", "android", 0,
-      SessionToken(ByteArray(32), "sess-1", "tok"),
+      SessionToken(ByteArray(32), "tok", "sess-1"), // (tokenBytes, base64Url, sessionId)
       "recv-devid",
     )
     var rx0 = 0L
@@ -81,7 +81,7 @@ class DiscoveryBeaconIdentityTest {
   fun `session beacon advertises real token and is never mistaken for identity`() {
     val receiver = DiscoveryBeacon(
       "recv-phone", "android", 0,
-      SessionToken(ByteArray(32), "sess-2", "tok2"),
+      SessionToken(ByteArray(32), "tok2", "sess-2"), // (tokenBytes, base64Url, sessionId)
       "recv-devid",
     )
     try {
@@ -92,7 +92,7 @@ class DiscoveryBeaconIdentityTest {
       // A pairable session beacon from another device: token + sessionId present
       val other = DiscoveryBeacon(
         "other-phone", "android", 0,
-        SessionToken(ByteArray(32), "sess-3", "tok3"),
+        SessionToken(ByteArray(32), "tok3", "sess-3"), // (tokenBytes, base64Url, sessionId)
         "other-devid",
       )
       val pkt = other.buildBeacon()
