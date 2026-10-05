@@ -45,6 +45,7 @@ import com.nexdrop.ndt1.ui.GradientTextView
 import com.nexdrop.ndt1.ui.HeroView
 import com.nexdrop.ndt1.ui.PulseDotView
 import com.nexdrop.ndt1.ui.RingView
+import com.nexdrop.ndt1.ui.SpeedGraphView
 import com.nexdrop.ndt1.ui.UiSpeed
 import com.nexdrop.ndt1.ui.bigText
 import com.nexdrop.ndt1.ui.body
@@ -373,6 +374,12 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private var etaView: TextView? = null
   private var overallView: TextView? = null
   private var pauseBtn: View? = null
+  private var speedGraph: SpeedGraphView? = null
+  // real-sample throttle: graph <=4 Hz, notification <=1 Hz (never competes
+  // with the NDT1 transport for CPU; values stay REAL, just cadence-limited)
+  private var lastGraphSampleMs = 0L
+  private var lastGraphDurable = -1L
+  private var lastNotifMs = 0L
 
   // ---- activity result contracts (unchanged engine flow) ----
   private val scanQr = registerForActivityResult(ScanContract()) { result ->
@@ -474,7 +481,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   private fun render() {
     ticker?.let { ui.removeCallbacks(it); ticker = null }
-    qrView = null; ring = null; ringPct = null; ringBytes = null; speedView = null; speedUnitView = null; etaView = null; pauseBtn = null
+    qrView = null; ring = null; ringPct = null; ringBytes = null; speedView = null; speedUnitView = null; etaView = null; pauseBtn = null; speedGraph = null
     pendingNav = null
     root = FrameLayout(this)
     root.addView(BgView(this), FrameLayout.LayoutParams(
@@ -855,48 +862,6 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     }
     content.addView(chips)
 
-    // NEARBY DEVICES (v1.4): real NDD1 discovery — receivers running on this
-    // network appear here automatically. No peers = honest empty state, and
-    // QR pairing always remains. No radar rings: Android exposes no honest
-    // distance for arbitrary peers, so none is implied.
-    content.addView(sm("NEARBY DEVICES").apply {
-      setTextColor(D.MUTED); letterSpacing = 0.10f
-      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
-    })
-    val nearby = pairablePeers()
-    content.addView(glassCard(pad = 12f).apply {
-      if (nearby.isEmpty()) {
-        if (beaconIdentity == null && beaconSession == null) {
-          addView(textView("Discovery unavailable", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
-          addView(sm("Another local socket holds the discovery port, or multicast is blocked. Scan the receiver's QR instead — pairing is identical."))
-        } else {
-          addView(textView("No NexDrop receivers found", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
-          addView(sm("A device on this network shows up here when it opens the Receive screen. QR pairing always works too."))
-        }
-      } else {
-        nearby.forEach { p ->
-          val dev = p.dev
-          val r = row().apply { setOnClickListener { pairFromDiscovery(p) } }
-          r.addView(icBox(R.drawable.ic_dev).apply {
-            background = android.graphics.drawable.GradientDrawable().apply {
-              cornerRadius = dp(13).toFloat(); setColor(D.argb(31, D.PRIMARY)); setStroke(dp(1), D.argb(51, D.PRIMARY))
-            }
-          })
-          r.addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
-          val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
-          t.addView(textView(if (isTrusted(dev.deviceId)) "${dev.deviceName} · trusted" else dev.deviceName, 13f, D.TEXT, 700))
-          t.addView(sm("${dev.address} · ready to receive"))
-          r.addView(t)
-          r.addView(pill(if (isTrusted(dev.deviceId)) "TRUSTED" else "LOCAL"))
-          addView(r)
-          addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(6)) })
-        }
-        addView(sm("Tap a device to send the ${if (sendQueue.isEmpty()) "queue" else "whole queue"} without scanning a QR.").apply {
-          setPadding(0, dp(2), 0, 0)
-        })
-      }
-    })
-
     // SEND QUEUE (PRIORITY 1): real totals, per-item states, add/remove/reorder
     val queued = sendQueue.toList()
     content.addView(sm(if (queued.isEmpty()) "No files selected"
@@ -945,6 +910,48 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
     // fill + SEND ALL
     content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0).apply { weight = 1f } })
+    // NEARBY DEVICES (v1.4): real NDD1 discovery — receivers running on this
+    // network appear here automatically. No peers = honest empty state, and
+    // QR pairing always remains. No radar rings: Android exposes no honest
+    // distance for arbitrary peers, so none is implied.
+    content.addView(sm("NEARBY DEVICES").apply {
+      setTextColor(D.MUTED); letterSpacing = 0.10f
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
+    })
+    val nearby = pairablePeers()
+    content.addView(glassCard(pad = 12f).apply {
+      if (nearby.isEmpty()) {
+        if (beaconIdentity == null && beaconSession == null) {
+          addView(textView("Discovery unavailable", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
+          addView(sm("Another local socket holds the discovery port, or multicast is blocked. Scan the receiver's QR instead — pairing is identical."))
+        } else {
+          addView(textView("No NexDrop receivers found", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
+          addView(sm("A device on this network shows up here when it opens the Receive screen. QR pairing always works too."))
+        }
+      } else {
+        nearby.forEach { p ->
+          val dev = p.dev
+          val r = row().apply { setOnClickListener { pairFromDiscovery(p) } }
+          r.addView(icBox(R.drawable.ic_dev).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+              cornerRadius = dp(13).toFloat(); setColor(D.argb(31, D.PRIMARY)); setStroke(dp(1), D.argb(51, D.PRIMARY))
+            }
+          })
+          r.addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
+          val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
+          t.addView(textView(if (isTrusted(dev.deviceId)) "${dev.deviceName} · trusted" else dev.deviceName, 13f, D.TEXT, 700))
+          t.addView(sm("${dev.address} · ready to receive"))
+          r.addView(t)
+          r.addView(pill(if (isTrusted(dev.deviceId)) "TRUSTED" else "LOCAL"))
+          addView(r)
+          addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(6)) })
+        }
+        addView(sm("Tap a device to send the ${if (sendQueue.isEmpty()) "queue" else "whole queue"} without scanning a QR.").apply {
+          setPadding(0, dp(2), 0, 0)
+        })
+      }
+    })
+
     content.addView(btn(if (sendQueue.size > 1) "SEND ALL (${sendQueue.size})" else "CONTINUE", "primary") {
       if (sendQueue.isEmpty()) { toast("Select a file first"); return@btn }
       if (!hasPermission(Manifest.permission.CAMERA)) { askPermission(Manifest.permission.CAMERA, REQ_CAMERA); return@btn }
@@ -1282,6 +1289,19 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     speedCol.addView(etaView)
     content.addView(speedCol)
 
+    // LIVE SPEED GRAPH (Phase 4): real measured samples only, <=4 Hz,
+    // drawn off the transfer path (postInvalidate + animation cadence).
+    content.addView(glassCard(pad = 10f).apply {
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(12) }
+      addView(sm("SPEED — LIVE SAMPLES").apply {
+        setTextColor(D.MUTED); letterSpacing = 0.10f
+      })
+      addView(SpeedGraphView(this@MainActivity).apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(72))
+        contentDescription = "Live transfer speed graph from real measured samples"
+      }.also { speedGraph = it })
+    })
+
     // device-to-device dashed link
     content.addView(glassCard(pad = 10f).apply {
       layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
@@ -1343,20 +1363,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       render() // relabel PAUSE/RESUME from real state; ring refs rebind, engine untouched
     }.also { pauseBtn = it })
     controls.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
-    controls.addView(btn("CANCEL", "outline", icon = R.drawable.ic_x, tintText = D.DANGER) {
-      receiver?.cancel(); sender?.cancel()
-      // Queue: only the in-flight file is cancelled; Done stays done, the
-      // rest stay Ready — the user returns to the queue, not a dead end.
-      if (role == Role.SEND) {
-        sendQueue.getOrNull(queueIndex)?.let { if (it.state == "Sending") it.state = "Ready" }
-        activePairing = null
-      }
-      hideTransferUi()
-      TransferService.stop(this)
-      toast("Transfer cancelled")
-      if (role == Role.SEND && sendQueue.isNotEmpty()) { screen = Screen.SEND; render() }
-      else { screen = Screen.HOME; render() }
-    })
+    controls.addView(btn("CANCEL", "outline", icon = R.drawable.ic_x, tintText = D.DANGER) { cancelTransfer() })
     content.addView(controls)
   }
 
@@ -1404,6 +1411,27 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     })
     content.addView(statRow)
 
+    // PEAK (Phase 5): the engine's measured sustained peak — never a burst.
+    val peakRow = row().apply { bottomMargin = dp(8) }
+    peakRow.addView(glassCard(pad = 14f).apply {
+      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+      addView(sm("Peak (sustained)"))
+      addView(bigText(UiSpeed.speedText(stats?.peakSustainedBps), 18f).apply { setPadding(0, dp(3), 0, 0) })
+    })
+    // Real device names where discovery provided them; honest fallback.
+    val peerName = peerIdentity()?.deviceName
+    val route = when {
+      role == Role.SEND && !peerName.isNullOrEmpty() -> "This device → $peerName"
+      role == Role.RECEIVE && !peerName.isNullOrEmpty() -> "$peerName → This device"
+      else -> "Android → Android"
+    }
+    peakRow.addView(glassCard(pad = 14f).apply {
+      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f; marginStart = dp(5) }
+      addView(sm("Route"))
+      addView(bigText(route, 13f).apply { setPadding(0, dp(5), 0, 0) })
+    })
+    content.addView(peakRow)
+
     // verified card — real transport + verification facts
     content.addView(glassCard(pad = 12f).apply {
       fun infoRow(icon: Int, main: TextView, subView: TextView): View {
@@ -1431,7 +1459,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         textView("LOCAL DIRECT · Native NDT1 TCP", 12.5f, D.MUTED, 600), sm("")))
     })
 
-    // buttons
+    // buttons — Open/Done stay; Share summary + View history added (Phase 5)
     content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0).apply { weight = 1f } })
     val btns = row()
     val f = currentFile
@@ -1440,6 +1468,16 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     btns.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
     btns.addView(btn("DONE", "primary") { goRoot(Screen.HOME) })
     content.addView(btns)
+    content.addView(row().apply {
+      setPadding(0, dp(8), 0, 0)
+      addView(btn("SHARE SUMMARY", "outline", height = 44, weight = 1f) { shareSummary() }.apply {
+        layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
+      })
+      addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
+      addView(btn("VIEW HISTORY", "outline", height = 44, weight = 1f) { go(Screen.HISTORY) }.apply {
+        layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
+      })
+    })
     content.addView(btn(if (role == Role.SEND) "KEEP SENDING" else "KEEP RECEIVING", "text", height = 36) {
       screen = if (role == Role.SEND) Screen.SEND else { startReceiving(); return@btn }
       render()
@@ -1888,8 +1926,14 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     if (idx < 0) { // whole queue verified-complete
       runOnUiThread {
         hideTransferUi()
-        TransferService.stop(this)
+        val done = sendQueue.filter { it.state == "Done" }
+        val bytes = done.sumOf { it.size }
+        val summary = if (done.size == 1)
+          "${done.first().name}  ·  ${SpeedFormat.bytesText(bytes)}\n${UiSpeed.speedText(completedStats?.averageBps)}  ·  ${UiSpeed.durationText(completedStats?.durationMs ?: 0)}  ·  SHA-256 VERIFIED"
+        else
+          "${done.size} files  ·  ${SpeedFormat.bytesText(bytes)}\nAll SHA-256 VERIFIED"
         backStack.clear(); screen = Screen.RESULT; render()
+        TransferService.complete(this, summary)
       }
       return
     }
@@ -1980,12 +2024,29 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     failedMessage = message
     backStack.clear(); screen = Screen.FAILED
     render()
-    TransferService.stop(this)
+    TransferService.fail(this, currentName?.let { "$it — ${message.lineSequence().firstOrNull()?.take(100) ?: "failed"}" }
+      ?: (message.lineSequence().firstOrNull()?.take(120) ?: "failed"))
   }
 
   @Volatile private var failedMessage: String? = null
 
-  private fun hideTransferUi() { sender = null; receiver = null; setTransferActive(false) }
+  private fun hideTransferUi() { sender = null; receiver = null; TransferService.engineControl = null; setTransferActive(false) }
+
+  /** ONE cancel path: on-screen button and notification action both land here. */
+  private fun cancelTransfer() {
+    receiver?.cancel(); sender?.cancel()
+    // Queue: only the in-flight file is cancelled; Done stays done, the
+    // rest stay Ready — the user returns to the queue, not a dead end.
+    if (role == Role.SEND) {
+      sendQueue.getOrNull(queueIndex)?.let { if (it.state == "Sending") it.state = "Ready" }
+      activePairing = null
+    }
+    hideTransferUi()
+    TransferService.stop(this)
+    toast("Transfer cancelled")
+    if (role == Role.SEND && sendQueue.isNotEmpty()) { screen = Screen.SEND; render() }
+    else { screen = Screen.HOME; render() }
+  }
 
   private fun setTransferActive(on: Boolean) {
     transferActive = on
@@ -1997,6 +2058,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     transferStartNanos = System.nanoTime()
     paused = false
     transferGotFirstProgress = false
+    lastGraphSampleMs = 0; lastGraphDurable = -1; lastNotifMs = 0
+    // Notification actions control the LIVE engine only (Phase 3). The same
+    // semantics as the on-screen buttons: toggle pause, hard cancel.
+    TransferService.engineControl = { cmd ->
+      runOnUiThread {
+        when (cmd) {
+          "pause" -> { paused = !paused; if (paused) { receiver?.pause(); sender?.pause() } else { receiver?.resume(); sender?.resume() } }
+          "cancel" -> cancelTransfer()
+        }
+      }
+    }
     backStack.clear(); screen = Screen.TRANSFER
     render()
   }
@@ -2028,8 +2100,22 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         val pos = maxOf(sendQueue.indexOfFirst { it.state == "Sending" }, 0)
         overallView?.text = "File ${pos + 1} of ${sendQueue.size} — overall $opct%"
       }
-      // Truthful foreground notification (same math as the JSON export)
-      currentName?.let { TransferService.notifyProgress(this, it, durable, total, bps) }
+      // LIVE GRAPH + NOTIFICATION (Phases 3/4): real delta-bytes/delta-time
+      // samples; graph <=4 Hz, notification <=1 Hz so UI never competes with
+      // the NDT1 transport. Nothing synthetic — paused time shows as zero.
+      val nowMs = System.currentTimeMillis()
+      if (nowMs - lastGraphSampleMs >= 250) {
+        if (lastGraphDurable >= 0 && lastGraphSampleMs > 0) {
+          val dtS = (nowMs - lastGraphSampleMs) / 1000.0
+          val sample = if (paused) 0.0 else (durable - lastGraphDurable) / dtS
+          if (sample >= 0) speedGraph?.add(sample)
+        }
+        lastGraphSampleMs = nowMs; lastGraphDurable = durable
+      }
+      if (nowMs - lastNotifMs >= 1000) {
+        lastNotifMs = nowMs
+        currentName?.let { TransferService.notifyProgress(this, it, durable, total, bps, paused, canControl = true) }
+      }
     }
   }
 
@@ -2096,7 +2182,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       recordHistory(file.name, stats.averageBps, stats.durationMs, sha256, verified = true)
       backStack.clear(); screen = Screen.RESULT
       render()
-      TransferService.stop(this)
+      TransferService.complete(this,
+        "${file.name}  ·  ${SpeedFormat.bytesText(file.length())}\n" +
+        "${UiSpeed.speedText(stats.averageBps)}  ·  ${UiSpeed.durationText(stats.durationMs)}  ·  SHA-256 VERIFIED")
     }
   }
 
@@ -2188,6 +2276,27 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
       }, "Share ${f.name}"))
     } catch (_: Exception) { toast("No app can share this file type") }
+  }
+
+  /** Shareable completion summary (Phase 5) — every value from THIS transfer. */
+  private fun shareSummary() {
+    val stats = completedStats
+    val text = buildString {
+      append("NexDrop — Transfer complete\n\n")
+      append(currentName ?: "file").append('\n')
+      append(SpeedFormat.bytesText(currentFile?.length() ?: currentSize)).append('\n')
+      append("Duration: ").append(UiSpeed.durationText(stats?.durationMs ?: 0)).append('\n')
+      append("Average: ").append(UiSpeed.speedText(stats?.averageBps)).append('\n')
+      append("Peak (sustained): ").append(UiSpeed.speedText(stats?.peakSustainedBps)).append('\n')
+      if (completedSha != null) append("SHA-256: VERIFIED\n")
+      append("Transport: LOCAL DIRECT · Native NDT1 TCP\n")
+      append("\nPRIVATE · DIRECT · FAST — no cloud, no accounts.")
+    }
+    try {
+      startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text)
+      }, "Share transfer summary"))
+    } catch (_: Exception) { toast("Sharing unavailable") }
   }
 
   private fun openFile(f: File) {
