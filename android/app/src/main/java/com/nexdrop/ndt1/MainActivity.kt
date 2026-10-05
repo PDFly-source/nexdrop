@@ -2043,7 +2043,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       }
       background = android.graphics.drawable.GradientDrawable().apply {
         cornerRadius = dp(16).toFloat()
-        setStroke(dp(1).toFloat(), if (active) D.PRIMARY else D.argb(51, D.MUTED))
+        setStroke(dp(1), if (active) D.PRIMARY else D.argb(51, D.MUTED))
         setColor(if (active) D.argb(26, D.PRIMARY) else android.graphics.Color.TRANSPARENT)
       }
       setOnClickListener { onClick() }
