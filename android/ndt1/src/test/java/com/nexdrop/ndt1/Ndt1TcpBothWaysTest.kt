@@ -41,7 +41,7 @@ class Ndt1TcpBothWaysTest {
     override fun onComplete(file: File, sha256: String, stats: ThroughputSampler.Stats) {
       completedFile = file; completedSha = sha256; completedStats = stats; done.countDown()
     }
-    override fun onError(message: String) { error = message; println("RECEIVER ERROR: \$message"); done.countDown() }
+    override fun onError(message: String) { error = message; println("RECEIVER ERROR: $message"); done.countDown() }
     override fun onPeerConnected(peerIp: String) { peerSeen = peerIp }
   }
 
@@ -216,10 +216,24 @@ class Ndt1TcpBothWaysTest {
           off += len
         }
         out.flush()
-      } // abrupt close mid-transfer — the durable-resume case, no CANCEL
+        // Drain the receiver's PROGRESS/CREDIT control frames until the
+        // socket goes quiet, then close cleanly. Closing with UNREAD control
+        // frames would RST the connection on Linux and abort the receiver
+        // mid-frame — the durable-resume path under test is a mid-transfer
+        // drop AFTER durable bytes have landed, like a real interruption.
+        sock.soTimeout = 1_000
+        try {
+          while (true) {
+            val n = input.read(readBuf)
+            if (n <= 0) break
+          }
+        } catch (_: java.net.SocketTimeoutException) { /* quiet — drain done */ }
+      } // no COMPLETE — the durable-resume case, no CANCEL
 
       val part = File(dir, "$name.ndtpart")
-      assertTrue("a dropped (not cancelled) transfer must retain the part file for resume",
+      assertTrue(
+        "a dropped (not cancelled) transfer must retain the part file for resume " +
+        "(error=${listener.error}, dir=${dir.listFiles()?.joinToString { it.name + "=" + it.length() }})",
         waitUntil(10_000) { part.exists() && part.length() >= 3L * mib })
 
       // ---- LEG 2: reconnect, resume from the READY-advertised durable offset ----
@@ -239,7 +253,7 @@ class Ndt1TcpBothWaysTest {
           }
           return pending.removeFirst()
         }
-        val nonce = 0x5A11C0DE
+        val nonce = 0x5A11C1CE // fresh nonce per connection — replay-bound, like a real sender
         val hello = encodeHello(session.sessionId, Handshake.helloProof(session.tokenBytes, nonce), nonce)
         out.write(encodeHeader(FrameType.HELLO, hello.size) + hello)
         assertEquals("AUTH_OK expected on the resumed session", FrameType.AUTH_OK, nextFrame().first)
