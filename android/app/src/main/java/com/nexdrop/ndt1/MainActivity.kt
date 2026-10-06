@@ -1926,12 +1926,6 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   // ================= DEVICE TEST (engineering only, unchanged logic) =================
   private fun renderDeviceTest() {
-    // v1.4.2-rc5: Wi-Fi link rate/band/RSSI need location permission on
-    // Android 8.1+. Without it the telemetry can only say "unavailable" —
-    // asked here so PERF LAB runs record the real radio state.
-    if (!hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
-      askPermission(Manifest.permission.ACCESS_FINE_LOCATION, REQ_LOC)
-    }
     screenTitle("Device Test")
     content.addView(sm("Engineering diagnostics — benchmarks, raw endpoint info, run JSON.").apply {
       setTextColor(D.MUTED)
@@ -1954,6 +1948,16 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       setTextColor(D.MUTED); letterSpacing = 0.10f
       layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(14); bottomMargin = dp(6) }
     })
+    // v1.4.2-rc5: Wi-Fi rate/band/RSSI need location permission on Android
+    // 8.1+ — without it the telemetry can only say "unavailable". Explicit
+    // user action (never a surprise dialog on screen render).
+    if (!hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
+      content.addView(btn("Grant location — truthful Wi-Fi telemetry", "outline", height = 38) {
+        askPermission(Manifest.permission.ACCESS_FINE_LOCATION, REQ_LOC)
+      }.apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(38)).apply { topMargin = dp(6) }
+      })
+    }
     content.addView(glassCard(pad = 12f).apply {
       val idStats = beaconIdentity?.stats()
       val sesStats = beaconSession?.stats()
