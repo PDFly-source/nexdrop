@@ -303,9 +303,13 @@ class Ndt1TcpBothWaysTest {
       assertTrue("average must be a valid rate, was ${stats.averageBps}",
         stats.averageBps == null || (stats.averageBps!!.isFinite() && stats.averageBps!! >= 0.0))
       if (stats.durationMs > 0) {
-        val implied = stats.bytes * 1000.0 / stats.durationMs
-        assertTrue("average ${stats.averageBps} must match sessionBytes/sessionWall ($implied)",
-          stats.averageBps != null && Math.abs(stats.averageBps!! - implied) < 0.10 * implied)
+        // durationMs truncates to whole ms — for a few-ms CI loopback session
+        // bytes/durationMs over-reads by up to (ms+1)/ms. Bracket the true
+        // ns-accurate rate between the truncation bounds (5% slack each side).
+        val lo = stats.bytes * 1000.0 / (stats.durationMs + 1) * 0.95
+        val hi = stats.bytes * 1000.0 / stats.durationMs * 1.05
+        assertTrue("average ${stats.averageBps} must match sessionBytes/sessionWall (bounds $lo..$hi)",
+          stats.averageBps != null && stats.averageBps!! >= lo && stats.averageBps!! <= hi)
       }
 
       // TEST C — the display fix must not touch integrity
