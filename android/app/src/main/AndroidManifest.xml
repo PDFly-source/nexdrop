@@ -12,6 +12,12 @@
        bluetooth, microphone, contacts, storage (scoped APIs only). -->
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <!-- v1.4.2-rc5: TRUTHFUL link telemetry — WifiManager.connectionInfo
+       (rate/band/RSSI) needs these on Android 8.1+, otherwise the app can
+       only print "unavailable". Runtime request is asked on Device Test. -->
+  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
   <!-- v1.4: real NDD1 UDP discovery (53819) — broadcast/multicast packets are
        filtered in power-save without this lock; held only while discovery runs. -->
   <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />

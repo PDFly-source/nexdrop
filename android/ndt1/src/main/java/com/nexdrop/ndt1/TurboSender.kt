@@ -92,7 +92,10 @@ class TurboSender(private val context: Context) {
           sock.connect(InetSocketAddress(host, port), 8000)
           // Phase C: the REAL socket config the kernel granted (read back,
           // never the requested value) + best-effort Wi-Fi link state.
-          lastProfile.linkText = "link — sndbuf ${sock.sendBufferSize / 1024} KiB · rcvbuf ${sock.receiveBufferSize / 1024} KiB · NODELAY ${sock.tcpNoDelay} · wifi ${wifiSummary()}"
+          val ifName = try {
+            java.net.NetworkInterface.getByInetAddress(sock.localAddress)?.name ?: "?"
+          } catch (_: Exception) { "?" }
+          lastProfile.linkText = "link — sndbuf ${sock.sendBufferSize / 1024} KiB · rcvbuf ${sock.receiveBufferSize / 1024} KiB · NODELAY ${sock.tcpNoDelay} · via $ifName · wifi ${wifiSummary()}"
           val out = sock.getOutputStream()
           val input = sock.getInputStream()
           val decoder = FrameDecoder()
@@ -229,8 +232,10 @@ class TurboSender(private val context: Context) {
     }
   }
 
-  /** Phase C: best-effort Wi-Fi link state (Android may restrict without
-   * location permission — then we report unavailable, never a guess). */
+  /** Phase C: best-effort radio truth (v1.4.2-rc5: needs ACCESS_FINE_LOCATION
+   * at runtime on 8.1+ — without it Android returns nothing truthful and we
+   * report "unavailable", never a guess). Reports rate, band, RSSI, and the
+   * system-declared transport of the active network. */
   private fun wifiSummary(): String = try {
     val wm = context.getSystemService(android.content.Context.WIFI_SERVICE) as android.net.wifi.WifiManager
     val wi = wm.connectionInfo
@@ -240,7 +245,21 @@ class TurboSender(private val context: Context) {
       freq > 0 -> "2.4 GHz"
       else -> "band n/a"
     }
-    "${if (wi.linkSpeed > 0) "${wi.linkSpeed} Mbps" else "rate n/a"} · $band"
+    val rssi = wi.rssi
+    val rate = if (wi.linkSpeed > 0) "${wi.linkSpeed} Mbps" else "rate n/a"
+    val rssiTxt = if (rssi != 0 && rssi > -127) "${rssi} dBm" else "RSSI n/a"
+    val transport = try {
+      val cm = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+      val wifiNet = cm.allNetworks.firstOrNull { n -> cm.getNetworkCapabilities(n)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true }
+      val caps = if (wifiNet != null) cm.getNetworkCapabilities(wifiNet) else cm.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+      when {
+        caps == null -> "transport n/a"
+        caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "transport WIFI"
+        caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "transport CELLULAR"
+        else -> "transport other"
+      }
+    } catch (_: Exception) { "transport n/a" }
+    "$rate · $band · $rssiTxt · $transport"
   } catch (e: Exception) { "unavailable" }
 
   @Volatile private var localPaused = false

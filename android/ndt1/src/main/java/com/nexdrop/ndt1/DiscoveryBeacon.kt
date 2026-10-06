@@ -38,12 +38,44 @@ class DiscoveryBeacon(
   data class BeaconStats(
     val sentPackets: Long, val receivedPackets: Long,
     val running: Boolean, val portBound: Int,
+    /** v1.4.2-rc5: the REAL last send error ("" = none) — honest evidence
+     * for the beacon diagnosis: bind failure, interface, or silent loss. */
+    val lastSendError: String = "",
   )
 
   fun stats(): BeaconStats = BeaconStats(
     sentPackets.get(), receivedPackets.get(),
-    running, sock?.localPort ?: -1,
+    running, sock?.localPort ?: -1, lastSendError,
   )
+
+  @Volatile private var lastSendError = ""
+
+  /**
+   * v1.4.2-rc5: every UP non-loopback interface's broadcast address, so the
+   * beacon leaves via the interface ACTUALLY carrying the local route (the
+   * hotspot Wi-Fi link) — not whatever the kernel picks for 255.255.255.255
+   * (on a phone with mobile data that is the cellular route, and the beacon
+   * never reaches the hotspot peer). Pure java.net — no permission needed.
+   */
+  private fun broadcastTargets(): List<java.net.InetAddress> {
+    val targets = ArrayList<java.net.InetAddress>()
+    try {
+      val nets = java.net.NetworkInterface.getNetworkInterfaces() ?: return listOf()
+      for (nif in nets) {
+        // NOTE: nif.supportsMulticast() is an unreliable hint on Android
+        // (often false on the very hotspot interface we must target).
+        if (!nif.isUp || nif.isLoopback) continue
+        for (ia in nif.interfaceAddresses) {
+          val b = ia.broadcast ?: continue
+          targets.add(b)
+        }
+      }
+    } catch (_: Exception) {}
+    if (targets.isEmpty()) {
+      try { targets.add(java.net.InetAddress.getByName("255.255.255.255")) } catch (_: Exception) {}
+    }
+    return targets
+  }
   private val seen = HashMap<String, DiscoveredDevice>()
 
   data class DiscoveredDevice(
@@ -95,11 +127,26 @@ class DiscoveryBeacon(
     if (advertise) {
       Thread {
         val packet = buildBeacon()
+        var targets = broadcastTargets()
+        var tick = 0
         while (running) {
-          try {
-            sentPackets.incrementAndGet()
-          sock!!.send(DatagramPacket(packet, packet.size, InetAddress.getByName("255.255.255.255"), Ndt1.DISCOVERY_PORT))
-          } catch (_: Exception) { /* best-effort */ }
+          var ok = 0
+          for (t in targets) {
+            try {
+              sock!!.send(DatagramPacket(packet, packet.size, t, Ndt1.DISCOVERY_PORT))
+              ok++
+            } catch (e: Exception) {
+              lastSendError = e.message ?: e.javaClass.simpleName
+            }
+          }
+          if (ok > 0) {
+            // v1.4.2-rc5 TRUTHFUL COUNTER: only successfully handed to the
+            // kernel count as "sent" — attempts that failed never inflate it.
+            sentPackets.addAndGet(ok.toLong())
+            if (lastSendError.isNotEmpty() && ok == targets.size) lastSendError = ""
+          }
+          // re-scan interfaces every 10 s (hotspot can come and go)
+          if (++tick % 10 == 0) targets = broadcastTargets()
           Thread.sleep(1000)
         }
       }.start()

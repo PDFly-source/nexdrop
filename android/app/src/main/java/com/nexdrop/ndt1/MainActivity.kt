@@ -1926,6 +1926,12 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   // ================= DEVICE TEST (engineering only, unchanged logic) =================
   private fun renderDeviceTest() {
+    // v1.4.2-rc5: Wi-Fi link rate/band/RSSI need location permission on
+    // Android 8.1+. Without it the telemetry can only say "unavailable" —
+    // asked here so PERF LAB runs record the real radio state.
+    if (!hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
+      askPermission(Manifest.permission.ACCESS_FINE_LOCATION, REQ_LOC)
+    }
     screenTitle("Device Test")
     content.addView(sm("Engineering diagnostics — benchmarks, raw endpoint info, run JSON.").apply {
       setTextColor(D.MUTED)
@@ -1952,9 +1958,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       val idStats = beaconIdentity?.stats()
       val sesStats = beaconSession?.stats()
       srow(this, R.drawable.ic_wifi, "Identity beacon",
-        idStats?.let { "running — port ${it.portBound} — sent ${it.sentPackets}" } ?: "not running")
+        idStats?.let { "running — port ${it.portBound} — sent ${it.sentPackets}" + (if (it.lastSendError.isNotEmpty()) " — send err: ${it.lastSendError}" else "") }
+          ?: "not running (runs on Send/Transfer screens — this card is Device-Test state)")
       srow(this, R.drawable.ic_wifi, "Session beacon",
-        sesStats?.let { "running — port ${it.portBound} — sent ${it.sentPackets} — received ${it.receivedPackets}" } ?: "not running")
+        sesStats?.let { "running — port ${it.portBound} — sent ${it.sentPackets} — received ${it.receivedPackets}" + (if (it.lastSendError.isNotEmpty()) " — send err: ${it.lastSendError}" else "") }
+          ?: "not running (runs while this device is Receiving)")
       srow(this, R.drawable.ic_dev, "This device ID", deviceIdPref().take(18) + "…")
       val peer = peerIdentity()
       srow(this, R.drawable.ic_dev, "Peer identity",
@@ -2727,5 +2735,6 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     private const val KEY_THEME = "theme" // "system" | "light" | "dark"
     private const val REQ_NOTIF = 2
     private const val REQ_CAMERA = 3
+    private const val REQ_LOC = 4  // v1.4.2-rc5: truthful Wi-Fi link telemetry
   }
 }
