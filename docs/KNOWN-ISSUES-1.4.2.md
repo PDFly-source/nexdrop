@@ -1,4 +1,10 @@
-# NexDrop Android 1.4.2 — documented known issues (NOT fixed in this release, by owner decision)
+# NexDrop Android 1.4.2 — documented known issues
+
+**STATUS UPDATE (v1.4.3, 2026-10-06): issue 1 is FIXED in v1.4.3** — display
+telemetry only (`sessionBytes / sessionWall`); the NDT1 wire protocol,
+durability, resume, SHA-256 and transfer performance are unchanged from the
+physically validated 1.4.2 engine. See commit history on
+`maint/v1.4.3-telemetry`.
 
 ## 1. Recovered-transfer result screen can over-report average speed (cosmetic, display-only)
 

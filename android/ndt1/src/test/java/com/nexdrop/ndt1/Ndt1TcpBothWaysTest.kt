@@ -1,6 +1,7 @@
 package com.nexdrop.ndt1
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -32,14 +33,15 @@ class Ndt1TcpBothWaysTest {
     val done = CountDownLatch(1)
     @Volatile var completedFile: File? = null
     @Volatile var completedSha: String? = null
+    @Volatile var completedStats: ThroughputSampler.Stats? = null
     @Volatile var peerSeen: String? = null
     @Volatile var error: String? = null
     override fun onOffer(offer: Offer): Boolean = true // ACCEPT — the ONE-QR Accept flow
     override fun onProgress(durable: Long, total: Long) {}
     override fun onComplete(file: File, sha256: String, stats: ThroughputSampler.Stats) {
-      completedFile = file; completedSha = sha256; done.countDown()
+      completedFile = file; completedSha = sha256; completedStats = stats; done.countDown()
     }
-    override fun onError(message: String) { error = message; println("RECEIVER ERROR: \$message"); done.countDown() }
+    override fun onError(message: String) { error = message; println("RECEIVER ERROR: $message"); done.countDown() }
     override fun onPeerConnected(peerIp: String) { peerSeen = peerIp }
   }
 
@@ -157,6 +159,175 @@ class Ndt1TcpBothWaysTest {
       assertEquals(payload.size.toLong(), listener.completedFile!!.length())
       assertEquals(sha256Hex(payload), listener.completedSha)
     } finally { receiverA.stop() }
+  }
+
+  // ===================================================================
+  // v1.4.3 maintenance (docs/KNOWN-ISSUES-1.4.2.md): a RECOVERED transfer
+  // displayed 130.22 MB/s on a physical phone — numerator included the
+  // pre-interruption bytes, denominator was only the resumed session's wall.
+  // TEST B: the result stats must be session-scoped (sessionBytes, never
+  // the full file total). TEST C: the fix must not touch integrity (durable
+  // resume, SHA-256, completed byte count, final content).
+  // ===================================================================
+  @Test
+  fun `interrupted transfer resumes and result stats count ONLY the resumed session (the 130 MB per s bug)`() {
+    val mib = 1024 * 1024
+    val bytes = ByteArray(4 * mib) { ((it * 31 + 7) and 0xff).toByte() }
+    val sha = sha256Hex(bytes)
+    val fileId = 1
+    val name = "resume.bin"
+    val dir = Files.createTempDirectory("resume-stats").toFile()
+    val token = ByteArray(32) { (it * 7 + 1).toByte() }
+    val session = SessionToken(token, "test-resume", "sess-resume")
+    val listener = RecordingListener()
+    val receiver = TurboReceiver(session, dir, listener)
+    val port = receiver.start(0, "127.0.0.1")
+    try {
+      // ---- LEG 1: 3 of 4 MiB, then the connection drops (no COMPLETE) ----
+      Socket("127.0.0.1", port).use { sock ->
+        sock.tcpNoDelay = true
+        val out = sock.getOutputStream()
+        val input = sock.getInputStream()
+        val dec = FrameDecoder()
+        val pending = ArrayDeque<Pair<Int, ByteArray>>()
+        val readBuf = ByteArray(64 * 1024)
+        fun nextFrame(): Pair<Int, ByteArray> {
+          while (pending.isEmpty()) {
+            val n = input.read(readBuf)
+            assertTrue("leg-1 socket closed early (receiver error: ${listener.error})", n > 0)
+            dec.push(readBuf.copyOf(n)).forEach(pending::addLast)
+          }
+          return pending.removeFirst()
+        }
+        val nonce = 0x5A11C0DE
+        val hello = encodeHello(session.sessionId, Handshake.helloProof(session.tokenBytes, nonce), nonce)
+        out.write(encodeHeader(FrameType.HELLO, hello.size) + hello)
+        assertEquals("AUTH_OK expected", FrameType.AUTH_OK, nextFrame().first)
+        val offer = encodeOffer(fileId, bytes.size.toLong(), name, sha)
+        out.write(encodeHeader(FrameType.OFFER, offer.size) + offer)
+        assertEquals("READY expected after ACCEPT", FrameType.READY, nextFrame().first)
+        var off = 0L
+        while (off < 3L * mib) {
+          val len = minOf(Ndt1.FRAME_BYTES, (3L * mib - off).toInt())
+          val payload = ByteArray(24 + len)
+          u32(payload, 0, fileId); u64(payload, 4, off); u64(payload, 12, bytes.size.toLong()); u32(payload, 20, len)
+          System.arraycopy(bytes, off.toInt(), payload, 24, len)
+          out.write(encodeHeader(FrameType.DATA, payload.size) + payload)
+          off += len
+        }
+        out.flush()
+        // Drain the receiver's PROGRESS/CREDIT control frames until the
+        // socket goes quiet, then close cleanly. Closing with UNREAD control
+        // frames would RST the connection on Linux and abort the receiver
+        // mid-frame — the durable-resume path under test is a mid-transfer
+        // drop AFTER durable bytes have landed, like a real interruption.
+        sock.soTimeout = 1_000
+        try {
+          while (true) {
+            val n = input.read(readBuf)
+            if (n <= 0) break
+          }
+        } catch (_: java.net.SocketTimeoutException) { /* quiet — drain done */ }
+      } // no COMPLETE — the durable-resume case, no CANCEL
+
+      val part = File(dir, "$name.ndtpart")
+      assertTrue(
+        "a dropped (not cancelled) transfer must retain the part file for resume " +
+        "(error=${listener.error}, dir=${dir.listFiles()?.joinToString { it.name + "=" + it.length() }})",
+        waitUntil(10_000) { part.exists() && part.length() >= 3L * mib })
+
+      // ---- LEG 2: reconnect, resume from the READY-advertised durable offset ----
+      var base = -1L
+      Socket("127.0.0.1", port).use { sock ->
+        sock.tcpNoDelay = true
+        val out = sock.getOutputStream()
+        val input = sock.getInputStream()
+        val dec = FrameDecoder()
+        val pending = ArrayDeque<Pair<Int, ByteArray>>()
+        val readBuf = ByteArray(64 * 1024)
+        fun nextFrame(): Pair<Int, ByteArray> {
+          while (pending.isEmpty()) {
+            val n = input.read(readBuf)
+            assertTrue("leg-2 socket closed early (receiver error: ${listener.error})", n > 0)
+            dec.push(readBuf.copyOf(n)).forEach(pending::addLast)
+          }
+          return pending.removeFirst()
+        }
+        val nonce = 0x5A11C1CE // fresh nonce per connection — replay-bound, like a real sender
+        val hello = encodeHello(session.sessionId, Handshake.helloProof(session.tokenBytes, nonce), nonce)
+        out.write(encodeHeader(FrameType.HELLO, hello.size) + hello)
+        assertEquals("AUTH_OK expected on the resumed session", FrameType.AUTH_OK, nextFrame().first)
+        val offer = encodeOffer(fileId, bytes.size.toLong(), name, sha)
+        out.write(encodeHeader(FrameType.OFFER, offer.size) + offer)
+        val (readyType, readyPayload) = nextFrame()
+        assertEquals("READY expected after ACCEPT", FrameType.READY, readyType)
+        base = decodeOffset(readyPayload).second
+
+        // resume EXACTLY from the advertised durable offset — the desync
+        // guard in DurableWriter enforces this, same as a real sender
+        var off = base
+        while (off < bytes.size) {
+          val len = minOf(Ndt1.FRAME_BYTES, (bytes.size - off).toInt())
+          val payload = ByteArray(24 + len)
+          u32(payload, 0, fileId); u64(payload, 4, off); u64(payload, 12, bytes.size.toLong()); u32(payload, 20, len)
+          System.arraycopy(bytes, off.toInt(), payload, 24, len)
+          out.write(encodeHeader(FrameType.DATA, payload.size) + payload)
+          off += len
+        }
+        val complete = encodeComplete(fileId, sha)
+        out.write(encodeHeader(FrameType.COMPLETE, complete.size) + complete)
+        while (true) {
+          val (t2, p2) = nextFrame()
+          when (t2) {
+            FrameType.VERIFY_OK -> break
+            FrameType.VERIFY_FAIL -> throw AssertionError("VERIFY_FAIL: ${String(p2, Charsets.US_ASCII)}")
+            FrameType.PROGRESS, FrameType.CREDIT -> { /* mid-transfer cadence — keep draining */ }
+            else -> throw AssertionError("unexpected frame 0x${t2.toString(16)} before VERIFY_OK")
+          }
+        }
+      }
+
+      assertTrue("receiver must advertise a durable resume offset inside the interrupted range, was $base",
+        base in 1..(3L * mib))
+      assertTrue("recovered transfer must complete", listener.done.await(30, TimeUnit.SECONDS))
+      assertNullError(listener)
+      val stats = listener.completedStats!!
+      val file = listener.completedFile!!
+
+      // TEST B — the regression: the result average must be session-scoped.
+      // The old code called stats(FULL durable total): a recovered transfer
+      // divided pre-interruption bytes by the resumed wall (the 130.22 case).
+      val sessionBytes = bytes.size.toLong() - base
+      assertEquals("result stats must count ONLY the resumed session's bytes",
+        sessionBytes, stats.bytes)
+      assertTrue("average must be a valid rate, was ${stats.averageBps}",
+        stats.averageBps == null || (stats.averageBps!!.isFinite() && stats.averageBps!! >= 0.0))
+      if (stats.durationMs > 0) {
+        // durationMs truncates to whole ms — for a few-ms CI loopback session
+        // bytes/durationMs over-reads by up to (ms+1)/ms. Bracket the true
+        // ns-accurate rate between the truncation bounds (5% slack each side).
+        val lo = stats.bytes * 1000.0 / (stats.durationMs + 1) * 0.95
+        val hi = stats.bytes * 1000.0 / stats.durationMs * 1.05
+        assertTrue("average ${stats.averageBps} must match sessionBytes/sessionWall (bounds $lo..$hi)",
+          stats.averageBps != null && stats.averageBps!! >= lo && stats.averageBps!! <= hi)
+      }
+
+      // TEST C — the display fix must not touch integrity
+      assertEquals("completed byte count must be the FULL file", bytes.size.toLong(), file.length())
+      assertTrue("completed file content must be identical to the original",
+        file.readBytes().contentEquals(bytes))
+      assertEquals("SHA-256 must verify over the full recovered file", sha, listener.completedSha)
+      assertFalse("finalized transfer must not leave the part file behind", part.exists())
+    } finally { receiver.stop() }
+  }
+
+  private fun waitUntil(timeoutMs: Long, cond: () -> Boolean): Boolean {
+    val deadline = System.currentTimeMillis() + timeoutMs
+    while (System.currentTimeMillis() < deadline) {
+      if (cond()) return true
+      Thread.sleep(20)
+    }
+    return cond()
   }
 
   /** TurboReceiver verifies the token — the sender must present the same one. */
