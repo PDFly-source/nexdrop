@@ -199,6 +199,16 @@ class TurboReceiver(
           synchronized(out) { out.write(encodeHeader(FrameType.PROGRESS, 12) + encodeOffset(offer.fileId, durable)) }
         }
         val sampler = ThroughputSampler()
+        // v1.4.3 display-telemetry scope fix (docs/KNOWN-ISSUES-1.4.2.md):
+        // the result-screen average must be sessionBytes/sessionWall. The
+        // sampler starts when THIS session starts, so its numerator must
+        // exclude bytes received before the interruption — the old code
+        // passed the FULL durable total, which divided by only the resumed
+        // session's wall time produced inflated averages (the physical
+        // 130.22 MB/s case). DISPLAY TELEMETRY ONLY: durableOffset, READY,
+        // PROGRESS, CREDIT, SHA-256, VERIFY_OK, resume and the RX profile
+        // line are unchanged and keep using the absolute durable offset.
+        val sessionBaseBytes = writer.durableOffset
         var lastNotify = 0L
         synchronized(out) { out.write(encodeHeader(FrameType.READY, 12) + encodeOffset(offer.fileId, writer.durableOffset)) }
 
@@ -246,7 +256,7 @@ class TurboReceiver(
               if (receiverSha == senderSha) {
                 writer.finalizeTo(target)
                 synchronized(out) { out.write(encodeHeader(FrameType.VERIFY_OK, 4) + encodeOffset(offer.fileId, 0).copyOf(4)) }
-                listener.onComplete(target, receiverSha, sampler.stats(durable))
+                listener.onComplete(target, receiverSha, sampler.stats(durable - sessionBaseBytes))
               } else {
                 synchronized(out) {
                   out.write(encodeHeader(FrameType.VERIFY_FAIL, 37) + encodeComplete(offer.fileId, receiverSha))

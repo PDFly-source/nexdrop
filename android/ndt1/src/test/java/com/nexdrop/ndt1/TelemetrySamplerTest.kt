@@ -83,6 +83,44 @@ class TelemetrySamplerTest {
     assertTrue("json must serialize N/A as null", json.contains("\"averageBps\":null"))
   }
 
+  // v1.4.3 maintenance pins (docs/KNOWN-ISSUES-1.4.2.md): the result-screen
+  // average must be sessionBytes/sessionWall — TEST A (normal scope, the
+  // formula every non-recovered transfer uses, unchanged) and TEST E (no
+  // divide-by-zero/NaN/Infinity on degenerate sessions).
+  @Test
+  fun `normal transfer 100 MiB over 10 s - average is exactly 10 MiB per s (TEST A)`() {
+    val clock = FakeClock(0)
+    val sampler = ThroughputSampler(clock.source)
+    val mib = 1024L * 1024
+    for (i in 1..10) {
+      clock.advanceMs(1000)
+      sampler.sample(mib * 10 * i) // 10 MiB per second, uniform
+    }
+    val s = sampler.stats(mib * 100)
+    assertEquals(mib * 100, s.bytes)
+    assertEquals(10_000L, s.durationMs)
+    assertTrue("average ${s.averageBps} must be ~10 MiB/s",
+      s.averageBps != null && Math.abs(s.averageBps!! - 10.0 * 1048576) < 0.01 * 1048576)
+  }
+
+  @Test
+  fun `zero elapsed or zero session bytes - no divide-by-zero, NaN or Infinity (TEST E)`() {
+    val clock = FakeClock(0)
+    val sampler = ThroughputSampler(clock.source)
+    // zero elapsed AND zero bytes (an instant session)
+    val s0 = sampler.stats(0L)
+    assertNull("zero elapsed must serialize as N/A, never a fabricated rate", s0.averageBps)
+    // 1 ms elapsed, zero bytes transferred
+    clock.advanceMs(1)
+    val s1 = sampler.stats(0L)
+    assertTrue("zero bytes over 1 ms must be 0 or N/A, was ${s1.averageBps}",
+      s1.averageBps == null || s1.averageBps!! == 0.0)
+    assertValidRate(s1.averageBps, "average")
+    assertValidRate(s1.sustainedBps, "sustained")
+    assertValidRate(s1.peakSustainedBps, "peak")
+    assertEquals(0L, s1.bytes)
+  }
+
   @Test
   fun `insufficient trailing samples - sustained falls back to average, never a tail burst`() {
     val clock = FakeClock(0)
