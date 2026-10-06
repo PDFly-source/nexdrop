@@ -84,6 +84,7 @@ class TurboSender(private val context: Context) {
     cancelled.set(false)
     lastProfile = SenderProfile()
     thread(name = "ndt1-sender") {
+      RadioPerf.acquire(context) // rc6: keep the Wi-Fi radio awake for THIS transfer only
       try {
         Socket().use { sock ->
           sock.tcpNoDelay = true // measured +17% in the loopback A/B (spec table)
@@ -100,12 +101,25 @@ class TurboSender(private val context: Context) {
           val input = sock.getInputStream()
           val decoder = FrameDecoder()
           val readBuf = ByteArray(Ndt1Tunables.frameBytes)
+          // rc6 FLOW FIX: ONE queue for the whole connection. The old
+          // per-call ArrayDeque returned the first frame of a multi-frame
+          // socket read and DISCARDED the siblings — stale PROGRESS meant a
+          // smaller effective window and extra blocking reads.
+          val pending = ArrayDeque<Pair<Int, ByteArray>>()
+          fun nextFrameP(): Pair<Int, ByteArray>? {
+            while (pending.isEmpty()) {
+              val n = input.read(readBuf)
+              if (n < 0) return null
+              decoder.push(readBuf, n).forEach(pending::addLast)
+            }
+            return pending.removeFirst()
+          }
 
           // ---- HELLO (single-use token proof, fresh nonce) ----
           val nonce = Handshake.randomNonce()
           val hello = encodeHello(session.sessionId, Handshake.helloProof(session.tokenBytes, nonce), nonce)
           out.write(encodeHeader(FrameType.HELLO, hello.size) + hello)
-          val authFrame = nextFrame(decoder, input, readBuf)
+          val authFrame = nextFrameP()
             ?: throw Ndt1Exception("closed during auth")
           when (authFrame.first) {
             FrameType.AUTH_OK -> {
@@ -135,7 +149,7 @@ class TurboSender(private val context: Context) {
           out.write(encodeHeader(FrameType.OFFER, offer.size) + offer)
 
           // ---- READY: resume from the receiver's durable offset ----
-          val readyFrame = nextFrame(decoder, input, readBuf)
+          val readyFrame = nextFrameP()
             ?: throw Ndt1Exception("closed before READY")
           if (readyFrame.first != FrameType.READY) throw Ndt1Exception("expected READY")
           val startOffset = decodeOffset(readyFrame.second).second
@@ -155,21 +169,31 @@ class TurboSender(private val context: Context) {
               paused.withLock { while (localPaused && !cancelled.get()) pauseGate.await() }
               if (cancelled.get()) throw Ndt1Exception("cancelled by sender")
 
-              val space = Ndt1Tunables.windowBytes - (sent - durable)
-              if (space <= 0) {
-                // window full: wait for PROGRESS/CREDIT (timed — this is
-                // the honest credit-starvation counter for the A/B matrix)
-                val waitT0 = System.nanoTime()
-                val f = nextFrame(decoder, input, readBuf) ?: throw Ndt1Exception("peer closed mid-transfer")
-                lastProfile.windowWaits++
-                lastProfile.windowWaitMs += (System.nanoTime() - waitT0) / 1e6
+              // rc6 FLOW FIX: drain EVERY already-buffered control frame
+              // before deciding window space — durable stays fresh while
+              // data flows, so the sender keeps the pipe fed continuously
+              // instead of the old burst -> block-on-credit -> burst cycle.
+              drain@ while (pending.isNotEmpty()) {
+                val f = pending.removeFirst()
                 when (f.first) {
-                  FrameType.PROGRESS -> durable = decodeOffset(f.second).second
+                  FrameType.PROGRESS -> { val o = decodeOffset(f.second).second; if (o > durable) durable = o }
                   FrameType.CREDIT -> {} // window headroom explicit grant
                   FrameType.CANCEL -> { listener.onError("cancelled by receiver"); return@thread }
-                  FrameType.PAUSE -> { readUntilResume(decoder, input, readBuf) }
+                  FrameType.PAUSE -> { readUntilResume(decoder, input, readBuf, pending) }
                   else -> {}
                 }
+                if (sent >= sizeBytes) break@drain
+              }
+
+              val space = Ndt1Tunables.windowBytes - (sent - durable)
+              if (space <= 0) {
+                // window genuinely exhausted: block for the next wire frame
+                // (timed — this is the honest credit-starvation counter)
+                val waitT0 = System.nanoTime()
+                val f = nextFrameP() ?: throw Ndt1Exception("peer closed mid-transfer")
+                lastProfile.windowWaits++
+                lastProfile.windowWaitMs += (System.nanoTime() - waitT0) / 1e6
+                pending.addFirst(f) // processed by the drain loop above
               } else {
                 val want = minOf(Ndt1Tunables.frameBytes.toLong(), sizeBytes - sent).toInt()
                 val readT0 = System.nanoTime()
@@ -206,7 +230,7 @@ class TurboSender(private val context: Context) {
           val complete = encodeComplete(fileId, shaHex)
           out.write(encodeHeader(FrameType.COMPLETE, complete.size) + complete)
           while (true) {
-            val f = nextFrame(decoder, input, readBuf) ?: throw Ndt1Exception("closed before VERIFY")
+            val f = nextFrameP() ?: throw Ndt1Exception("closed before VERIFY")
             if (f.first == FrameType.PONG && lastProfile.verifyRttMs <= 0) {
               lastProfile.verifyRttMs = (System.nanoTime() - rtt0) / 1e6
             }
@@ -227,6 +251,7 @@ class TurboSender(private val context: Context) {
       } catch (e: Exception) {
         listener.onError(e.message ?: "sender error")
       } finally {
+        RadioPerf.release() // rc6: radio back to normal power save on every exit path
         active = false
       }
     }
@@ -273,21 +298,19 @@ class TurboSender(private val context: Context) {
     paused.withLock { localPaused = false; cancelled.set(true); pauseGate.signalAll() }
   }
 
-  private fun readUntilResume(decoder: FrameDecoder, input: java.io.InputStream, buf: ByteArray) {
+  private fun readUntilResume(
+    decoder: FrameDecoder, input: java.io.InputStream,
+    buf: ByteArray, pending: ArrayDeque<Pair<Int, ByteArray>>,
+  ) {
     while (true) {
-      val f = nextFrame(decoder, input, buf) ?: throw Ndt1Exception("closed while paused")
+      while (pending.isEmpty()) {
+        val n = input.read(buf)
+        if (n < 0) throw Ndt1Exception("closed while paused")
+        decoder.push(buf, n).forEach(pending::addLast)
+      }
+      val f = pending.removeFirst()
       if (f.first == FrameType.RESUME) return
       if (f.first == FrameType.CANCEL) throw Ndt1Exception("cancelled while paused")
-    }
-  }
-
-  private fun nextFrame(decoder: FrameDecoder, input: java.io.InputStream, buf: ByteArray): Pair<Int, ByteArray>? {
-    val pending = ArrayDeque<Pair<Int, ByteArray>>()
-    while (true) {
-      val n = input.read(buf)
-      if (n < 0) return null
-      decoder.push(buf, n).forEach(pending::addLast) // zero-copy feed (v1.4.2)
-      if (pending.isNotEmpty()) return pending.removeFirst()
     }
   }
 }

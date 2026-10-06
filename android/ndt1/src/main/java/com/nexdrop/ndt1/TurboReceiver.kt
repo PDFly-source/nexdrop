@@ -27,6 +27,9 @@ class TurboReceiver(
   private val session: SessionToken,
   private val downloadDir: File,
   private val listener: Listener,
+  /** rc6: app context for the transfer radio lock — null keeps legacy
+   *  behavior (tests, TV) byte-identical, just without the lock. */
+  private val appContext: android.content.Context? = null,
 ) {
   interface Listener {
     /** Must return quickly — decision UI runs on the caller's side. */
@@ -139,6 +142,7 @@ class TurboReceiver(
   private fun handleConnection(sock: Socket) {
     userCancelled.set(false)
     lastProfile = ReceiverProfile()
+    RadioPerf.acquire(appContext) // rc6: keep the Wi-Fi radio awake for THIS transfer only
     try {
       sock.use { s ->
         // Phase C: the REAL socket config the kernel granted this accepted
@@ -261,6 +265,7 @@ class TurboReceiver(
     } catch (e: Exception) {
       listener.onError(e.message ?: "receiver error")
     } finally {
+      RadioPerf.release() // rc6: radio back to normal power save on every exit path
       controlOut = null
       // Mission §5: a USER cancel removes the incomplete part file on EVERY
       // exit path (EOF, IO error, wire CANCEL) — a connection drop alone

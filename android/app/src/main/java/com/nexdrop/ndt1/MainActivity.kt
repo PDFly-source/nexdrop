@@ -997,7 +997,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     if (endpoint == null) { screen = Screen.UNAVAILABLE; render(); return }
     val session = Handshake.newSessionToken()
     val dl = File(getExternalFilesDir(null) ?: filesDir, "downloads").apply { mkdirs() }
-    receiver = TurboReceiver(session, dl, this)
+    receiver = TurboReceiver(session, dl, this, applicationContext) // rc6: radio lock context
     val port = try { receiver!!.start(0, endpoint.ip) } catch (e: Exception) {
       screen = Screen.UNAVAILABLE; render(); return
     }
