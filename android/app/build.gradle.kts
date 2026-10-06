@@ -20,8 +20,8 @@ android {
     targetSdk = 34
     // Production release (mission 2026-10-04 §14): production label/icons,
     // release build in CI. Debug APK stays available for engineering.
-    versionCode = 13
-    versionName = "1.4.2-rc6"  // internal: transfer Wi-Fi low-latency radio lock + sender continuous-flow fix — not a release
+    versionCode = 14
+    versionName = "1.4.2-rc7"  // release candidate: engine byte-identical to validated rc6 (5 GHz 3-run mean 38.86 MB/s; 2.4 GHz 6.43) — hardening only
   }
   // Production signing (mission 2026-10-04 signing pipeline): the keystore
   // and passwords live ONLY in GitHub Actions secrets
