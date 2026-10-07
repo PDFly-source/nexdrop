@@ -100,16 +100,23 @@ class PreviewScheduler(private val runner: (Runnable) -> Unit) {
   @Volatile private var generation = 0
   val inFlightCount: Int get() = synchronized(lock) { inFlight.size }
 
-  /** @return true when this call actually enqueued the job (false = deduped). */
+  /** @return true when this call actually enqueued the job (false = deduped or rejected). */
   fun submit(key: String, task: () -> Unit): Boolean = synchronized(lock) {
     if (key in inFlight) return false
     inFlight += key
     val g = generation
-    runner(Runnable {
-      try { if (g == generation) task() }
-      catch (_: Exception) { /* preview errors are always swallowed */ }
-      finally { synchronized(lock) { inFlight -= key } }
-    })
+    try {
+      runner(Runnable {
+        try { if (g == generation) task() }
+        catch (_: Exception) { /* preview errors are always swallowed */ }
+        finally { synchronized(lock) { inFlight -= key } }
+      })
+    } catch (_: Exception) {
+      // a dead/rejected preview worker must never crash the queue or a
+      // transfer — release the key and report rejection
+      inFlight -= key
+      return false
+    }
     true
   }
 
