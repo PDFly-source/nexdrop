@@ -155,10 +155,12 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private var sender: TurboSender?
     get() = appSender
     set(v) { appSender = v }
-  private var transferStartNanos = 0L
   private var paused: Boolean
     get() = appTransferPaused
     set(v) { appTransferPaused = v }
+  private var transferStartNanos: Long
+    get() = appTransferStartNanos
+    set(v) { appTransferStartNanos = v }
   private var pendingPairing: QrPairing.Pairing? = null
   private var benchModeMiB: Int?
     get() = appBenchModeMiB
@@ -701,6 +703,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     q?.rebindHost(this)
     if (appRole != Role.NONE && (q?.current != null || appReceiver != null || appSender != null)) {
       screen = Screen.TRANSFER // same session, same numbers, no duplicate job
+      bindEngineControl() // progress/ETA/notification controls act through the LIVE Activity
     } else if (q != null && (q.hasQueued() || q.isPaused)) {
       screen = Screen.SEND // a live queue survives the recreation
     }
@@ -2897,6 +2900,23 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
 
   private fun hideTransferUi() { sender = null; receiver = null; TransferService.engineControl = null; setTransferActive(false); rxWatchdogDisarm() }
 
+  /** Notification actions control the LIVE engine only (Phase 3). The same
+   *  semantics as the on-screen buttons: toggle pause, hard cancel.
+   *  v1.5 HARDENING: called from beginTransfer AND from onCreate rehydrate —
+   *  a recreated Activity rebinds the callbacks so progress, ETA, notification
+   *  Pause/Cancel and the watchdog all act through the LIVE Activity. */
+  private fun bindEngineControl() {
+    TransferService.engineControl = { cmd ->
+      runOnUiThread {
+        when (cmd) {
+          "pause" -> { paused = !paused; if (paused) { receiver?.pause(); sender?.pause() } else { receiver?.resume(); sender?.resume() }
+            if (role == Role.SEND) queue.onTransferPaused(paused) }
+          "cancel" -> cancelTransfer()
+        }
+      }
+    }
+  }
+
   private fun setTransferActive(on: Boolean) {
     transferActive = on
     applyKeepAwake()
@@ -2941,17 +2961,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     paused = false
     transferGotFirstProgress = false
     lastGraphSampleMs = 0; lastGraphDurable = -1; lastNotifMs = 0
-    // Notification actions control the LIVE engine only (Phase 3). The same
-    // semantics as the on-screen buttons: toggle pause, hard cancel.
-    TransferService.engineControl = { cmd ->
-      runOnUiThread {
-        when (cmd) {
-          "pause" -> { paused = !paused; if (paused) { receiver?.pause(); sender?.pause() } else { receiver?.resume(); sender?.resume() }
-            if (role == Role.SEND) queue.onTransferPaused(paused) }
-          "cancel" -> cancelTransfer()
-        }
-      }
-    }
+    bindEngineControl()
     backStack.clear(); screen = Screen.TRANSFER
     render()
   }
@@ -3388,6 +3398,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     private var appBenchModeMiB: Int? = null
     private var appPeerIp: String? = null
     private var appLastRxProgressMs = 0L
+    private var appTransferStartNanos = 0L
     private var appRxWatchdogArmed = false
     private var appTransferPaused = false
     private var appDiscoveryBindError: String? = null
