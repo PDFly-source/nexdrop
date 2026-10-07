@@ -243,7 +243,13 @@ class PreviewProvider(appContext: Context) {
    */
   internal fun decodeLegacyImage(uri: Uri): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    appContentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
+    // NOTE: the bounds decode legitimately returns null — the null check must
+    // be on the STREAM, never on the decode result (an elvis on the `use`
+    // block would reject every image: the original Phase C code had exactly
+    // that bug, silently disabling previews on API 26/27 devices; caught by
+    // the closure instrumented tests).
+    val boundsStream = appContentResolver.openInputStream(uri) ?: return null
+    boundsStream.use { BitmapFactory.decodeStream(it, null, bounds) }
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
     val (tw, th) = targetSize(bounds.outWidth, bounds.outHeight)
     var sample = 1

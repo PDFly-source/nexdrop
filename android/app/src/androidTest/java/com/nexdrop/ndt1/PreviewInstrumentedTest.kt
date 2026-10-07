@@ -325,7 +325,14 @@ class PreviewInstrumentedTest {
     assertTrue(bridgeLeftovers().isEmpty())
   }
 
-  /** Provider serves files from the app cacheDir (same uid/process). */
-  private fun putBridgeFile(name: String, bytes: ByteArray): File =
-    tmp(name).apply { writeBytes(bytes) }
+  /**
+   * ApkBridgeProvider runs in the TEST package, whose context (and
+   * cacheDir) is distinct from the target app's — source files must be
+   * written into the provider's own cacheDir, not tmp() (target cacheDir).
+   */
+  private fun putBridgeFile(name: String, bytes: ByteArray): File {
+    val dir = InstrumentationRegistry.getInstrumentation().context.cacheDir
+    dir.mkdirs()
+    return File(dir, name).apply { writeBytes(bytes) }
+  }
 }
