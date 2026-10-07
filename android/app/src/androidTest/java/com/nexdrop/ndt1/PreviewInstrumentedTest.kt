@@ -208,3 +208,123 @@ class PreviewInstrumentedTest {
     assertEquals(0, prov.cacheEntries())
   }
 }
+
+  // ========================================================================
+  // v1.5 Phase C closure: EXIF orientation (>=28 path AND legacy 26/27 path)
+  // ========================================================================
+
+  /** 400x200 JPEG with EXIF orientation 6 (rotate 90° CW) — portrait preview. */
+  private fun writeRotatedJpeg(name: String): File {
+    val f = writeJpeg(name, 400, 200, Color.rgb(30, 90, 220))
+    androidx.exifinterface.media.ExifInterface(f.absolutePath).apply {
+      setAttribute(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, "6")
+      saveAttributes()
+    }
+    return f
+  }
+
+  @Test fun rotatedExifJpegPreviewIsUpright() {
+    // On API >= 28 the main path is ImageDecoder, which must honor EXIF.
+    val f = writeRotatedJpeg("rotated.jpg")
+    val r = gen(f, FileKind.IMAGE)
+    assertTrue("got $r", r is PreviewResult.ImagePreview)
+    r as PreviewResult.ImagePreview
+    assertTrue("expected portrait after EXIF 90°, got ${r.bitmap.width}x${r.bitmap.height}",
+      r.bitmap.height > r.bitmap.width)
+  }
+
+  @Test fun legacyDecodeAppliesExifOrientation() {
+    // Directly exercises the API 26/27 branch (decodeLegacyImage) on this
+    // emulator regardless of its API level — the branch code under test is
+    // the one that runs on 26/27 devices.
+    val f = writeRotatedJpeg("rotated_legacy.jpg")
+    val bmp = prov.decodeLegacyImage(Uri.fromFile(f))
+    assertNotNull("legacy decode must succeed", bmp)
+    bmp!!
+    assertTrue("legacy path must apply EXIF 90°, got ${bmp.width}x${bmp.height}",
+      bmp.height > bmp.width)
+  }
+
+  @Test fun legacyDecodeNormalImageStaysLandscape() {
+    val f = writeJpeg("normal_legacy.jpg", 400, 200, Color.GREEN)
+    val bmp = prov.decodeLegacyImage(Uri.fromFile(f))
+    assertNotNull(bmp); bmp!!
+    assertTrue("got ${bmp.width}x${bmp.height}", bmp.width > bmp.height)
+  }
+
+  @Test fun legacyDecodeCorruptedImageReturnsNull() {
+    val f = writeBytes("bad_legacy.jpg", ByteArray(64) { 7 })
+    assertNull("corrupted image must decode to null (typed icon upstream)",
+      prov.decodeLegacyImage(Uri.fromFile(f)))
+  }
+
+  @Test fun legacyDecodeLargeImageStaysBounded() {
+    val f = writeJpeg("large_legacy.jpg", 2048, 2048, Color.BLUE)
+    val bmp = prov.decodeLegacyImage(Uri.fromFile(f))
+    assertNotNull(bmp); bmp!!
+    assertTrue("got ${bmp.width}x${bmp.height}", maxOf(bmp.width, bmp.height) <= 512)
+  }
+
+  @Test fun applyExifOrientationRotatesAndFlipsDimensions() {
+    val r90 = prov.applyExifOrientation(Bitmap.createBitmap(10, 6, Bitmap.Config.ARGB_8888), 6)
+    assertEquals("90° swaps dimensions", 6, r90.width); assertEquals(10, r90.height)
+    val flip = prov.applyExifOrientation(Bitmap.createBitmap(10, 6, Bitmap.Config.ARGB_8888), 2)
+    assertEquals("flip keeps dimensions", 10, flip.width); assertEquals(6, flip.height)
+  }
+
+  // ========================================================================
+  // v1.5 Phase C closure: content:// APK bridge (SAF/share-sheet sources)
+  // ========================================================================
+
+  private val authority = "com.nexdrop.ndt1.test.apkbridge"
+  private fun bridgeUri(name: String) = Uri.parse("content://$authority/$name")
+  private fun bridgeLeftovers(): List<File> =
+    ctx.cacheDir.listFiles { f -> f.name.startsWith("ndt1-apk-bridge-") }?.toList() ?: emptyList()
+
+  @Test fun contentApkYieldsPackagePreviewAndCleansUp() {
+    val apkBytes = File(InstrumentationRegistry.getInstrumentation().context.packageCodePath).readBytes()
+    // tmp() writes into the target app cacheDir — ApkBridgeProvider serves it.
+    putBridgeFile("bridge_real.apk", apkBytes)
+    val r = prov.generate(bridgeUri("bridge_real.apk"), apkBytes.size.toLong(), 0,
+      FileKind.APK, "application/vnd.android.package-archive")
+    assertTrue("got $r", r is PreviewResult.ApkPreview)
+    r as PreviewResult.ApkPreview
+    assertNotNull("APK icon must extract via the bridge", r.icon)
+    assertTrue("label must extract", r.label.isNotEmpty())
+    assertTrue("temp bridge file must be deleted, found ${bridgeLeftovers()}",
+      bridgeLeftovers().isEmpty())
+  }
+
+  @Test fun contentApkInvalidFallsBackToTypedIcon() {
+    putBridgeFile("bridge_bad.apk", ByteArray(128) { 9 })
+    val r = prov.generate(bridgeUri("bridge_bad.apk"), 128, 0, FileKind.APK, null)
+    assertTrue("got $r", r is PreviewResult.TypedIcon)
+    assertTrue(bridgeLeftovers().isEmpty())
+  }
+
+  @Test fun contentApkInaccessibleFallsBackToTypedIcon() {
+    // Provider has no such file (openFile → null) — like a revoked SAF grant.
+    val r = prov.generate(bridgeUri("bridge_missing.apk"), 1000, 0, FileKind.APK, null)
+    assertTrue("got $r", r is PreviewResult.TypedIcon)
+    assertTrue(bridgeLeftovers().isEmpty())
+  }
+
+  @Test fun contentApkUnknownSizeSkipsBridge() {
+    // size == -1 (FileMeta could not resolve) must never start a copy.
+    putBridgeFile("bridge_nosize.apk", ByteArray(64) { 1 })
+    val r = prov.generate(bridgeUri("bridge_nosize.apk"), -1, 0, FileKind.APK, null)
+    assertTrue("got $r", r is PreviewResult.TypedIcon)
+    assertTrue(bridgeLeftovers().isEmpty())
+  }
+
+  @Test fun contentApkOversizedSkipsBridge() {
+    // size over the 256 MiB cap must never start a copy.
+    putBridgeFile("bridge_huge.apk", ByteArray(64) { 1 })
+    val r = prov.generate(bridgeUri("bridge_huge.apk"), 300L * 1024 * 1024, 0, FileKind.APK, null)
+    assertTrue("got $r", r is PreviewResult.TypedIcon)
+    assertTrue(bridgeLeftovers().isEmpty())
+  }
+
+  /** Provider serves files from the app cacheDir (same uid/process). */
+  private fun putBridgeFile(name: String, bytes: ByteArray): File =
+    tmp(name).apply { writeBytes(bytes) }

@@ -81,6 +81,13 @@ dependencies {
   implementation("com.journeyapps:zxing-android-embedded:4.3.0")
   // v1.5 Phase B: app-module unit tests (FileKind classification — pure JVM)
   testImplementation("junit:junit:4.13.2")
+  // v1.5 Phase C closure: EXIF orientation on API 26/27 (ImageDecoder handles
+  // it natively from 28). androidx.exifinterface is the maintained minimal
+  // replacement for the unreliable platform android.media.ExifInterface on
+  // those APIs — ~100 KB, no transitive dependencies, NOT a large image
+  // framework. The legacy sampled-decode path reads ONLY the JPEG EXIF
+  // segment and rotates the <=512 px thumbnail.
+  implementation("androidx.exifinterface:exifinterface:1.3.7")
   androidTestImplementation("androidx.test.ext:junit:1.1.5")
   androidTestImplementation("androidx.test:runner:1.5.2")
 }

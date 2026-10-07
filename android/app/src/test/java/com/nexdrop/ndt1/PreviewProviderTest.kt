@@ -133,3 +133,59 @@ class PreviewConcurrencyTest {
     assertEquals(0, s.inFlightCount) // in-flight bookkeeping drains
   }
 }
+
+// ===========================================================================
+// v1.5 Phase C closure: EXIF mapping + APK bridge policy (pure)
+// ===========================================================================
+
+class ExifTransformSpecTest {
+
+  // EXIF orientation values as Ints (they are shorts in androidx).
+  private val NORMAL = 1; private val UNDEFINED = 0
+  private val FLIP_HORIZONTAL = 2; private val ROTATE_180 = 3
+  private val FLIP_VERTICAL = 4; private val TRANSPOSE = 5
+  private val ROTATE_90 = 6; private val TRANSVERSE = 7
+  private val ROTATE_270 = 8
+
+  @Test fun orientationMapIsCanonical() {
+    assertEquals(0 to false, exifTransformSpec(NORMAL))
+    assertEquals(0 to false, exifTransformSpec(UNDEFINED))
+    assertEquals(90 to false, exifTransformSpec(ROTATE_90))
+    assertEquals(180 to false, exifTransformSpec(ROTATE_180))
+    assertEquals(270 to false, exifTransformSpec(ROTATE_270))
+    assertEquals(0 to true, exifTransformSpec(FLIP_HORIZONTAL))
+    assertEquals(180 to true, exifTransformSpec(FLIP_VERTICAL))
+    assertEquals(270 to true, exifTransformSpec(TRANSPOSE))
+    assertEquals(90 to true, exifTransformSpec(TRANSVERSE))
+  }
+
+  @Test fun unknownNeverRotates() {
+    // Never guess a rotation for an unrecognized value — an upright-decode
+    // thumbnail is honest; a fabricated 90° turn would corrupt the preview.
+    assertEquals(0 to false, exifTransformSpec(42))
+    assertEquals(0 to false, exifTransformSpec(-1))
+  }
+}
+
+class ApkBridgePolicyTest {
+
+  private val GIB = 1024L * 1024 * 1024
+  private val MIB = 1024L * 1024
+
+  @Test fun onlyKnownBoundedSizesBridge() {
+    val usable = 1 * GIB
+    assertTrue(shouldBridgeApk(5 * MIB, usable))
+    assertFalse("unknown size must never bridge", shouldBridgeApk(0, usable))
+    assertFalse("FileMeta miss must never bridge", shouldBridgeApk(-1, usable))
+    assertFalse("over-cap APK keeps the typed icon", shouldBridgeApk(257 * MIB, usable))
+    assertTrue("exactly at the cap still bridges (1..max is inclusive)",
+      shouldBridgeApk(256 * MIB, usable))
+  }
+
+  @Test fun insufficientHeadroomNeverBridges() {
+    val size = 5 * MIB
+    assertFalse("no headroom", shouldBridgeApk(size, 5 * MIB))
+    assertFalse("below size+margin", shouldBridgeApk(size, size + APK_BRIDGE_MARGIN_BYTES))
+    assertTrue("above size+margin", shouldBridgeApk(size, size + APK_BRIDGE_MARGIN_BYTES + 1))
+  }
+}

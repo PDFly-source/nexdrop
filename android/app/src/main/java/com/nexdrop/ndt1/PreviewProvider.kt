@@ -13,7 +13,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import androidx.exifinterface.media.ExifInterface
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -86,6 +88,38 @@ class BoundedLruCache<K, V>(private val maxEntries: Int) {
 
 fun defaultPreviewCacheEntries(): Int =
   (Runtime.getRuntime().maxMemory() / (16L * 1024 * 1024)).toInt().coerceIn(12, 48)
+
+// ---- v1.5 Phase C closure: EXIF mapping (pure, JVM unit-tested) ----------
+// Canonical Android orientation table: the sampled legacy decode (API 26/27)
+// gets upright previews. Values are the EXIF orientation shorts as Ints.
+
+/** (degrees CW, flipX) for an EXIF orientation value — pure. */
+fun exifTransformSpec(orientation: Int): Pair<Int, Boolean> = when (orientation) {
+  ExifInterface.ORIENTATION_ROTATE_90.toInt() -> 90 to false
+  ExifInterface.ORIENTATION_ROTATE_180.toInt() -> 180 to false
+  ExifInterface.ORIENTATION_ROTATE_270.toInt() -> 270 to false
+  ExifInterface.ORIENTATION_FLIP_HORIZONTAL.toInt() -> 0 to true
+  ExifInterface.ORIENTATION_FLIP_VERTICAL.toInt() -> 180 to true
+  ExifInterface.ORIENTATION_TRANSPOSE.toInt() -> 270 to true
+  ExifInterface.ORIENTATION_TRANSVERSE.toInt() -> 90 to true
+  else -> 0 to false // NORMAL / UNDEFINED / unknown — never guess a rotation
+}
+
+// ---- v1.5 Phase C closure: APK bridge policy (pure, JVM unit-tested) ------
+
+/** Larger APKs keep the honest typed icon — bounded cache-disk use. */
+internal const val APK_BRIDGE_MAX_BYTES = 256L * 1024 * 1024
+
+/** Required free-space headroom above the streamed copy. */
+internal const val APK_BRIDGE_MARGIN_BYTES = 64L * 1024 * 1024
+
+/**
+ * Bridge ONLY when the size is honestly known (FileMeta resolved it), the
+ * APK is within the cap, and the cache dir has real room. Otherwise the
+ * typed icon stays — no speculative multi-hundred-MB copies. Pure.
+ */
+fun shouldBridgeApk(size: Long, usableBytes: Long): Boolean =
+  size in 1..APK_BRIDGE_MAX_BYTES && usableBytes > size + APK_BRIDGE_MARGIN_BYTES
 
 /**
  * Dedup + cancellation for preview jobs. submit() is a no-op for a key
@@ -167,7 +201,7 @@ class PreviewProvider(appContext: Context) {
       PreviewPlan.VIDEO -> videoPreview(uri)
       PreviewPlan.AUDIO -> audioPreview(uri)
       PreviewPlan.PDF -> pdfPreview(uri)
-      PreviewPlan.APK -> apkPreview(uri)
+      PreviewPlan.APK -> apkPreview(uri, size)
       PreviewPlan.ICON -> PreviewResult.TypedIcon
     }
   } catch (_: Exception) {
@@ -187,7 +221,7 @@ class PreviewProvider(appContext: Context) {
       }
       return PreviewResult.ImagePreview(bmp)
     }
-    return sampledBitmapFactory(uri)?.let { PreviewResult.ImagePreview(it) } ?: PreviewResult.TypedIcon
+    return decodeLegacyImage(uri)?.let { PreviewResult.ImagePreview(it) } ?: PreviewResult.TypedIcon
   }
 
   private fun targetSize(w: Int, h: Int): Pair<Int, Int> {
@@ -196,9 +230,18 @@ class PreviewProvider(appContext: Context) {
     return max(1, (w * scale).roundToInt()) to max(1, (h * scale).roundToInt())
   }
 
-  private fun sampledBitmapFactory(uri: Uri): Bitmap? {
-    // API 26/27 path: read bounds first (bounded header read), then decode
-    // one sampled frame. No EXIF handling below 28 (documented limitation).
+  /**
+   * API 26/27 path: bounded header read, ONE sampled decode, then EXIF
+   * orientation applied to the <=512 px thumbnail (ImageDecoder applies
+   * EXIF automatically from API 28; this manual pass closes that gap for
+   * 26/27). Orientation is read with androidx.exifinterface — the
+   * platform android.media.ExifInterface on these APIs is unreliable and
+   * androidx is the maintained, dependency-free replacement (~100 KB, no
+   * transitive deps; NOT a large image framework).
+   * `internal` so the instrumented tests can exercise this exact branch on
+   * any API level.
+   */
+  internal fun decodeLegacyImage(uri: Uri): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     appContentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
@@ -206,7 +249,31 @@ class PreviewProvider(appContext: Context) {
     var sample = 1
     while (bounds.outWidth / (sample * 2) >= tw && bounds.outHeight / (sample * 2) >= th) sample *= 2
     val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-    return appContentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+    val bmp = appContentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) } ?: return null
+    return applyExifOrientation(bmp, readExifOrientation(uri))
+  }
+
+  /** Fresh bounded stream — only the JPEG EXIF segment is parsed. */
+  private fun readExifOrientation(uri: Uri): Int = try {
+    appContentResolver.openInputStream(uri)?.use { stream ->
+      ExifInterface(stream).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toInt())
+    } ?: ExifInterface.ORIENTATION_NORMAL.toInt()
+  } catch (_: Exception) {
+    ExifInterface.ORIENTATION_NORMAL.toInt() // no/unparseable EXIF → treat as upright, never a crash
+  }
+
+  /** Rotate/flip the small thumbnail only — the original is never loaded. */
+  internal fun applyExifOrientation(bmp: Bitmap, orientation: Int): Bitmap {
+    val (degrees, flipX) = exifTransformSpec(orientation)
+    if (degrees == 0 && !flipX) return bmp
+    val m = android.graphics.Matrix()
+    m.setRotate(degrees.toFloat())
+    if (flipX) m.postScale(-1f, 1f)
+    return try {
+      Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+    } catch (_: Exception) {
+      bmp // OutOfMemoryError-free safety: rotation is cosmetic, keep upright-decode
+    }
   }
 
   // ---- VIDEO: ONE representative frame + duration; never decodes the file ----
@@ -277,9 +344,16 @@ class PreviewProvider(appContext: Context) {
 
   // ---- APK: package metadata only — NEVER install, launch or execute ----
 
-  private fun apkPreview(uri: Uri): PreviewResult {
-    if (uri.scheme != "file") return PreviewResult.TypedIcon // content:// APK shares have no path; honest fallback
-    val path = uri.path ?: return PreviewResult.TypedIcon
+  private fun apkPreview(uri: Uri, size: Long): PreviewResult {
+    val path = if (uri.scheme == "file") uri.path ?: return PreviewResult.TypedIcon else null
+    return when {
+      path != null -> apkPreviewFromPath(path)
+      uri.scheme == "content" -> apkPreviewViaBridge(uri, size)
+      else -> PreviewResult.TypedIcon
+    }
+  }
+
+  private fun apkPreviewFromPath(path: String): PreviewResult {
     val pm = app.packageManager
     val pi = pm.getPackageArchiveInfo(path, 0) ?: return PreviewResult.TypedIcon
     val ai = pi.applicationInfo ?: return PreviewResult.TypedIcon
@@ -288,6 +362,60 @@ class PreviewProvider(appContext: Context) {
     val version = pi.versionName ?: ""
     val iconBmp = try { drawableToBoundedBitmap(ai.loadIcon(pm)) } catch (_: Exception) { null }
     return PreviewResult.ApkPreview(iconBmp, label, version)
+  }
+
+  /**
+   * content:// APKs (SAF / share-sheet sources) have no filesystem path, and
+   * PackageManager only reads metadata from a file. Bridge = a STREAMED copy
+   * into a temporary cache file (64 KiB buffer, bounded to the caller-known
+   * size), metadata extraction, immediate deletion in finally. Constraints,
+   * all enforced here:
+   *   - never the whole file in RAM (64 KiB chunks)
+   *   - never persisted as user data (cache dir, always deleted; stale
+   *     leftovers from a killed process are swept on the next bridge)
+   *   - never installed, launched or executed — getPackageArchiveInfo only
+   *     parses zip/package metadata
+   *   - never on the main thread (runs on the single preview worker)
+   *   - cancellation-safe: queued jobs never started allocate nothing; the
+   *     at-most-one in-flight bridge always reaches its finally-delete
+   *   - the original URI is only ever READ, never modified
+   *   - unknown size, oversized APK (> 256 MB) or insufficient cache space
+   *     → honest TypedIcon, no copy is started
+   */
+  private fun apkPreviewViaBridge(uri: Uri, size: Long): PreviewResult {
+    val dir = app.cacheDir
+    if (!shouldBridgeApk(size, dir.usableSpace)) return PreviewResult.TypedIcon
+    sweepStaleBridgeFiles(dir)
+    val tmp = File(dir, "ndt1-apk-bridge-${counter.incrementAndGet()}.apk")
+    try {
+      if (!streamCopyBounded(uri, tmp, size)) return PreviewResult.TypedIcon
+      return apkPreviewFromPath(tmp.absolutePath)
+    } finally {
+      try { tmp.delete() } catch (_: Exception) { /* best-effort */ }
+    }
+  }
+
+  private fun streamCopyBounded(uri: Uri, dst: File, size: Long): Boolean {
+    appContentResolver.openInputStream(uri)?.use { src ->
+      FileOutputStream(dst).use { out ->
+        val buf = ByteArray(64 * 1024)
+        var remaining = size
+        while (remaining > 0) {
+          val n = src.read(buf, 0, min(buf.size.toLong(), remaining).toInt())
+          if (n <= 0) return false // source shorter than claimed — honest reject
+          out.write(buf, 0, n)
+          remaining -= n
+        }
+        return true
+      }
+    } ?: return false
+  }
+
+  /** Remnants of a process-killed bridge must never accumulate. */
+  private fun sweepStaleBridgeFiles(dir: File) {
+    try {
+      dir.listFiles { f -> f.name.startsWith("ndt1-apk-bridge-") }?.forEach { f -> f.delete() }
+    } catch (_: Exception) { /* sweep is best-effort */ }
   }
 
   private fun drawableToBoundedBitmap(drawable: android.graphics.drawable.Drawable): Bitmap {
