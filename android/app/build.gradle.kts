@@ -21,7 +21,10 @@ android {
     // Production release (mission 2026-10-04 §14): production label/icons,
     // release build in CI. Debug APK stays available for engineering.
     versionCode = 16
-    versionName = "1.4.3"  // maintenance: recovered-transfer result-average scope fix (display telemetry only — wire protocol, durability, resume, SHA-256 and performance byte-identical to 1.4.2)
+    versionName = "1.4.3"
+    // v1.5 Phase C: instrumented preview tests (PreviewInstrumentedTest)
+    // run on the CI emulator via :app:connectedDebugAndroidTest.
+    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"  // maintenance: recovered-transfer result-average scope fix (display telemetry only — wire protocol, durability, resume, SHA-256 and performance byte-identical to 1.4.2)
   }
   // Production signing (mission 2026-10-04 signing pipeline): the keystore
   // and passwords live ONLY in GitHub Actions secrets
@@ -75,4 +78,6 @@ dependencies {
   implementation("com.journeyapps:zxing-android-embedded:4.3.0")
   // v1.5 Phase B: app-module unit tests (FileKind classification — pure JVM)
   testImplementation("junit:junit:4.13.2")
+  androidTestImplementation("androidx.test.ext:junit:1.1.5")
+  androidTestImplementation("androidx.test:runner:1.5.2")
 }

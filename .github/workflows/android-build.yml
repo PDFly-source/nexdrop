@@ -237,6 +237,14 @@ jobs:
           pip3 install --quiet zxing-cpp pillow
           npx --yes tsx --version
 
+      # v1.5 Phase C: gradle (JDK 17) runs the instrumented preview tests
+      # inside the emulator-runner script.
+      - name: Set up JDK 17 (smoke-side gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Boot Android 16 (API 36) emulator and run the startup smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:

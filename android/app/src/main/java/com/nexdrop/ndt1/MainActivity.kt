@@ -165,6 +165,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     @Volatile var state = "Ready" // Ready | Sending | Done
   }
   private val sendQueue = ArrayList<QItem>()
+  /** v1.5 Phase C: bounded async previews — one low-priority worker, LRU cache, never on a transfer thread. */
+  private val previews by lazy { PreviewProvider(applicationContext) }
   private var queueIndex = -1
   private var queueBytesDone = 0L
   private var activePairing: QrPairing.Pairing? = null
@@ -268,6 +270,84 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     FileKind.IMAGE -> "Image"; FileKind.VIDEO -> "Video"; FileKind.AUDIO -> "Audio"
     FileKind.PDF -> "PDF"; FileKind.APK -> "App"; FileKind.ARCHIVE -> "Archive"
     FileKind.DOC -> "Document"; FileKind.OTHER -> "File"
+  }
+
+  /**
+   * v1.5 Phase C queue subline: size · [duration/label when real] · MIME.
+   * Always real metadata — durations/labels arrive only from an actual
+   * PreviewResult, never guessed.
+   */
+  private fun queueSub(item: QItem, index: Int, extra: String? = null): TextView {
+    val parts = ArrayList<String>()
+    parts.add(SpeedFormat.bytesText(item.size))
+    extra?.let { parts.add(it) }
+    parts.add(item.mime ?: kindLabel(item.kind))
+    parts.add("#${index + 1}")
+    return sm(parts.joinToString("  ·  "))
+  }
+
+  private fun durText(ms: Long): String {
+    val s = ms / 1000
+    return "%d:%02d".format(s / 60, s % 60)
+  }
+
+  /**
+   * Queue-row preview surface: starts as the typed kind icon (Phase B);
+   * the async bounded preview swaps in a REAL thumbnail when one exists.
+   * Corrupted/unreadable content keeps the honest icon — never blank,
+   * never faked.
+   */
+  private fun previewBox(item: QItem, index: Int, sub: TextView): android.widget.FrameLayout {
+    val key = previewCacheKey(item.uri.toString(), item.size, item.lastModified)
+    val frame = android.widget.FrameLayout(this).apply {
+      layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+      background = GlassSurface()
+      clipToOutline = true
+      tag = key
+      contentDescription = "Preview: ${item.name}"
+    }
+    frame.addView(ImageView(this).apply {
+      setImageResource(kindIcon(item.kind))
+      imageTintList = android.content.res.ColorStateList.valueOf(D.MUTED)
+      layoutParams = android.widget.FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER)
+      setPadding(dp(11), dp(11), dp(11), dp(11))
+      scaleType = ImageView.ScaleType.FIT_CENTER
+    })
+    previews.request(item.uri, item.size, item.lastModified, item.kind, item.mime) { res ->
+      // The row may have been rebuilt by a later render() — only the row
+      // whose frame still carries this key is updated.
+      if (frame.tag != key || frame.parent == null) return@request
+      when (res) {
+        is PreviewResult.ImagePreview -> applyThumb(frame, res.bitmap)
+        is PreviewResult.PdfPreview -> applyThumb(frame, res.page)
+        is PreviewResult.VideoPreview -> {
+          applyThumb(frame, res.frame)
+          sub.text = queueSub(item, index, durText(res.durationMs)).text
+        }
+        is PreviewResult.AudioPreview ->
+          if (res.durationMs > 0) sub.text = queueSub(item, index, durText(res.durationMs)).text
+        is PreviewResult.ApkPreview -> {
+          res.icon?.let { applyThumb(frame, it) }
+          if (res.label.isNotEmpty()) {
+            val label = res.label + if (res.versionName.isNotEmpty()) " ${res.versionName}" else ""
+            sub.text = queueSub(item, index, label).text
+          }
+        }
+        else -> {} // TypedIcon/Unavailable: the honest typed icon already shows
+      }
+    }
+    return frame
+  }
+
+  private fun applyThumb(frame: android.widget.FrameLayout, bmp: android.graphics.Bitmap) {
+    frame.removeAllViews()
+    frame.addView(ImageView(this).apply {
+      setImageBitmap(bmp)
+      scaleType = ImageView.ScaleType.FIT_CENTER
+      layoutParams = android.widget.FrameLayout.LayoutParams(
+        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+        android.widget.FrameLayout.LayoutParams.MATCH_PARENT)
+    })
   }
 
   /** SAF folder → real recursive file queue (streamed, bounded RAM). */
@@ -853,14 +933,15 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     val r = glassCard(pad = 12f).apply {
       orientation = LinearLayout.HORIZONTAL
       gravity = Gravity.CENTER_VERTICAL
-      addView(icBox(kindIcon(item.kind)))
+      addView(previewBox(item, index, sub))
       addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
       val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
       t.addView(textView(item.name, 13f, D.TEXT, 700).apply {
         maxLines = 2
         ellipsize = android.text.TextUtils.TruncateAt.END
       })
-      t.addView(sm("${SpeedFormat.bytesText(item.size)}  ·  ${item.mime ?: kindLabel(item.kind)}  ·  #${index + 1}"))
+      val sub = queueSub(item, index)
+      t.addView(sub)
       addView(t)
       if (item.state != "Sending") {
         addView(ImageView(this@MainActivity).apply {

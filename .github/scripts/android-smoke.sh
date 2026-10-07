@@ -19,6 +19,22 @@
 set -eu
 PKG=com.nexdrop.ndt1
 
+# =========================================================================
+# v1.5 Phase C: INSTRUMENTED PREVIEW TESTS first — real decoders on this
+# emulator (bounded ImageDecoder thumbnails, PDF page-1, APK metadata,
+# audio duration, corrupted/inaccessible honest fallbacks, cache + async
+# contract). Runs BEFORE the signed release APK is installed because the
+# instrumented app APK is debug-signed (same package id — install order
+# matters); gradle uninstalls both when it finishes, leaving the emulator
+# clean for the release smoke below.
+# =========================================================================
+echo '== 0) v1.5 Phase C instrumented preview tests (real Android decoders) =='
+cd "$GITHUB_WORKSPACE/android"
+./gradlew --no-daemon --stacktrace :app:connectedDebugAndroidTest \
+  || { echo 'PREVIEW INSTRUMENTED TESTS FAILED'; exit 1; }
+cd - >/dev/null
+echo 'PREVIEW INSTRUMENTED TESTS PASS — real bounded previews + honest fallbacks verified'
+
 tap_nav() {
   # Tap a BOTTOM-NAV tab. Screen content may contain the same word
   # ('Settings' quick-header on Your NexDrop, 'History' rows, ...), and
