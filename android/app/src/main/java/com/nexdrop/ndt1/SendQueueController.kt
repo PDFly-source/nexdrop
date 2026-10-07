@@ -21,7 +21,7 @@ package com.nexdrop.ndt1
  */
 class SendQueueController(
   private val host: Host,
-  private val maxAutoRetries: Int = 3,
+  val maxAutoRetries: Int = 3, // public: the UI states the real budget, never a copy
 ) {
 
   /** Engine + UI bridge implemented by MainActivity. */
@@ -81,6 +81,7 @@ class SendQueueController(
     val failed: Int,
     val completedBytes: Long,
     val sessionDurationMs: Long,
+    val cancelled: Int = 0, // honest count — a user-cancelled file is not "failed"
   )
 
   val items = ArrayList<QueueItem>()
@@ -205,6 +206,7 @@ class SendQueueController(
       failed = items.count { it.state == QState.FAILED },
       completedBytes = done.sumOf { it.size },
       sessionDurationMs = 0L, // host composes the real wall duration it measured
+      cancelled = items.count { it.state == QState.CANCELLED },
     ))
   }
 
@@ -215,8 +217,15 @@ class SendQueueController(
     current?.transferred = durable
   }
 
-  /** Engine-reported verified completion — the only path to COMPLETED. */
+  /**
+   * Engine-reported verified completion — the only path to COMPLETED.
+   * Duplicate-job protection (v1.5 Phase E): only an IN-FLIGHT file can
+   * complete. A straggler second onComplete — or one racing a cancel —
+   * must never re-run next(); that would start a second concurrent
+   * transfer job and corrupt the drain.
+   */
   fun onTransferCompleted(item: QueueItem) {
+    if (!item.isBusy) return // COMPLETED/CANCELLED/QUEUED — straggler, ignore
     item.state = QState.COMPLETED
     item.transferred = item.size
     item.error = null
@@ -242,7 +251,12 @@ class SendQueueController(
    * with the next QUEUED file instead of dying.
    */
   fun onTransferError(item: QueueItem, message: String, canAutoResume: Boolean) {
-    val resumable = canAutoResume && item.retryCount < maxAutoRetries && item.state != QState.CANCELLED
+    // Terminal-state protection (v1.5 Phase E): a straggler error after
+    // COMPLETED must never fail a SHA-256-verified file, and an error
+    // landing after a user CANCEL must never rewrite CANCELLED as FAILED.
+    // Only an in-flight file can fail.
+    if (!item.isBusy) return
+    val resumable = canAutoResume && item.retryCount < maxAutoRetries
     if (resumable) {
       item.retryCount++
       item.state = QState.RETRYING

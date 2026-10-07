@@ -475,3 +475,81 @@ class QueuePauseResumeTest {
     assertEquals(2, q.host.started.size)
   }
 }
+
+/**
+ * v1.5 Phase E — production hardening: duplicate-job protection, terminal
+ * state protection (no bogus FAILED after cancel/completion), honest
+ * cancelled counts in the drain summary. The engine is still absent; these
+ * pin the ORCHESTRATION guards that keep a straggler callback from
+ * corrupting the queue or starting a second concurrent transfer.
+ */
+class QueueHardeningPhaseETest {
+
+  @Test fun duplicateCompletionNeverStartsTwoJobs() {
+    val q = Q(); q.add(1); q.add(2); q.add(3)
+    q.ctrl.start()
+    val it1 = q.ctrl.current!!
+    q.ctrl.onTransferCompleted(it1) // real completion -> file 2 starts
+    assertEquals(2, q.host.started.size)
+    q.ctrl.onTransferCompleted(it1) // STRAGGLER duplicate for the same file
+    assertEquals("a duplicate completion must not start a second job", 2, q.host.started.size)
+    assertEquals("file2", q.ctrl.current?.name) // file 2 is still the one in flight
+  }
+
+  @Test fun errorAfterCompletionIsIgnored() {
+    val q = Q(); q.add(1); q.add(2)
+    q.ctrl.start()
+    val it1 = q.ctrl.current!!
+    q.ctrl.onTransferCompleted(it1) // SHA-256 verified on both ends
+    q.ctrl.onTransferError(it1, "connection reset after verify", canAutoResume = true)
+    assertEquals("a verified file must never be failed retroactively",
+      SendQueueController.QState.COMPLETED, it1.state)
+    assertEquals("file2", q.ctrl.current?.name) // the queue continues normally, no re-arm of file 1
+  }
+
+  @Test fun errorAfterCancelKeepsCancelledTruthful() {
+    val q = Q(); q.add(1); q.add(2)
+    q.ctrl.start()
+    val it1 = q.ctrl.current!!
+    q.ctrl.cancelCurrentTransfer() // user cancel — CANCELLED is the truth
+    assertEquals(SendQueueController.QState.CANCELLED, it1.state)
+    q.ctrl.onTransferError(it1, "cancelled by user", canAutoResume = false) // engine straggler
+    assertEquals("cancel stays truthful — never rewritten as FAILED",
+      SendQueueController.QState.CANCELLED, it1.state)
+    assertEquals("cancel stops the drain — no extra engine job was started",
+      1, q.host.started.size)
+    assertEquals(SendQueueController.QState.QUEUED, q.ctrl.items[1].state)
+  }
+
+  @Test fun stragglerErrorForIdleItemIsIgnored() {
+    val q = Q(); q.add(1); q.add(2)
+    q.ctrl.start()
+    val it2 = q.ctrl.items[1] // QUEUED — never started
+    q.ctrl.onTransferError(it2, "bogus late error", canAutoResume = false)
+    assertEquals("an idle item cannot be failed by a straggler callback",
+      SendQueueController.QState.QUEUED, it2.state)
+    assertEquals("no extra engine job may be started", 1, q.host.started.size)
+  }
+
+  @Test fun cancelledCountInSummaryIsHonest() {
+    val q = Q(); q.add(1, 100); q.add(2, 200); q.add(3, 700)
+    q.ctrl.start()
+    q.ctrl.onTransferCompleted(q.ctrl.current!!) // file 1 completes
+    q.ctrl.cancelCurrentTransfer()               // file 2 cancelled by the user
+    assertEquals(SendQueueController.QState.QUEUED, q.ctrl.items[2].state) // cancel stops the drain
+    q.ctrl.start()                              // user taps SEND again — file 3 proceeds
+    assertEquals(SendQueueController.QState.TRANSFERRING, q.ctrl.current?.state)
+    q.ctrl.onTransferError(q.ctrl.current!!, "peer refused", canAutoResume = false) // file 3 fails hard
+    assertEquals(1, q.host.finished.size)
+    val s = q.host.finished[0]
+    assertEquals(1, s.completed)
+    assertEquals(1, s.failed)
+    assertEquals("a cancelled file is neither successful nor failed", 1, s.cancelled)
+    assertEquals(100L * 1024 * 1024, s.completedBytes)
+  }
+
+  @Test fun retryBudgetIsPublicAndHonest() {
+    val q = Q()
+    assertEquals(3, q.ctrl.maxAutoRetries) // the UI states the real budget
+  }
+}

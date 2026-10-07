@@ -152,6 +152,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private var currentSize: Long = 0
   private var completedSha: String? = null
   private var completedStats: ThroughputSampler.Stats? = null
+  /** v1.5 Phase E: max sustained peak across the whole queue session —
+   *  the RESULT screen shows session aggregates, not the last file's. */
+  private var queuePeakBps: Double? = null
   private var transferGotFirstProgress = false
 
   // ---- SEND QUEUE (v1.5 Phase D): the ordered queue, per-file state
@@ -943,7 +946,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     // the honest error when failed, real verification when completed.
     val stateExtra = when (item.state) {
       SendQueueController.QState.COMPLETED -> "SHA-256 VERIFIED"
-      SendQueueController.QState.FAILED -> "FAILED · ${item.error?.lineSequence()?.firstOrNull()?.take(64) ?: "error"}"
+      SendQueueController.QState.FAILED -> "FAILED · ${item.error?.lineSequence()?.firstOrNull()?.take(64) ?: "error"}" +
+        (if (item.retryCount > 0) " · after ${item.retryCount} attempt(s)" else "")
       SendQueueController.QState.CANCELLED -> "CANCELLED"
       else -> null
     }
@@ -1674,30 +1678,55 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       }
     })
     val head = col().apply { gravity = Gravity.CENTER_HORIZONTAL }
-    head.addView(h2("Transfer complete"))
-    head.addView(textView(currentName ?: "file", 13f, D.TEXT, 700).apply {
-      gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0)
-    })
-    // Queue summary (v1.5 Phase D §25): honest split — never claims full
-    // success when any file failed; duration is the real session wall clock.
-    queueResult?.let { (summary, durMs) ->
-      if (summary.completed + summary.failed > 1) {
-        val split = if (summary.failed > 0) "${summary.completed} successful · ${summary.failed} failed"
-                    else "${summary.completed} files transferred"
-        head.addView(sm("Queue complete — $split · ${SpeedFormat.bytesText(summary.completedBytes)}").apply {
-          gravity = Gravity.CENTER; setPadding(0, dp(4), 0, 0)
+    // v1.5 Phase E: the headline itself is honest — "Transfer complete"
+    // only when nothing failed; a mixed queue says so, immediately.
+    val multi = queueResult?.let { (sum, _) -> sum.completed + sum.failed + sum.cancelled > 1 } ?: false
+    val anyFail = queueResult?.let { (sum, _) -> sum.failed > 0 } ?: false
+    head.addView(h2(
+      when {
+        multi && anyFail -> "Completed with failures"
+        multi -> "Queue complete"
+        else -> "Transfer complete"
+      }))
+    if (multi) {
+      // Session totals — real counts, real bytes, never the last file's numbers.
+      queueResult?.let { (summary, durMs) ->
+        val split = buildString {
+          append(if (summary.failed > 0) "${summary.completed} successful · ${summary.failed} failed"
+                 else "${summary.completed} files transferred")
+          if (summary.cancelled > 0) append(" · ${summary.cancelled} cancelled")
+        }
+        head.addView(sm("Queue session — $split · ${SpeedFormat.bytesText(summary.completedBytes)}").apply {
+          gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0)
         })
-        if (durMs > 0) head.addView(sm("Duration ${UiSpeed.durationText(durMs)}").apply {
+        if (durMs > 0) head.addView(sm("Session duration ${UiSpeed.durationText(durMs)}").apply {
           gravity = Gravity.CENTER; setPadding(0, dp(2), 0, 0)
         })
       }
+    } else {
+      head.addView(textView(currentName ?: "file", 13f, D.TEXT, 700).apply {
+        gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0)
+      })
+      val bytes = currentFile?.length() ?: currentSize
+      head.addView(sm(if (bytes > 0) "${SpeedFormat.bytesText(bytes)} transferred" else "").apply { gravity = Gravity.CENTER })
     }
-    val bytes = currentFile?.length() ?: currentSize
-    head.addView(sm(if (bytes > 0) "${SpeedFormat.bytesText(bytes)} transferred" else "").apply { gravity = Gravity.CENTER })
     content.addView(head)
 
-    // Average + Duration (real stats)
-    val stats = completedStats
+    // Average + Duration — SESSION aggregates for a queue (v1.5 Phase E),
+    // per-file stats only for a single transfer. Both are real measured
+    // numbers; the session average is completed bytes over wall clock.
+    val sessionDurMs = queueResult?.second ?: 0L
+    val sessionStats: ThroughputSampler.Stats? =
+      if (multi && sessionDurMs > 0)
+        ThroughputSampler.Stats(
+          durationMs = sessionDurMs,
+          bytes = queueResult?.first?.completedBytes ?: 0L,
+          averageBps = queueResult?.first?.completedBytes?.let { it / (sessionDurMs / 1000.0) },
+          sustainedBps = null, // session average is over wall clock; per-file numbers live in history
+          peakSustainedBps = queuePeakBps,
+        )
+      else completedStats
+    val stats = sessionStats
     val statRow = row().apply {
       layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
         topMargin = dp(14); bottomMargin = dp(8)
@@ -1771,8 +1800,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         r.addView(t)
         return r
       }
+      val shaLine = queueResult?.let { (sum, _) ->
+        if (sum.completed > 1) "${sum.completed} FILES SHA-256 VERIFIED" else "SHA-256 VERIFIED"
+      } ?: "SHA-256 VERIFIED"
       addView(infoRow(R.drawable.ic_shield,
-        textView("SHA-256 VERIFIED", 12.5f, D.OK, 700, 1), sm("")))
+        textView(shaLine, 12.5f, D.OK, 700, 1), sm("")))
       addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(8)) })
       addView(infoRow(R.drawable.ic_dev,
         textView("", 12.5f, D.TEXT, 700).apply { text = if (role == Role.SEND) "Android → Android" else "Android → Android" },
@@ -2426,7 +2458,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private fun sendQueueStart(pairing: QrPairing.Pairing) {
     if (!queue.hasQueued()) { toast("Select files first"); return }
     activePairing = pairing
-    if (queue.current == null) queueSessionStartNanos = System.nanoTime()
+    if (queue.current == null) { // a fresh session starts the honest clock
+      queueSessionStartNanos = System.nanoTime()
+      queuePeakBps = null
+    }
     queue.start()
   }
 
@@ -2496,8 +2531,19 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       peerIp = activePairing?.ip
       sender?.lastProfile?.let { lastTxProfileText = it.textSummary() }
       runOnUiThread {
+        // History dedup (v1.5 Phase E): a duplicate engine onComplete must
+        // not write the same file into history twice, and a completion
+        // racing a user CANCEL must not turn the file into COMPLETED after
+        // the queue already recorded the truthful CANCELLED state. Only an
+        // in-flight file may complete — same invariant as the controller.
+        if (!item.isBusy) return@runOnUiThread
         completedSha = sha256
         completedStats = stats
+        // The result screen's PEAK is the session maximum of real
+        // sustained peaks — never just the last file's number.
+        stats.peakSustainedBps?.let { pk ->
+          queuePeakBps = maxOf(queuePeakBps ?: 0.0, pk)
+        }
         recordHistory(item.name, stats.averageBps, stats.durationMs, sha256, verified = true)
         queue.onTransferCompleted(item) // the only path to COMPLETED → next file or RESULT
       }
@@ -2619,6 +2665,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
 
   private fun beginTransfer() {
     setTransferActive(true)
+    // v1.5 Phase E: a fresh transfer must not inherit a stale queue
+    // session's result data (headline/stats split of an earlier queue).
+    queueResult = null; queuePeakBps = null
     runConditions = transferConditions() // Phase 11: real conditions, once per transfer
     transferStartNanos = System.nanoTime()
     paused = false
@@ -2654,9 +2703,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       val numeric = !sp.startsWith("N/A")
       speedView?.text = if (numeric) sp.substringBefore(" ") else "N/A"
       speedUnitView?.visibility = if (numeric) View.VISIBLE else View.GONE
-      val retrying = queue.current?.state == SendQueueController.QState.RETRYING
+      val cur = queue.current
+      val retrying = cur?.state == SendQueueController.QState.RETRYING
       etaView?.text = if (paused) "PAUSED — connection kept alive"
-        else if (retrying) "Reconnecting…"
+        else if (retrying) "Reconnect ${minOf((cur?.retryCount ?: 0) + 1, queue.maxAutoRetries)} of ${queue.maxAutoRetries} — resuming from durable offset"
         else "ETA ${UiSpeed.etaText(total - durable, bps)}"
       // Queue overall (v1.5 Phase D §7/§24): byte-based aggregate —
       // completed bytes + real durable bytes of the in-flight file.
