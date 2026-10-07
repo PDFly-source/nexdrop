@@ -21,8 +21,9 @@ object HistoryStore {
     val verified: Boolean,
     val speedBps: Double,
     val durationMs: Long,
-    val status: String = "Done", // Done | Failed (real outcomes only)
+    val status: String = "Done", // Done | Failed | Cancelled (real outcomes only)
     val reason: String = "",    // failure reason when status=Failed
+    val resumed: Boolean = false, // v1.5 Phase F: completed after ≥1 real durable-offset resume
   )
 
   private const val FILE = "transfer-history.json"
@@ -45,6 +46,7 @@ object HistoryStore {
         durationMs = j.optLong("dur"),
         status = j.optString("status", if (j.optBoolean("ok")) "Done" else "Failed"),
         reason = j.optString("reason", ""),
+        resumed = j.optBoolean("resumed"),
       )
     }
   } catch (_: Exception) { emptyList() }
@@ -77,7 +79,7 @@ object HistoryStore {
         put("name", e.name); put("bytes", e.bytes); put("sent", e.sent)
         put("at", e.atMs); put("sha", e.sha256); put("ok", e.verified)
         put("bps", e.speedBps); put("dur", e.durationMs)
-        put("status", e.status); put("reason", e.reason)
+        put("status", e.status); put("reason", e.reason); put("resumed", e.resumed)
       })
       // bound: keep the newest MAX records
       val trimmed = JSONArray()
@@ -85,6 +87,18 @@ object HistoryStore {
       for (i in start until arr.length()) trimmed.put(arr.get(i))
       f.writeText(trimmed.toString())
     } catch (_: Exception) { /* history must never break a transfer */ }
+  }
+
+  /**
+   * v1.5 Phase F — History filters. Pure selection over real records;
+   * every category is a truthful record kind, never an invented one.
+   */
+  fun matching(list: List<Entry>, filter: String): List<Entry> = when (filter) {
+    "SENT" -> list.filter { it.sent }
+    "RECEIVED" -> list.filter { !it.sent }
+    "FAILED" -> list.filter { it.status == "Failed" }
+    "CANCELLED" -> list.filter { it.status == "Cancelled" }
+    else -> list // ALL
   }
 
   /** "Today" / "Yesterday" / "12 Mar" — same words as the mockup. */
