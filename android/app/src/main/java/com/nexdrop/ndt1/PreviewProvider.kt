@@ -122,7 +122,7 @@ class PreviewScheduler(private val runner: (Runnable) -> Unit) {
  * main-thread callback contract. `generate` is synchronous (for the
  * instrumented tests and the worker); `request` is the async UI entry.
  */
-class PreviewProvider(appContext: Context, runner: (Runnable) -> Unit? = null) {
+class PreviewProvider(appContext: Context) {
 
   private val cache = BoundedLruCache<String, PreviewResult>(defaultPreviewCacheEntries())
   private val main = Handler(Looper.getMainLooper())
@@ -207,7 +207,7 @@ class PreviewProvider(appContext: Context, runner: (Runnable) -> Unit? = null) {
   private fun videoPreview(uri: Uri): PreviewResult {
     val mmr = MediaMetadataRetriever()
     try {
-      mmr.setDataSource(appContext, uri)
+      mmr.setDataSource(app, uri)
       val durationMs = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: -1L
       val vw = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
       val vh = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
@@ -236,7 +236,7 @@ class PreviewProvider(appContext: Context, runner: (Runnable) -> Unit? = null) {
   private fun audioPreview(uri: Uri): PreviewResult {
     val mmr = MediaMetadataRetriever()
     try {
-      mmr.setDataSource(appContext, uri)
+      mmr.setDataSource(app, uri)
       val d = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: -1L
       return PreviewResult.AudioPreview(d)
     } finally {
@@ -273,7 +273,7 @@ class PreviewProvider(appContext: Context, runner: (Runnable) -> Unit? = null) {
   private fun apkPreview(uri: Uri): PreviewResult {
     if (uri.scheme != "file") return PreviewResult.TypedIcon // content:// APK shares have no path; honest fallback
     val path = uri.path ?: return PreviewResult.TypedIcon
-    val pm = appContext.packageManager
+    val pm = app.packageManager
     val pi = pm.getPackageArchiveInfo(path, 0) ?: return PreviewResult.TypedIcon
     val ai = pi.applicationInfo ?: return PreviewResult.TypedIcon
     ai.sourceDir = path; ai.publicSourceDir = path
@@ -293,8 +293,8 @@ class PreviewProvider(appContext: Context, runner: (Runnable) -> Unit? = null) {
     return bmp
   }
 
-  private val appContext: Context = appContext.applicationContext
-  private val appContentResolver get() = appContext.contentResolver
+  private val app: Context = appContext.applicationContext
+  private val appContentResolver get() = app.contentResolver
 
   companion object {
     private const val MAX_DIM = 512 // bounded preview dimension (256–512 px target)
