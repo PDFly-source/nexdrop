@@ -33,8 +33,6 @@ class ApkBridgeProvider : ContentProvider() {
   override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor? =
     fileFor(uri)?.let { ParcelFileDescriptor.open(it, ParcelFileDescriptor.MODE_READ_ONLY) }
 
-  override fun openAssetFile(uri: Uri, mode: String): ParcelFileDescriptor? = openFile(uri, mode)
-
   override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor? {
     val f = fileFor(uri) ?: return null
     return MatrixCursor(arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)).apply {

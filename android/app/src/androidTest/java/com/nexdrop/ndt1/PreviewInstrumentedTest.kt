@@ -207,7 +207,6 @@ class PreviewInstrumentedTest {
     prov.cancelAll()
     assertEquals(0, prov.cacheEntries())
   }
-}
 
   // ========================================================================
   // v1.5 Phase C closure: EXIF orientation (>=28 path AND legacy 26/27 path)
@@ -328,3 +327,4 @@ class PreviewInstrumentedTest {
   /** Provider serves files from the app cacheDir (same uid/process). */
   private fun putBridgeFile(name: String, bytes: ByteArray): File =
     tmp(name).apply { writeBytes(bytes) }
+}
