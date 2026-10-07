@@ -29,7 +29,9 @@ class ApkBridgeProvider : ContentProvider() {
     // here while the test package's own dirs are not writable by the test
     // code. The source dir is therefore passed explicitly via ?dir= (test
     // fixture only; still guarded to /data/user/).
-    val dir = uri.getQueryParameter("dir")?.takeIf { it.startsWith("/data/user/") }
+    val dir: File = uri.getQueryParameter("dir")
+      ?.takeIf { it.startsWith("/data/user/") }  // fixture-only guard
+      ?.let { File(it) }
       ?: context!!.cacheDir
     val f = File(dir, name)
     return if (f.isFile) f else null
