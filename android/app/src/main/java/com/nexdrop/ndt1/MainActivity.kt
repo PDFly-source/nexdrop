@@ -933,6 +933,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     val r = glassCard(pad = 12f).apply {
       orientation = LinearLayout.HORIZONTAL
       gravity = Gravity.CENTER_VERTICAL
+      val sub = queueSub(item, index)
       addView(previewBox(item, index, sub))
       addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
       val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
@@ -940,7 +941,6 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         maxLines = 2
         ellipsize = android.text.TextUtils.TruncateAt.END
       })
-      val sub = queueSub(item, index)
       t.addView(sub)
       addView(t)
       if (item.state != "Sending") {

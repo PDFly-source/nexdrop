@@ -76,7 +76,7 @@ fun previewCacheKey(uriString: String, size: Long, lastModified: Long): String =
 class BoundedLruCache<K, V>(private val maxEntries: Int) {
   init { require(maxEntries > 0) { "maxEntries must be > 0" } }
   private val map = object : LinkedHashMap<K, V>(16, 0.75f, true) {
-    override fun removeEldestEntry(eldest: java.util.Map.Entry<K, V>?): Boolean = size > maxEntries
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean = size > maxEntries
   }
   @Synchronized fun get(k: K): V? = map[k]
   @Synchronized fun put(k: K, v: V) { map[k] = v }
