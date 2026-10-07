@@ -291,9 +291,27 @@ class PreviewInstrumentedTest {
     val apkBytes = File(InstrumentationRegistry.getInstrumentation().context.packageCodePath).readBytes()
     // tmp() writes into the target app cacheDir — ApkBridgeProvider serves it.
     putBridgeFile("bridge_real.apk", apkBytes)
+
+    // ---- TEMPORARY DIAGNOSTIC (drop once the happy path is green) ----
+    // Pinpoints WHICH stage degrades to TypedIcon: the content resolver
+    // stream, the PackageManager archive parse, or applicationInfo.
+    val resolverBytes = try {
+      ctx.contentResolver.openInputStream(bridgeUri("bridge_real.apk"))
+        ?.use { s -> s.readBytes().size } ?: -1
+    } catch (e: Exception) { -2 }
+    val probe = try {
+      tmp("bridge_probe.apk").apply { writeBytes(apkBytes) }
+    } catch (e: Exception) { null }
+    val pi = try { probe?.let { ctx.packageManager.getPackageArchiveInfo(it.absolutePath, 0) } } catch (e: Exception) { null }
+    val ai = pi?.applicationInfo
+    val diag = "resolverBytes=$resolverBytes parse=${pi != null} appInfo=${ai != null} " +
+      "label=${try { ai?.loadLabel(ctx.packageManager) } catch (e: Exception) { "<threw>" }}"
+    probe?.delete()
+    // -------------------------------------------------------------------
+
     val r = prov.generate(bridgeUri("bridge_real.apk"), apkBytes.size.toLong(), 0,
       FileKind.APK, "application/vnd.android.package-archive")
-    assertTrue("got $r", r is PreviewResult.ApkPreview)
+    assertTrue("got $r | DIAG $diag", r is PreviewResult.ApkPreview)
     r as PreviewResult.ApkPreview
     assertNotNull("APK icon must extract via the bridge", r.icon)
     assertTrue("label must extract", r.label.isNotEmpty())
