@@ -90,10 +90,4 @@ dependencies {
   implementation("androidx.exifinterface:exifinterface:1.3.7")
   androidTestImplementation("androidx.test.ext:junit:1.1.5")
   androidTestImplementation("androidx.test:runner:1.5.2")
-  // ApkBridgeProvider (androidTest) runs in the TEST package's own process,
-  // whose classloader holds ONLY the test APK — the instrumentation process
-  // resolves kotlin-stdlib from the target APK, so without this explicit
-  // dependency the provider process crashes with NoClassDefFoundError
-  // (kotlin.jvm.internal.Intrinsics) the moment a resolver call arrives.
-  androidTestImplementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.24")
 }

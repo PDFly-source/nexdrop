@@ -13,18 +13,19 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 
 /**
- * TEST-ONLY provider (v1.5 Phase C closure). Gives the instrumented tests a
- * content:// face over files they write into the target app's cacheDir, so
- * the content:// APK bridge is exercised end-to-end exactly the way SAF /
- * share-sheet APK shares arrive (streamed via ContentResolver, no path).
+ * TEST-ONLY provider (v1.5 Phase C closure). Lives in the DEBUG variant of
+ * :app (src/debug) so instrumented tests get a content:// face over files
+ * they write into the app's cacheDir — the content:// APK bridge is then
+ * exercised end-to-end exactly the way SAF / share-sheet APK shares arrive
+ * (streamed via ContentResolver, no path). Release builds never include it.
  *
- * <p>Deliberately written in JAVA: this provider runs in the TEST package's
- * own process, whose classloader holds only the test APK. Kotlin code there
- * needs kotlin-stdlib dexed into the androidTest APK, which proved fragile —
- * the instrumentation process resolves the stdlib from the target APK, so
- * any packaging regression silently crashes the provider process with
- * NoClassDefFoundError the moment a resolver call arrives. Java has no
- * runtime dependency and cannot regress this way.
+ * <p>Why the debug variant and NOT the androidTest APK: a provider declared
+ * by the test package is hosted in the TEST package's own process. Its
+ * classloader holds only the test APK (no kotlin-stdlib → NoClassDefFound
+ * crashes), and binding that separate process mid-instrumentation failed on
+ * the CI emulator (resolver throws). Declared here instead, it runs in the
+ * app's own process — the very process the instrumentation runs in — so the
+ * resolver call is a fast in-process dispatch with no bind at all.
  *
  * <p>content://com.nexdrop.ndt1.test.apkbridge/&lt;filename&gt; maps to a
  * file in the directory supplied via the ?dir= query parameter (fixture

@@ -1,17 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v1.5 Phase C closure: a test-only ContentProvider so the instrumented
-     tests can exercise the content:// APK bridge (SAF/share-sheet sources)
-     without touching real MediaStore state. Serves files the test writes
-     into the target app's cacheDir. Merged into the test APK manifest. -->
+<!-- v1.5 Phase C closure: the APK-bridge test provider is declared in the
+     app's DEBUG variant (src/debug/AndroidManifest.xml) — see
+     ApkBridgeProvider there for why it must not live in this test APK. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <application>
-    <!-- exported=true: the code under test resolves the URI through the
-         TARGET app's ContentResolver (a different package), exactly like a
-         real SAF/document provider. Non-exported access would be denied and
-         every bridge test would silently degrade to the typed icon. -->
-    <provider
-      android:name="com.nexdrop.ndt1.ApkBridgeProvider"
-      android:authorities="com.nexdrop.ndt1.test.apkbridge"
-      android:exported="true" />
-  </application>
+  <application />
 </manifest>
