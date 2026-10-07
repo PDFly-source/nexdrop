@@ -5,9 +5,13 @@
      into the target app's cacheDir. Merged into the test APK manifest. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
+    <!-- exported=true: the code under test resolves the URI through the
+         TARGET app's ContentResolver (a different package), exactly like a
+         real SAF/document provider. Non-exported access would be denied and
+         every bridge test would silently degrade to the typed icon. -->
     <provider
       android:name="com.nexdrop.ndt1.ApkBridgeProvider"
       android:authorities="com.nexdrop.ndt1.test.apkbridge"
-      android:exported="false" />
+      android:exported="true" />
   </application>
 </manifest>
