@@ -24,7 +24,14 @@ class ApkBridgeProvider : ContentProvider() {
   private fun fileFor(uri: Uri): File? {
     val name = uri.lastPathSegment ?: return null
     if (name.contains('/') || name.contains("..")) return null // path traversal guard
-    val f = File(context!!.cacheDir, name)
+    // The provider lives in the TEST package, but instrumentation runs the
+    // process as the TARGET uid — so the target app's data dirs are readable
+    // here while the test package's own dirs are not writable by the test
+    // code. The source dir is therefore passed explicitly via ?dir= (test
+    // fixture only; still guarded to /data/user/).
+    val dir = uri.getQueryParameter("dir")?.takeIf { it.startsWith("/data/user/") }
+      ?: context!!.cacheDir
+    val f = File(dir, name)
     return if (f.isFile) f else null
   }
 

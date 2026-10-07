@@ -277,7 +277,13 @@ class PreviewInstrumentedTest {
   // ========================================================================
 
   private val authority = "com.nexdrop.ndt1.test.apkbridge"
-  private fun bridgeUri(name: String) = Uri.parse("content://$authority/$name")
+  private fun bridgeUri(name: String): Uri {
+    // The provider reads ?dir= — the target app's cacheDir, where the test
+    // fixture writes (the process runs as the target uid, so tmp() works
+    // while the test package's own cacheDir does not).
+    val dir = java.net.URLEncoder.encode(ctx.cacheDir.absolutePath, "UTF-8")
+    return Uri.parse("content://$authority/$name?dir=$dir")
+  }
   private fun bridgeLeftovers(): List<File> =
     ctx.cacheDir.listFiles { f -> f.name.startsWith("ndt1-apk-bridge-") }?.toList() ?: emptyList()
 
@@ -325,14 +331,7 @@ class PreviewInstrumentedTest {
     assertTrue(bridgeLeftovers().isEmpty())
   }
 
-  /**
-   * ApkBridgeProvider runs in the TEST package, whose context (and
-   * cacheDir) is distinct from the target app's — source files must be
-   * written into the provider's own cacheDir, not tmp() (target cacheDir).
-   */
-  private fun putBridgeFile(name: String, bytes: ByteArray): File {
-    val dir = InstrumentationRegistry.getInstrumentation().context.cacheDir
-    dir.mkdirs()
-    return File(dir, name).apply { writeBytes(bytes) }
-  }
+  /** Fixture files live in the TARGET app cacheDir (tmp()) — see bridgeUri. */
+  private fun putBridgeFile(name: String, bytes: ByteArray): File =
+    tmp(name).apply { writeBytes(bytes) }
 }
