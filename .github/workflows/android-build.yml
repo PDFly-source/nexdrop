@@ -62,7 +62,7 @@ jobs:
       # cleanup, disconnect/resume, wrong-session reject, dead endpoint).
       - name: Unit tests — LocalNet + wire + telemetry + large-transfer regressions
         working-directory: android
-        run: ./gradlew --no-daemon --stacktrace :ndt1:testDebugUnitTest
+        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :ndt1:testDebugUnitTest
 
       - name: Upload ndt1 test report
         if: failure()
