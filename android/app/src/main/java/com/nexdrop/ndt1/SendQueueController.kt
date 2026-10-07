@@ -20,11 +20,15 @@ package com.nexdrop.ndt1
  * the controller knows nothing about bitmaps.
  */
 class SendQueueController(
-  private val host: Host,
+  internal var host: Host,
   val maxAutoRetries: Int = 3, // public: the UI states the real budget, never a copy
 ) {
 
   /** Engine + UI bridge implemented by MainActivity. */
+  /** v1.5 hardening: the controller is process-scoped; a recreated Activity
+   *  rebinds so late engine callbacks land on the LIVE UI, never a zombie. */
+  fun rebindHost(newHost: Host) { host = newHost }
+
   interface Host {
     /** Start the real sequential transfer for this item (TurboSender + FGS). */
     fun startTransfer(item: QueueItem)

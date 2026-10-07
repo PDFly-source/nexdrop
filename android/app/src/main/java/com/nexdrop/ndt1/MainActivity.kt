@@ -90,8 +90,18 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private enum class Screen { WELCOME, HOME, SEND, RECEIVE, TRANSFER, RESULT, FAILED, UNAVAILABLE, DEVICES, HISTORY, SETTINGS, DEVICE_TEST }
   private enum class Role { NONE, SEND, RECEIVE }
 
-  private var screen = Screen.HOME
-  private var role = Role.NONE
+  // v1.5 HARDENING: transfer state is PROCESS-scoped (companion singletons).
+  // An Activity recreation (theme flip, memory pressure, lifecycle) used to
+  // build a SECOND SendQueueController + engine owner next to the live one —
+  // the exact source of duplicate-completion, terminal-race and lifecycle
+  // failures on the owner's physical tests. One process, one controller,
+  // one engine; the recreated Activity rebinds and rehydrates from truth.
+  private var screen: Screen
+    get() = appScreen
+    set(v) { appScreen = v }
+  private var role: Role
+    get() = appRole
+    set(v) { appRole = v }
 
   // ---- navigation stack (real Back history; tab hops + sub-screens all push) ----
   // Back NEVER cancels an active transfer; the engine callbacks (TRANSFER ->
@@ -139,28 +149,56 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private var qrView: ImageView? = null
 
   // ---- transfer state (engine) ----
-  private var receiver: TurboReceiver? = null
-  private var sender: TurboSender? = null
+  private var receiver: TurboReceiver?
+    get() = appReceiver
+    set(v) { appReceiver = v }
+  private var sender: TurboSender?
+    get() = appSender
+    set(v) { appSender = v }
   private var transferStartNanos = 0L
-  private var paused = false
+  private var paused: Boolean
+    get() = appTransferPaused
+    set(v) { appTransferPaused = v }
   private var pendingPairing: QrPairing.Pairing? = null
-  private var benchModeMiB: Int? = null
+  private var benchModeMiB: Int?
+    get() = appBenchModeMiB
+    set(v) { appBenchModeMiB = v }
   private var localEndpoint: LocalNet.Endpoint? = null
-  private var peerIp: String? = null
-  private var currentFile: File? = null
-  private var currentName: String? = null
-  private var currentSize: Long = 0
-  private var completedSha: String? = null
-  private var completedStats: ThroughputSampler.Stats? = null
+  private var peerIp: String?
+    get() = appPeerIp
+    set(v) { appPeerIp = v }
+  private var currentFile: File?
+    get() = appCurrentFile
+    set(v) { appCurrentFile = v }
+  private var currentName: String?
+    get() = appCurrentName
+    set(v) { appCurrentName = v }
+  private var currentSize: Long
+    get() = appCurrentSize
+    set(v) { appCurrentSize = v }
+  private var completedSha: String?
+    get() = appCompletedSha
+    set(v) { appCompletedSha = v }
+  private var completedStats: ThroughputSampler.Stats?
+    get() = appCompletedStats
+    set(v) { appCompletedStats = v }
   /** v1.5 Phase E: max sustained peak across the whole queue session —
    *  the RESULT screen shows session aggregates, not the last file's. */
-  private var queuePeakBps: Double? = null
+  private var queuePeakBps: Double?
+    get() = appQueuePeakBps
+    set(v) { appQueuePeakBps = v }
   /** v1.5 Phase F: the received text of the last single .txt receive (bounded
    *  by TextSharePolicy; cleared at every fresh transfer — no stale leak). */
-  private var incomingText: String? = null
+  private var incomingText: String?
+    get() = appIncomingText
+    set(v) { appIncomingText = v }
   /** v1.5 Phase F: History filter chip state (ALL | SENT | RECEIVED | FAILED | CANCELLED). */
-  private var historyFilter: String = "ALL"
-  private var transferGotFirstProgress = false
+  private var historyFilter: String
+    get() = appHistoryFilter
+    set(v) { appHistoryFilter = v }
+  private var transferGotFirstProgress: Boolean
+    get() = appTransferGotFirstProgress
+    set(v) { appTransferGotFirstProgress = v }
 
   // ---- SEND QUEUE (v1.5 Phase D): the ordered queue, per-file state
   //      machine, byte-based aggregate progress, bounded retry, cancel/
@@ -169,17 +207,58 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   //      engine bridge. Sequential independent NDT1 streams — one file at
   //      a time, each through the full OFFER/accept/SHA flow on the
   //      receiver. URI + metadata only, never bytes. ----
-  private val queue by lazy { SendQueueController(this) }
+  private val queue: SendQueueController
+    get() = appQueue ?: SendQueueController(this).also { appQueue = it }
   /** Read-only view for list-style call sites; mutations go through the controller. */
   private val sendQueue get() = queue.items
   /** v1.5 Phase C: bounded async previews — one low-priority worker, LRU cache, never on a transfer thread. */
   private val previews by lazy { PreviewProvider(applicationContext) }
-  private var activePairing: QrPairing.Pairing? = null
+  private var activePairing: QrPairing.Pairing?
+    get() = appActivePairing
+    set(v) { appActivePairing = v }
   /** Queue session wall clock (honest RESULT duration). */
-  private var queueSessionStartNanos = 0L
+  private var queueSessionStartNanos: Long
+    get() = appQueueSessionStartNanos
+    set(v) { appQueueSessionStartNanos = v }
   /** Drain result for the RESULT screen (counts + real session duration). */
-  private var queueResult: Pair<SendQueueController.Summary, Long>? = null
+  private var queueResult: Pair<SendQueueController.Summary, Long>?
+    get() = appQueueResult
+    set(v) { appQueueResult = v }
   @Volatile private var acceptedOfferKey: String? = null
+
+  // ---- v1.5 HARDENING (physical test 6): receiver EOF watchdog.
+  // The frozen NDT1 engine exits its receive loop SILENTLY when the sender
+  // closes the socket mid-transfer (break@loop — no terminal callback), so
+  // the UI/foreground service kept claiming an active transfer after a
+  // sender-side Cancel. Protocol stays frozen; the app owns the recovery:
+  // 9 s without progress while receiving and not paused ⇒ the session is
+  // closed from the other end ⇒ honest ABORT, part file kept (resume-safe),
+  // receiver stays listening, NO history record (it is neither a completed
+  // nor a failed transfer of this device).
+  private fun rxWatchdogTick() {
+    if (!appRxWatchdogArmed) return
+    ui.postDelayed({
+      if (!appRxWatchdogArmed) return@postDelayed
+      val active = role == Role.RECEIVE && currentName != null && benchModeMiB == null
+      val stale = System.currentTimeMillis() - appLastRxProgressMs > 9_000
+      if (active && stale && !appTransferPaused) {
+        appRxWatchdogArmed = false
+        hideTransferUi()
+        TransferService.stop(this)
+        toast("Connection closed — partial file kept, resumable if the sender reconnects")
+        screen = Screen.RECEIVE; render()
+      } else rxWatchdogTick() // re-arm while a receive is live
+    }, 3_000)
+  }
+
+  private fun rxWatchdogArm() {
+    appLastRxProgressMs = System.currentTimeMillis()
+    if (appRxWatchdogArmed) return
+    appRxWatchdogArmed = true
+    rxWatchdogTick()
+  }
+
+  private fun rxWatchdogDisarm() { appRxWatchdogArmed = false }
 
   // ---- NEARBY DEVICES (v1.4): REAL NDD1 discovery only. One beacon socket
   //      at a time: the receiver advertises a real pairable session; a
@@ -454,11 +533,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     if (beaconIdentity != null || beaconSession != null) return // one socket (port is fixed)
     try {
       acquireMulticastLock()
+      appDiscoveryBindError = null
       beaconIdentity = DiscoveryBeacon(deviceLabel(), "android", 0,
         SessionToken(ByteArray(0), "", ""), deviceIdPref()).also {
         it.start({ peers -> onBeaconPeers(peers) })
       }
-    } catch (_: Exception) { beaconIdentity = null } // honest: QR pairing still works
+    } catch (e: Exception) {
+      beaconIdentity = null
+      // v1.5 HARDENING (test 18): NEVER silently swallow a discovery failure —
+      // the Send screen shows the exact reason and QR pairing remains.
+      appDiscoveryBindError = (e.message ?: e.javaClass.simpleName).take(120)
+    }
   }
 
   private fun stopIdentityBeacon() {
@@ -477,7 +562,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       beaconSession = DiscoveryBeacon(deviceLabel(), "android", port, session, deviceIdPref()).also {
         it.start({ peers -> onBeaconPeers(peers) })
       }
-    } catch (_: Exception) { beaconSession = null } // QR pairing unaffected
+    } catch (e: Exception) {
+      beaconSession = null
+      appDiscoveryBindError = (e.message ?: e.javaClass.simpleName).take(120) // honest: shown, not swallowed
+    } // QR pairing unaffected
   }
 
   private fun stopSessionBeacon() {
@@ -607,6 +695,15 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     applyThemeNow()
     val welcomed = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_WELCOMED, false)
     screen = if (welcomed) Screen.HOME else Screen.WELCOME
+    // v1.5 HARDENING: after a recreation, reattach to the ONE live transfer
+    // instead of starting a second one. The controller is the authority.
+    val q = appQueue
+    q?.rebindHost(this)
+    if (appRole != Role.NONE && (q?.current != null || appReceiver != null || appSender != null)) {
+      screen = Screen.TRANSFER // same session, same numbers, no duplicate job
+    } else if (q != null && (q.hasQueued() || q.isPaused)) {
+      screen = Screen.SEND // a live queue survives the recreation
+    }
     handleShareIntent(intent)
     // Mockup navigation: BACK returns to Home from any sub-screen (Android
     // convention for a hub activity); it never loses an active transfer.
@@ -674,6 +771,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   // ================= rendering scaffold =================
 
   private fun render() {
+    if (isFinishing || isDestroyed) return // zombie guard: only the live Activity renders
     ticker?.let { ui.removeCallbacks(it); ticker = null }
     qrView = null; ring = null; ringPct = null; ringBytes = null; speedView = null; speedUnitView = null; etaView = null; pauseBtn = null; speedGraph = null
     pendingNav = null
@@ -969,6 +1067,24 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       })
       t.addView(sub)
       addView(t)
+      // v1.5 HARDENING (test 12): VISIBLE reorder affordance — not buried
+      // in the tap dialog. Only QUEUED items may move; the active transfer
+      // and terminal states are guarded by the controller (JVM-tested).
+      if (item.state == SendQueueController.QState.QUEUED) {
+        val mover = col().apply { gravity = Gravity.CENTER_VERTICAL }
+        listOf(true to "Move ${item.name} up", false to "Move ${item.name} down").forEach { (up, desc) ->
+          mover.addView(ImageView(this@MainActivity).apply {
+            setImageResource(R.drawable.ic_down) // same glyph; 180° = up
+            if (up) rotation = 180f
+            imageTintList = android.content.res.ColorStateList.valueOf(D.MUTED)
+            layoutParams = LinearLayout.LayoutParams(dp(34), dp(32))
+            setPadding(dp(6), dp(4), dp(6), dp(4))
+            contentDescription = desc
+            setOnClickListener { queue.move(item, up = up); render() }
+          })
+        }
+        addView(mover)
+      }
       if (!item.isBusy) {
         addView(ImageView(this@MainActivity).apply {
           setImageResource(R.drawable.ic_x)
@@ -1021,7 +1137,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     if (item.state == SendQueueController.QState.FAILED) opts.add("Retry")
     if (!item.isBusy) opts.add("Remove")
     if (item.isBusy) opts.add("Cancel transfer")
-    AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+    AlertDialog.Builder(this, dialogTheme())
       .setTitle(item.name)
       .setItems(opts.toTypedArray()) { _, which ->
         when (val chosen = opts[which]) {
@@ -1164,7 +1280,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
           if (queue.completedCount > 0) opts.add("Clear sent (${queue.completedCount})")
           if (queue.failedCount + queue.cancelledCount > 0) opts.add("Clear failed (${queue.failedCount + queue.cancelledCount})")
           opts.add("Clear all (${queue.totalItems})")
-          AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+          AlertDialog.Builder(this, dialogTheme())
             .setTitle("Clear queue")
             .setItems(opts.toTypedArray()) { _, which ->
               when (opts[which].substringBefore(" (")) {
@@ -1183,7 +1299,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         qrow.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(6), 1) })
       }
       qrow.addView(btn("CANCEL ALL", "text", height = 36, weight = 1f, tintText = D.DANGER) {
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+        AlertDialog.Builder(this, dialogTheme())
           .setTitle("Cancel all transfers?")
           .setMessage("The current transfer stops and every unfinished file is marked cancelled. Completed files and history are kept.")
           .setPositiveButton("CANCEL ALL") { _, _ ->
@@ -1251,7 +1367,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       if (nearby.isEmpty()) {
         if (beaconIdentity == null && beaconSession == null) {
           addView(textView("Discovery unavailable", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
-          addView(sm("Another local socket holds the discovery port, or multicast is blocked. Scan the receiver's QR instead — pairing is identical."))
+          addView(sm(appDiscoveryBindError?.let { "Reason: $it" }
+            ?: "Another local socket holds the discovery port, or multicast is blocked."))
+          addView(sm("Scan the receiver's QR instead — pairing is identical."))
         } else {
           addView(textView("No NexDrop receivers found", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
           addView(sm("A device on this network shows up here when it opens the Receive screen. QR pairing always works too."))
@@ -1278,6 +1396,15 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
           setPadding(0, dp(2), 0, 0)
         })
       }
+      // v1.5 HARDENING (test 18): real diagnostics — live interface, beacon
+      // state, every device heard (identity-only included), bind reason.
+      addView(sm("Diagnostics · interface: ${activeWifiInterface() ?: "none"} · beacon: " +
+        (if (beaconIdentity != null || beaconSession != null) "listening" else "stopped") +
+        " · heard ${identityByIp.size} device(s)" +
+        (appDiscoveryBindError?.let { " · bind: $it" } ?: "")).apply {
+        setTextColor(D.MUTED); setPadding(0, dp(8), 0, 0)
+        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f)
+      })
     })
 
   }
@@ -1438,7 +1565,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     val box = col().apply { setPadding(dp(16), dp(16), dp(16), dp(16)) }
     box.addView(body("LOCAL DIRECT — pairing details"))
     box.addView(sm(text).apply { setPadding(0, dp(8), 0, 0) })
-    AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+    AlertDialog.Builder(this, dialogTheme())
       .setView(box)
       .setPositiveButton("Close", null)
       .show()
@@ -2066,7 +2193,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     })
     content.addView(glassCard(pad = 12f).apply {
       srow(this, R.drawable.ic_wifi, "Nearby discovery", "Available — local UDP, no internet")
-      srow(this, R.drawable.ic_swap, "Group drop", "Not supported yet — one receiver per session")
+      srow(this, R.drawable.ic_swap, "Group drop", "Not supported — one receiver per session") {
+        AlertDialog.Builder(this@MainActivity, dialogTheme()).setTitle("Group drop")
+          .setMessage("Honest status: not supported. The exact architectural blocker: a group send would need one authenticated NDT1 session per receiver, driven by a SECOND orchestration layer next to the single SendQueueController — while this milestone's rules (one queue, one orchestration, no second transfer system) keep that out of scope. We will not fake it with simulated multi-device rows.")
+          .setPositiveButton("Close", null).show()
+      }
       srow(this, R.drawable.ic_dev, "NFC pairing", "Unavailable — Android Beam was removed in Android 10+")
       srow(this, R.drawable.ic_wifi, "Hotspot mode", "Unavailable — Android reserves tethering control to system apps")
     })
@@ -2539,7 +2670,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       minLines = 3
       setPadding(dp(16), dp(12), dp(16), dp(12))
     }
-    AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+    AlertDialog.Builder(this, dialogTheme())
       .setTitle("Send text")
       .setView(input)
       .setPositiveButton("Continue") { _, _ ->
@@ -2764,7 +2895,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
 
   @Volatile private var failedMessage: String? = null
 
-  private fun hideTransferUi() { sender = null; receiver = null; TransferService.engineControl = null; setTransferActive(false) }
+  private fun hideTransferUi() { sender = null; receiver = null; TransferService.engineControl = null; setTransferActive(false); rxWatchdogDisarm() }
 
   private fun setTransferActive(on: Boolean) {
     transferActive = on
@@ -2827,6 +2958,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
 
   override fun onProgress(durable: Long, total: Long) {
     runOnUiThread {
+      if (role == Role.RECEIVE && benchModeMiB == null) rxWatchdogArm() // feeds appLastRxProgressMs too
       if (screen != Screen.TRANSFER) return@runOnUiThread
       currentSize = total
       val elapsedS = (System.nanoTime() - transferStartNanos) / 1e9
@@ -2989,7 +3121,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       setPadding(0, dp(8), 0, dp(4))
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     })
-    val dlg = AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+    val dlg = AlertDialog.Builder(this, dialogTheme())
       .setView(box)
       .setPositiveButton("Close", null)
       .create()
@@ -3153,7 +3285,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       put("benchmark", true)
       put("device", Build.MODEL)
     }
-    AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+    AlertDialog.Builder(this, dialogTheme())
       .setTitle("Share run JSON?")
       .setMessage(json.take(400))
       .setPositiveButton("Share") { _, _ ->
@@ -3227,7 +3359,38 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   }
   private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
+  /** v1.5 HARDENING (physical test 16): dialogs followed the DARK Material
+   *  theme even in Light mode — dark sheets with unreadable custom-view text.
+   *  Centralized: every AlertDialog now follows the app's theme tokens. */
+  private fun dialogTheme(): Int =
+    if (themeIsLight()) android.R.style.Theme_Material_Light_Dialog
+    else android.R.style.Theme_Material_Dialog
+
   companion object {
+    // v1.5 HARDENING: the process-scoped transfer truth (see field comments).
+    private var appScreen = Screen.HOME
+    private var appRole = Role.NONE
+    private var appReceiver: TurboReceiver? = null
+    private var appSender: TurboSender? = null
+    private var appCurrentFile: File? = null
+    private var appCurrentName: String? = null
+    private var appCurrentSize = 0L
+    private var appCompletedSha: String? = null
+    private var appCompletedStats: ThroughputSampler.Stats? = null
+    private var appQueuePeakBps: Double? = null
+    private var appIncomingText: String? = null
+    private var appHistoryFilter = "ALL"
+    private var appTransferGotFirstProgress = false
+    private var appQueue: SendQueueController? = null
+    private var appActivePairing: QrPairing.Pairing? = null
+    private var appQueueSessionStartNanos = 0L
+    private var appQueueResult: Pair<SendQueueController.Summary, Long>? = null
+    private var appBenchModeMiB: Int? = null
+    private var appPeerIp: String? = null
+    private var appLastRxProgressMs = 0L
+    private var appRxWatchdogArmed = false
+    private var appTransferPaused = false
+    private var appDiscoveryBindError: String? = null
     const val PWA_URL = "https://pdfly-source.github.io/nexdrop/"
     const val PWA_FALLBACK_NOTE =
       "The PWA (WebRTC path) pairs with the normal QR flow there. Resume safety: reconnecting within the 10-minute session resumes from the durable offset — never from zero."
