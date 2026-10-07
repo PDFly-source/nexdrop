@@ -199,7 +199,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       if (!quiet) toast("$name already in queue")
       return false
     }
-    sendQueue.add(QItem(uri, name, size, meta?.kind ?: FileMeta.classify(meta?.mime, name), meta?.mime, meta?.lastModified))
+    sendQueue.add(QItem(uri, name, size, meta?.kind ?: FileMeta.classify(meta?.mime, name), meta?.mime, meta?.lastModified ?: -1L))
     return true
   }
 

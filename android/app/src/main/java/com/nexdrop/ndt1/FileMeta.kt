@@ -97,8 +97,8 @@ object FileMeta {
       return Meta(n, f.length(), mime, f.lastModified(), classify(mime, n))
     }
     if (uri.scheme != "content") return null
-    val name: String?
-    val size: Long
+    var name: String? = null
+    var size = -1L
     var lastMod = -1L
     try {
       context.contentResolver.query(uri, null, null, null, null)?.use { c ->
