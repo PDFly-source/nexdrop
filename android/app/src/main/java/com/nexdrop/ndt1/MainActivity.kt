@@ -805,6 +805,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     // receivers) while on the Send/Transfer screens, so a receiving device
     // can show a REAL sender name and honor trusted auto-accept. Nowhere else.
     if (screen != Screen.SEND && screen != Screen.TRANSFER) stopIdentityBeacon()
+    if (pendingNav != null) addPremiumFooter() // all 5 tabs, exactly once, inside the scroll content
     val scroll = ScrollView(this).apply {
       isVerticalScrollBarEnabled = false
       addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -826,6 +827,48 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     } ?: scroll
     root.addView(host, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     setContentView(root)
+  }
+
+  /** PREMIUM SIGNATURE FOOTER (v1.5): the single implementation for Home,
+   *  Transfer, Devices, History and Settings. Last child of the scrollable
+   *  `content` (never an overlay); the bottom nav sits outside the ScrollView
+   *  so it can never be covered. Every colour is a D.* token (Dark/Light
+   *  follow D.apply); sizes are sp (130% safe); every line is explicitly
+   *  MATCH_PARENT + centred, so nothing can left-align. */
+  private fun addPremiumFooter() {
+    fun centred(v: TextView, top: Int): TextView = v.apply {
+      gravity = Gravity.CENTER_HORIZONTAL
+      textAlignment = View.TEXT_ALIGNMENT_CENTER
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+        topMargin = dp(top)
+      }
+    }
+    content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(30)) })
+    content.addView(View(this).apply { // premium divider: teal accent fading out at both edges
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)).apply {
+        marginStart = dp(34); marginEnd = dp(34)
+      }
+      background = android.graphics.drawable.GradientDrawable(
+        android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+        intArrayOf(android.graphics.Color.TRANSPARENT, D.argb(110, D.PRIMARY), D.argb(110, D.PRIMARY), android.graphics.Color.TRANSPARENT))
+    })
+    val footer = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      gravity = Gravity.CENTER_HORIZONTAL
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+      setPadding(0, dp(16), 0, dp(28)) // breathing room above the nav bar
+    }
+    footer.addView(centred(GradientTextView(this).apply { // brand wordmark: same gradient as "FAST."
+      text = "NexDrop"
+      setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 19f)
+      typeface = com.nexdrop.ndt1.ui.Fonts.sora(this@MainActivity, 700)
+      letterSpacing = 0.01f
+      includeFontPadding = false
+    }, 0))
+    footer.addView(centred(textView("PRIVATE • DIRECT • FAST", 10f, D.PRIMARY, 600, 1, 0.26f), 6))
+    footer.addView(centred(textView("Crafted & Developed by PKD", 11f, D.MUTED, 600), 12))
+    footer.addView(centred(textView("© 2026 NexDrop. All rights reserved.", 9.5f, D.argb(165, D.MUTED), 400), 3))
+    content.addView(footer)
   }
 
   private fun screenTitle(text: String) {
@@ -1016,6 +1059,56 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       }
     }
     content.addView(status)
+
+    // QUICK ACTIONS: ONLY destinations that already exist (Devices tab =
+    // real NDD1 nearby discovery + trusted devices; History; Settings;
+    // Diagnostics = Settings > Device Test). Every tile navigates for real.
+    content.addView(sm("Quick actions").apply {
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
+    })
+    fun quick(icon: Int, label: String, target: Screen) = glassCard(pad = 10f).apply {
+      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+      orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+      addView(ImageView(this@MainActivity).apply {
+        setImageResource(icon)
+        imageTintList = android.content.res.ColorStateList.valueOf(D.PRIMARY)
+        layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+      })
+      addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(8), 1) })
+      addView(textView(label, 12f, D.TEXT, 700, 1).apply {
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+      })
+      setOnClickListener { go(target) }
+    }
+    val q1 = row().apply { gravity = Gravity.FILL }
+    q1.addView(quick(R.drawable.ic_dev, "NEARBY DEVICES", Screen.DEVICES).apply {
+      (layoutParams as LinearLayout.LayoutParams).marginEnd = dp(5) })
+    q1.addView(quick(R.drawable.ic_hist, "HISTORY", Screen.HISTORY).apply {
+      (layoutParams as LinearLayout.LayoutParams).marginStart = dp(5) })
+    content.addView(q1)
+    val q2 = row().apply {
+      gravity = Gravity.FILL
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(10) }
+    }
+    q2.addView(quick(R.drawable.ic_spd, "DIAGNOSTICS", Screen.DEVICE_TEST).apply {
+      (layoutParams as LinearLayout.LayoutParams).marginEnd = dp(5) })
+    q2.addView(quick(R.drawable.ic_gear, "SETTINGS", Screen.SETTINGS).apply {
+      (layoutParams as LinearLayout.LayoutParams).marginStart = dp(5) })
+    content.addView(q2)
+
+    // RECENT TRANSFERS: real HistoryStore, shown only when something exists
+    val recent = HistoryStore.list(this).sortedByDescending { it.atMs }.take(3)
+    if (recent.isNotEmpty()) {
+      content.addView(sm("Recent transfers").apply {
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
+      })
+      content.addView(glassCard(pad = 12f).apply {
+        recent.forEachIndexed { i, e ->
+          addView(historyRow(e) { entry -> historyActions(entry) })
+          if (i < recent.size - 1) addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(6)) })
+        }
+      })
+    }
     nav(0)
   }
 
@@ -1409,10 +1502,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f)
       })
     })
-
+    nav(1)
   }
 
-  // ================= 04 RECEIVE + QR =================
   private fun startReceiving() {
     val endpoint = LocalNet.select(activeWifiInterface())
     if (endpoint == null) { screen = Screen.UNAVAILABLE; render(); return }
