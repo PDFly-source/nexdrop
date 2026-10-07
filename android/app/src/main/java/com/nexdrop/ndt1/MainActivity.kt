@@ -651,6 +651,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     stopIdentityBeacon()
     stopSessionBeacon()
     releaseMulticastLock()
+    // v1.5 Phase C: the queue is gone — release queued preview jobs
+    // (generation bump) and evict the bounded thumbnail cache. Never
+    // throws: preview teardown is best-effort and engine-independent.
+    runCatching { previews.cancelAll() }
     super.onDestroy()
   }
 
