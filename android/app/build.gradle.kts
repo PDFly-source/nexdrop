@@ -73,4 +73,6 @@ dependencies {
   // QR: pure-Java encoder (companion QR) + embedded scanner (ONE QR scan UX)
   implementation("com.google.zxing:core:3.5.3")
   implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+  // v1.5 Phase B: app-module unit tests (FileKind classification — pure JVM)
+  testImplementation("junit:junit:4.13.2")
 }

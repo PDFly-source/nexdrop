@@ -157,7 +157,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   // ---- SEND QUEUE (PRIORITY 1): N files or a whole folder, one pairing,
   //      sequential independent NDT1 streams. Nothing is faked: each file
   //      goes through the full OFFER/accept/SHA flow on the receiver. ----
-  private class QItem(val uri: Uri, val name: String, val size: Long) {
+  private class QItem(
+    val uri: Uri, val name: String, val size: Long,
+    // v1.5 Phase B: real metadata (FileMeta) — URI references only, no bytes.
+    val kind: FileKind = FileKind.OTHER, val mime: String? = null, val lastModified: Long = -1L,
+  ) {
     @Volatile var state = "Ready" // Ready | Sending | Done
   }
   private val sendQueue = ArrayList<QItem>()
@@ -183,12 +187,87 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   private fun queueTotalBytes(): Long = sendQueue.sumOf { it.size }
 
-  private fun addToQueue(uri: Uri, displayOverride: String?) {
-    val name = displayOverride ?: pendingName(uri) ?: return
-    val size = pendingSize(uri)
-    if (size <= 0) { toast("Cannot read $name"); return }
-    if (sendQueue.any { it.uri.toString() == uri.toString() }) { toast("$name already in queue"); return }
-    sendQueue.add(QItem(uri, name, size))
+  private fun addToQueue(uri: Uri, displayOverride: String?, quiet: Boolean = false): Boolean {
+    val meta = FileMeta.load(this, uri)
+    val name = displayOverride ?: meta?.name ?: run {
+      if (!quiet) toast("Cannot read that file")
+      return false
+    }
+    val size = meta?.size ?: -1L
+    if (size <= 0) { if (!quiet) toast("Cannot read $name"); return false }
+    if (sendQueue.any { it.uri.toString() == uri.toString() }) {
+      if (!quiet) toast("$name already in queue")
+      return false
+    }
+    sendQueue.add(QItem(uri, name, size, meta?.kind ?: FileMeta.classify(meta?.mime, name), meta?.mime, meta?.lastModified))
+    return true
+  }
+
+  /**
+   * v1.5 Phase B batch add — the picker and the Android Share Sheet share
+   * this exact path. Small batches resolve inline (instant); >20 URIs
+   * resolve metadata OFF the UI thread (a 100+ file share must not jank or
+   * double-query), then commit in ONE UI update. URI references only.
+   */
+  private fun addUrisBatch(uris: List<Uri>, fromShareSheet: Boolean = false) {
+    if (uris.isEmpty()) { if (fromShareSheet) toast("Nothing shareable in that request"); return }
+    if (uris.size <= 20) {
+      var added = 0
+      uris.forEach { u ->
+        try { contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+        if (addToQueue(u, null, quiet = true)) added++
+      }
+      finishBatchAdd(added, uris.size, fromShareSheet)
+      return
+    }
+    toast("Reading ${uris.size} files…")
+    thread {
+      val pairs = uris.mapNotNull { u ->
+        try { contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+        FileMeta.load(this, u)?.let { u to it }
+      }
+      runOnUiThread {
+        var added = 0
+        pairs.forEach { (u, m) ->
+          if (m.size > 0 && sendQueue.none { it.uri.toString() == u.toString() }) {
+            sendQueue.add(QItem(u, m.name, m.size, m.kind, m.mime, m.lastModified))
+            added++
+          }
+        }
+        finishBatchAdd(added, uris.size, fromShareSheet)
+      }
+    }
+  }
+
+  private fun finishBatchAdd(added: Int, total: Int, fromShareSheet: Boolean) {
+    if (added == 0) {
+      toast(if (total == 1) "Could not read that file — it may no longer be accessible"
+            else "Could not read those files — they may no longer be accessible")
+      return
+    }
+    val n = sendQueue.size
+    toast(if (added < total) "Added $added of $total — $n in queue"
+          else if (added == 1) "Added to the send queue — $n total"
+          else "Added $added files — $n in queue")
+    if (fromShareSheet) goRoot(Screen.SEND)
+    else if (screen != Screen.SEND) { screen = Screen.SEND; render() } else render()
+  }
+
+  /** Real icon per classified kind — taxonomy only, never a fake preview. */
+  private fun kindIcon(kind: FileKind): Int = when (kind) {
+    FileKind.IMAGE -> R.drawable.ic_img
+    FileKind.VIDEO -> R.drawable.ic_vid
+    FileKind.AUDIO -> R.drawable.ic_file
+    FileKind.PDF, FileKind.DOC -> R.drawable.ic_doc
+    FileKind.APK -> R.drawable.ic_app
+    FileKind.ARCHIVE -> R.drawable.ic_more
+    FileKind.OTHER -> R.drawable.ic_file
+  }
+
+  private fun kindLabel(kind: FileKind): String = when (kind) {
+    FileKind.IMAGE -> "Image"; FileKind.VIDEO -> "Video"; FileKind.AUDIO -> "Audio"
+    FileKind.PDF -> "PDF"; FileKind.APK -> "App"; FileKind.ARCHIVE -> "Archive"
+    FileKind.DOC -> "Document"; FileKind.OTHER -> "File"
   }
 
   /** SAF folder → real recursive file queue (streamed, bounded RAM). */
@@ -202,7 +281,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
             val rel = if (path.isEmpty()) d.name ?: "?" else "$path/${d.name ?: "?"}"
             if (d.isDirectory) walk(d, rel)
             else if (d.isFile && (d.name ?: "").isNotEmpty() && d.length() > 0) {
-              items.add(QItem(d.uri, rel, d.length()))
+              items.add(QItem(d.uri, rel, d.length(), FileMeta.classify(null, d.name)))
             }
           }
         }
@@ -419,16 +498,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   // QUEUE. Content URIs stream through the engine — nothing is loaded to RAM.
   private val pickFile = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri>? ->
     if (uris.isNullOrEmpty()) return@registerForActivityResult
-    var added = 0
-    uris.forEach { uri ->
-      try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
-      addToQueue(uri, null)
-      added++
-    }
-    if (added > 0) {
-      toast("$added file(s) added — ${sendQueue.size} in queue")
-      if (screen == Screen.SEND) render() else { screen = Screen.SEND; render() }
-    }
+    addUrisBatch(uris)
   }
   // Folder picker (PRIORITY 1): SAF tree — queued RECURSIVELY as individual
   // streamed files. No Android API lets a native app enumerate arbitrary
@@ -482,14 +552,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       (androidx.core.content.IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) ?: ArrayList()).filterNotNull()
     }
     if (uris.isEmpty()) { toast("Nothing shareable in that request"); return }
-    val added = ArrayList<String>()
-    uris.forEach { u ->
-      val name = queryName(u)
-      if (name != null) { addToQueue(u, name); added.add(name) }
-    }
-    if (added.isEmpty()) { toast("Could not read the shared item(s)"); return }
-    goRoot(Screen.SEND)
-    toast(if (added.size == 1) "Added ${added[0]} to the send queue" else "Added ${added.size} files to the send queue")
+    // v1.5 Phase B: shared files take the SAME batch path as picker files —
+    // one metadata query per URI, off-thread for large shares. Text-only
+    // shares are not silently converted to files; first-class text sharing
+    // arrives in the v1.5 text phase.
+    addUrisBatch(uris, fromShareSheet = true)
   }
 
   override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
@@ -786,14 +853,14 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     val r = glassCard(pad = 12f).apply {
       orientation = LinearLayout.HORIZONTAL
       gravity = Gravity.CENTER_VERTICAL
-      addView(icBox(R.drawable.ic_file))
+      addView(icBox(kindIcon(item.kind)))
       addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
       val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
       t.addView(textView(item.name, 13f, D.TEXT, 700).apply {
         maxLines = 2
         ellipsize = android.text.TextUtils.TruncateAt.END
       })
-      t.addView(sm("${SpeedFormat.bytesText(item.size)}  ·  #${index + 1}"))
+      t.addView(sm("${SpeedFormat.bytesText(item.size)}  ·  ${item.mime ?: kindLabel(item.kind)}  ·  #${index + 1}"))
       addView(t)
       if (item.state != "Sending") {
         addView(ImageView(this@MainActivity).apply {
@@ -873,6 +940,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     listOf(
       Triple(R.drawable.ic_img, "Images", "image/*"),
       Triple(R.drawable.ic_vid, "Videos", "video/*"),
+      Triple(R.drawable.ic_file, "Audio", "audio/*"),
       Triple(R.drawable.ic_doc, "Docs", "application/*"),
       Triple(R.drawable.ic_app, "Apps", "application/vnd.android.package-archive"),
       Triple(R.drawable.ic_more, "Other", "*/*"),
@@ -2673,27 +2741,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     }
   }
 
-  private fun pendingName(uri: Uri): String? =
-    if (uri.scheme == "file") File(uri.path!!).name else queryName(uri)
-
-  private fun pendingSize(uri: Uri): Long =
-    if (uri.scheme == "file") File(uri.path!!).length() else querySize(uri)
-
-  private fun queryName(uri: Uri): String? {
-    contentResolver.query(uri, null, null, null, null)?.use { c ->
-      val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-      if (idx >= 0 && c.moveToFirst()) return c.getString(idx)
-    }
-    return uri.lastPathSegment
-  }
-
-  private fun querySize(uri: Uri): Long {
-    contentResolver.query(uri, null, null, null, null)?.use { c ->
-      val idx = c.getColumnIndex(android.provider.OpenableColumns.SIZE)
-      if (idx >= 0 && c.moveToFirst() && !c.isNull(idx)) return c.getLong(idx)
-    }
-    return -1
-  }
+  // (v1.5 Phase B) pendingName/pendingSize/queryName/querySize removed:
+  // superseded by FileMeta.load — ONE ContentResolver query per URI instead
+  // of separate name+size queries. Behavior for file:// URIs is preserved
+  // inside FileMeta (plain File stats).
 
   private fun openPwa() {
     try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PWA_URL))) }
