@@ -85,13 +85,23 @@ import kotlin.concurrent.thread
  * Every name, size, byte count, percentage, speed, ETA, duration and
  * SHA status on screen comes from real engine state — no mock data.
  */
-class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
+class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueController.Host {
 
   private enum class Screen { WELCOME, HOME, SEND, RECEIVE, TRANSFER, RESULT, FAILED, UNAVAILABLE, DEVICES, HISTORY, SETTINGS, DEVICE_TEST }
   private enum class Role { NONE, SEND, RECEIVE }
 
-  private var screen = Screen.HOME
-  private var role = Role.NONE
+  // v1.5 HARDENING: transfer state is PROCESS-scoped (companion singletons).
+  // An Activity recreation (theme flip, memory pressure, lifecycle) used to
+  // build a SECOND SendQueueController + engine owner next to the live one —
+  // the exact source of duplicate-completion, terminal-race and lifecycle
+  // failures on the owner's physical tests. One process, one controller,
+  // one engine; the recreated Activity rebinds and rehydrates from truth.
+  private var screen: Screen
+    get() = appScreen
+    set(v) { appScreen = v }
+  private var role: Role
+    get() = appRole
+    set(v) { appRole = v }
 
   // ---- navigation stack (real Back history; tab hops + sub-screens all push) ----
   // Back NEVER cancels an active transfer; the engine callbacks (TRANSFER ->
@@ -139,34 +149,118 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private var qrView: ImageView? = null
 
   // ---- transfer state (engine) ----
-  private var receiver: TurboReceiver? = null
-  private var sender: TurboSender? = null
-  private var transferStartNanos = 0L
-  private var paused = false
+  private var receiver: TurboReceiver?
+    get() = appReceiver
+    set(v) { appReceiver = v }
+  private var sender: TurboSender?
+    get() = appSender
+    set(v) { appSender = v }
+  private var paused: Boolean
+    get() = appTransferPaused
+    set(v) { appTransferPaused = v }
+  private var transferStartNanos: Long
+    get() = appTransferStartNanos
+    set(v) { appTransferStartNanos = v }
   private var pendingPairing: QrPairing.Pairing? = null
-  private var benchModeMiB: Int? = null
+  private var benchModeMiB: Int?
+    get() = appBenchModeMiB
+    set(v) { appBenchModeMiB = v }
   private var localEndpoint: LocalNet.Endpoint? = null
-  private var peerIp: String? = null
-  private var currentFile: File? = null
-  private var currentName: String? = null
-  private var currentSize: Long = 0
-  private var completedSha: String? = null
-  private var completedStats: ThroughputSampler.Stats? = null
-  private var transferGotFirstProgress = false
+  private var peerIp: String?
+    get() = appPeerIp
+    set(v) { appPeerIp = v }
+  private var currentFile: File?
+    get() = appCurrentFile
+    set(v) { appCurrentFile = v }
+  private var currentName: String?
+    get() = appCurrentName
+    set(v) { appCurrentName = v }
+  private var currentSize: Long
+    get() = appCurrentSize
+    set(v) { appCurrentSize = v }
+  private var completedSha: String?
+    get() = appCompletedSha
+    set(v) { appCompletedSha = v }
+  private var completedStats: ThroughputSampler.Stats?
+    get() = appCompletedStats
+    set(v) { appCompletedStats = v }
+  /** v1.5 Phase E: max sustained peak across the whole queue session —
+   *  the RESULT screen shows session aggregates, not the last file's. */
+  private var queuePeakBps: Double?
+    get() = appQueuePeakBps
+    set(v) { appQueuePeakBps = v }
+  /** v1.5 Phase F: the received text of the last single .txt receive (bounded
+   *  by TextSharePolicy; cleared at every fresh transfer — no stale leak). */
+  private var incomingText: String?
+    get() = appIncomingText
+    set(v) { appIncomingText = v }
+  /** v1.5 Phase F: History filter chip state (ALL | SENT | RECEIVED | FAILED | CANCELLED). */
+  private var historyFilter: String
+    get() = appHistoryFilter
+    set(v) { appHistoryFilter = v }
+  private var transferGotFirstProgress: Boolean
+    get() = appTransferGotFirstProgress
+    set(v) { appTransferGotFirstProgress = v }
 
-  // ---- SEND QUEUE (PRIORITY 1): N files or a whole folder, one pairing,
-  //      sequential independent NDT1 streams. Nothing is faked: each file
-  //      goes through the full OFFER/accept/SHA flow on the receiver. ----
-  private class QItem(val uri: Uri, val name: String, val size: Long) {
-    @Volatile var state = "Ready" // Ready | Sending | Done
-  }
-  private val sendQueue = ArrayList<QItem>()
-  private var queueIndex = -1
-  private var queueBytesDone = 0L
-  private var activePairing: QrPairing.Pairing? = null
-  private var resumeAttempts = 0
-  @Volatile private var reconnecting = false
+  // ---- SEND QUEUE (v1.5 Phase D): the ordered queue, per-file state
+  //      machine, byte-based aggregate progress, bounded retry, cancel/
+  //      pause and failure isolation live in SendQueueController (pure
+  //      Kotlin, fully JVM-tested). This class is only the Host: UI +
+  //      engine bridge. Sequential independent NDT1 streams — one file at
+  //      a time, each through the full OFFER/accept/SHA flow on the
+  //      receiver. URI + metadata only, never bytes. ----
+  private val queue: SendQueueController
+    get() = appQueue ?: SendQueueController(this).also { appQueue = it }
+  /** Read-only view for list-style call sites; mutations go through the controller. */
+  private val sendQueue get() = queue.items
+  /** v1.5 Phase C: bounded async previews — one low-priority worker, LRU cache, never on a transfer thread. */
+  private val previews by lazy { PreviewProvider(applicationContext) }
+  private var activePairing: QrPairing.Pairing?
+    get() = appActivePairing
+    set(v) { appActivePairing = v }
+  /** Queue session wall clock (honest RESULT duration). */
+  private var queueSessionStartNanos: Long
+    get() = appQueueSessionStartNanos
+    set(v) { appQueueSessionStartNanos = v }
+  /** Drain result for the RESULT screen (counts + real session duration). */
+  private var queueResult: Pair<SendQueueController.Summary, Long>?
+    get() = appQueueResult
+    set(v) { appQueueResult = v }
   @Volatile private var acceptedOfferKey: String? = null
+
+  // ---- v1.5 HARDENING (physical test 6): receiver EOF watchdog.
+  // The frozen NDT1 engine exits its receive loop SILENTLY when the sender
+  // closes the socket mid-transfer (break@loop — no terminal callback), so
+  // the UI/foreground service kept claiming an active transfer after a
+  // sender-side Cancel. Protocol stays frozen; the app owns the recovery:
+  // 9 s without progress while receiving and not paused ⇒ the session is
+  // closed from the other end ⇒ honest ABORT, part file kept (resume-safe),
+  // receiver stays listening, NO history record (it is neither a completed
+  // nor a failed transfer of this device).
+  private fun rxWatchdogTick() {
+    if (!appRxWatchdogArmed) return
+    ui.postDelayed({
+      if (!appRxWatchdogArmed) return@postDelayed
+      val active = role == Role.RECEIVE && currentName != null && benchModeMiB == null
+      val stale = System.currentTimeMillis() - appLastRxProgressMs > 9_000
+      if (active && stale && !appTransferPaused) {
+        appRxWatchdogArmed = false
+        hideTransferUi()
+        TransferService.stop(this)
+        toast("Connection closed — partial file kept, resumable if the sender reconnects")
+        screen = Screen.RECEIVE; render()
+      } else rxWatchdogTick() // re-arm while a receive is live
+    }, 3_000)
+  }
+
+  private fun rxWatchdogArm() {
+    appLastRxProgressMs = System.currentTimeMillis()
+    if (appRxWatchdogArmed) return
+    appRxWatchdogArmed = true
+    rxWatchdogTick()
+  }
+
+  private fun rxWatchdogDisarm() { appRxWatchdogArmed = false }
 
   // ---- NEARBY DEVICES (v1.4): REAL NDD1 discovery only. One beacon socket
   //      at a time: the receiver advertises a real pairable session; a
@@ -176,19 +270,204 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private var beaconSession: DiscoveryBeacon? = null   // receiver mode: advertise token + listen
   private var beaconIdentity: DiscoveryBeacon? = null  // send mode: identity presence + listen
   private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+  /** v1.5 readiness: action to run once CAMERA is granted (askCameraForScan). */
+  private var cameraPending: (() -> Unit)? = null
   private data class SeenPeer(val dev: DiscoveryBeacon.DiscoveredDevice, val atMs: Long)
   private val identityByIp = java.util.concurrent.ConcurrentHashMap<String, SeenPeer>()
   private var nearbySignature = ""
   private var lastTrustPromptDevid: String? = null
 
-  private fun queueTotalBytes(): Long = sendQueue.sumOf { it.size }
+  private fun queueTotalBytes(): Long = queue.totalBytes
 
-  private fun addToQueue(uri: Uri, displayOverride: String?) {
-    val name = displayOverride ?: pendingName(uri) ?: return
-    val size = pendingSize(uri)
-    if (size <= 0) { toast("Cannot read $name"); return }
-    if (sendQueue.any { it.uri.toString() == uri.toString() }) { toast("$name already in queue"); return }
-    sendQueue.add(QItem(uri, name, size))
+  private fun addToQueue(uri: Uri, displayOverride: String?, quiet: Boolean = false): Boolean {
+    val meta = FileMeta.load(this, uri)
+    val name = displayOverride ?: meta?.name ?: run {
+      if (!quiet) toast("Cannot read that file")
+      return false
+    }
+    val size = meta?.size ?: -1L
+    if (size <= 0) { if (!quiet) toast("Cannot read $name"); return false }
+    // v1.5 Phase D: duplicate protection + honest add live in the controller.
+    val res = queue.add(SendQueueController.QueueItem(
+      uri.toString(), name, size,
+      meta?.kind ?: FileMeta.classify(meta?.mime, name), meta?.mime, meta?.lastModified ?: -1L))
+    if (res.skipped > 0) {
+      if (!quiet) toast("$name already in queue")
+      return false
+    }
+    return true
+  }
+
+  /**
+   * v1.5 Phase B batch add — the picker and the Android Share Sheet share
+   * this exact path. Small batches resolve inline (instant); >20 URIs
+   * resolve metadata OFF the UI thread (a 100+ file share must not jank or
+   * double-query), then commit in ONE UI update. URI references only.
+   */
+  private fun addUrisBatch(uris: List<Uri>, fromShareSheet: Boolean = false) {
+    if (uris.isEmpty()) { if (fromShareSheet) toast("Nothing shareable in that request"); return }
+    if (uris.size <= 20) {
+      var added = 0
+      uris.forEach { u ->
+        try { contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+        if (addToQueue(u, null, quiet = true)) added++
+      }
+      finishBatchAdd(added, uris.size, fromShareSheet)
+      return
+    }
+    // (>20 URIs branch below resolves metadata off-thread)
+    toast("Reading ${uris.size} files…")
+    thread {
+      val pairs = uris.mapNotNull { u ->
+        try { contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+        FileMeta.load(this, u)?.let { u to it }
+      }
+      runOnUiThread {
+        val toAdd = pairs.mapNotNull { (u, m) ->
+          if (m.size > 0) SendQueueController.QueueItem(u.toString(), m.name, m.size, m.kind, m.mime, m.lastModified) else null
+        }
+        val res = queue.addBatch(toAdd)
+        finishBatchAdd(res.added, uris.size, fromShareSheet, res.skipped)
+      }
+    }
+  }
+
+  private fun finishBatchAdd(added: Int, total: Int, fromShareSheet: Boolean, skipped: Int = 0) {
+    if (added == 0) {
+      toast(if (total == 1) "Could not read that file — it may no longer be accessible"
+            else "Could not read those files — they may no longer be accessible")
+      return
+    }
+    val n = sendQueue.size
+    toast(when {
+      skipped > 0 -> "Added $added of $total — $skipped duplicates skipped — $n in queue"
+      added < total -> "Added $added of $total — $n in queue"
+      added == 1 -> "Added to the send queue — $n total"
+      else -> "Added $added files — $n in queue"
+    })
+    if (fromShareSheet) goRoot(Screen.SEND)
+    else if (screen != Screen.SEND) { screen = Screen.SEND; render() } else render()
+  }
+
+  /** Real icon per classified kind — taxonomy only, never a fake preview. */
+  private fun kindIcon(kind: FileKind): Int = when (kind) {
+    FileKind.IMAGE -> R.drawable.ic_img
+    FileKind.VIDEO -> R.drawable.ic_vid
+    FileKind.AUDIO -> R.drawable.ic_file
+    FileKind.PDF, FileKind.DOC -> R.drawable.ic_doc
+    FileKind.APK -> R.drawable.ic_app
+    FileKind.ARCHIVE -> R.drawable.ic_more
+    FileKind.OTHER -> R.drawable.ic_file
+  }
+
+  private fun kindLabel(kind: FileKind): String = when (kind) {
+    FileKind.IMAGE -> "Image"; FileKind.VIDEO -> "Video"; FileKind.AUDIO -> "Audio"
+    FileKind.PDF -> "PDF"; FileKind.APK -> "App"; FileKind.ARCHIVE -> "Archive"
+    FileKind.DOC -> "Document"; FileKind.OTHER -> "File"
+  }
+
+  /**
+   * v1.5 Phase C queue subline: size · [duration/label when real] · MIME.
+   * Always real metadata — durations/labels arrive only from an actual
+   * PreviewResult, never guessed.
+   */
+  private fun queueSub(item: SendQueueController.QueueItem, index: Int, extra: String? = null): TextView {
+    val parts = ArrayList<String>()
+    parts.add(SpeedFormat.bytesText(item.size))
+    extra?.let { parts.add(it) }
+    parts.add(item.mime ?: kindLabel(item.kind))
+    parts.add("#${index + 1}")
+    return sm(parts.joinToString("  ·  "))
+  }
+
+  private fun durText(ms: Long): String {
+    val s = ms / 1000
+    return "%d:%02d".format(s / 60, s % 60)
+  }
+
+  /**
+   * Queue-row preview surface: starts as the typed kind icon (Phase B);
+   * the async bounded preview swaps in a REAL thumbnail when one exists.
+   * Corrupted/unreadable content keeps the honest icon — never blank,
+   * never faked.
+   */
+  private fun previewBox(item: SendQueueController.QueueItem, index: Int, sub: TextView): android.widget.FrameLayout {
+    val frame = android.widget.FrameLayout(this).apply {
+      // FINAL POLISH: deterministic bounded thumb — 64 dp square, never
+      // wrap/height-fill, never a poster. The preview area is a thumbnail
+      // inside a compact row; real previews crop within these bounds.
+      layoutParams = LinearLayout.LayoutParams(dp(64), dp(64))
+      background = GlassSurface()
+      clipToOutline = true
+      tag = previewCacheKey(item.uri, item.size, item.lastModified)
+      contentDescription = "Preview: ${item.name}"
+    }
+    frame.addView(ImageView(this).apply {
+      // Honest typed fallback: a proportional glyph INSIDE the bounded
+      // thumb — never a giant empty placeholder, never a tiny lost icon.
+      setImageResource(kindIcon(item.kind))
+      imageTintList = android.content.res.ColorStateList.valueOf(D.MUTED)
+      layoutParams = android.widget.FrameLayout.LayoutParams(
+        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+        android.widget.FrameLayout.LayoutParams.MATCH_PARENT)
+      setPadding(dp(18), dp(18), dp(18), dp(18))
+      scaleType = ImageView.ScaleType.FIT_CENTER
+    })
+    return frame
+  }
+
+  /**
+   * Preview request for a queue row — called AFTER the frame is attached
+   * to its card. FIX (warm-cache re-renders never showed thumbnails): the
+   * cache-hit callback fires SYNCHRONOUSLY inside request(); when the
+   * request was made while the row was still under construction the frame
+   * had no parent yet, the detach guard dropped the result, and every
+   * re-render (queue event, state change, move buttons) rebuilt the row
+   * with the typed icon forever. Requesting post-attach makes the
+   * synchronous hit land on the live row; the async miss path still drops
+   * harmlessly if a later render replaced the row — the next render then
+   * finds the warm cache, per the documented PreviewProvider contract.
+   */
+  private fun bindRowPreview(frame: android.widget.FrameLayout, sub: TextView, item: SendQueueController.QueueItem, index: Int) {
+    val uriObj = Uri.parse(item.uri)
+    val key = previewCacheKey(item.uri, item.size, item.lastModified)
+    previews.request(uriObj, item.size, item.lastModified, item.kind, item.mime) { res ->
+      // The row may have been rebuilt by a later render() — only the row
+      // whose frame still carries this key is updated.
+      if (frame.tag != key || frame.parent == null) return@request
+      when (res) {
+        is PreviewResult.ImagePreview -> applyThumb(frame, res.bitmap)
+        is PreviewResult.PdfPreview -> applyThumb(frame, res.page)
+        is PreviewResult.VideoPreview -> {
+          applyThumb(frame, res.frame)
+          sub.text = queueSub(item, index, durText(res.durationMs)).text
+        }
+        is PreviewResult.AudioPreview ->
+          if (res.durationMs > 0) sub.text = queueSub(item, index, durText(res.durationMs)).text
+        is PreviewResult.ApkPreview -> {
+          res.icon?.let { applyThumb(frame, it) }
+          if (res.label.isNotEmpty()) {
+            val label = res.label + if (res.versionName.isNotEmpty()) " ${res.versionName}" else ""
+            sub.text = queueSub(item, index, label).text
+          }
+        }
+        else -> {} // TypedIcon/Unavailable: the honest typed icon already shows
+      }
+    }
+  }
+
+  private fun applyThumb(frame: android.widget.FrameLayout, bmp: android.graphics.Bitmap) {
+    frame.removeAllViews()
+    frame.addView(ImageView(this).apply {
+      // CENTER_CROP inside the fixed 64 dp thumb: the preview fills the
+      // bounded area and crops the overflow — no dark letterbox bands, no
+      // black/empty card. The frame stays 64 dp regardless of aspect ratio.
+      setImageBitmap(bmp)
+      scaleType = ImageView.ScaleType.CENTER_CROP
+      layoutParams = android.widget.FrameLayout.LayoutParams(
+        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+        android.widget.FrameLayout.LayoutParams.MATCH_PARENT)
+    })
   }
 
   /** SAF folder → real recursive file queue (streamed, bounded RAM). */
@@ -196,21 +475,22 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     thread {
       try {
         val root = DocumentFile.fromTreeUri(this, tree) ?: return@thread
-        val items = ArrayList<QItem>()
+        val items = ArrayList<SendQueueController.QueueItem>()
         fun walk(dir: DocumentFile, path: String) {
           dir.listFiles().forEach { d ->
             val rel = if (path.isEmpty()) d.name ?: "?" else "$path/${d.name ?: "?"}"
             if (d.isDirectory) walk(d, rel)
             else if (d.isFile && (d.name ?: "").isNotEmpty() && d.length() > 0) {
-              items.add(QItem(d.uri, rel, d.length()))
+              items.add(SendQueueController.QueueItem(d.uri.toString(), rel, d.length(), FileMeta.classify(null, d.name), null, -1L))
             }
           }
         }
         walk(root, "")
         runOnUiThread {
           if (items.isEmpty()) { toast("No files in that folder"); return@runOnUiThread }
-          items.forEach { it2 -> sendQueue.add(it2) }
-          toast("Folder queued — ${items.size} files, ${SpeedFormat.bytesText(items.sumOf { it.size })}")
+          val res = queue.addBatch(items)
+          toast("Folder queued — ${res.added} files, ${SpeedFormat.bytesText(items.sumOf { it.size })}" +
+            if (res.skipped > 0) " · ${res.skipped} duplicates skipped" else "")
           if (screen == Screen.SEND) render() else { screen = Screen.SEND; render() }
         }
       } catch (e: Exception) {
@@ -282,11 +562,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     if (beaconIdentity != null || beaconSession != null) return // one socket (port is fixed)
     try {
       acquireMulticastLock()
+      appDiscoveryBindError = null
       beaconIdentity = DiscoveryBeacon(deviceLabel(), "android", 0,
         SessionToken(ByteArray(0), "", ""), deviceIdPref()).also {
         it.start({ peers -> onBeaconPeers(peers) })
       }
-    } catch (_: Exception) { beaconIdentity = null } // honest: QR pairing still works
+    } catch (e: Exception) {
+      beaconIdentity = null
+      // v1.5 HARDENING (test 18): NEVER silently swallow a discovery failure —
+      // the Send screen shows the exact reason and QR pairing remains.
+      appDiscoveryBindError = (e.message ?: e.javaClass.simpleName).take(120)
+    }
   }
 
   private fun stopIdentityBeacon() {
@@ -305,7 +591,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       beaconSession = DiscoveryBeacon(deviceLabel(), "android", port, session, deviceIdPref()).also {
         it.start({ peers -> onBeaconPeers(peers) })
       }
-    } catch (_: Exception) { beaconSession = null } // QR pairing unaffected
+    } catch (e: Exception) {
+      beaconSession = null
+      appDiscoveryBindError = (e.message ?: e.javaClass.simpleName).take(120) // honest: shown, not swallowed
+    } // QR pairing unaffected
   }
 
   private fun stopSessionBeacon() {
@@ -315,7 +604,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   /** Pair to a REAL discovered receiver — same path as a scanned QR. */
   private fun pairFromDiscovery(p: SeenPeer) {
-    if (sendQueue.isEmpty()) { toast("Choose files first — then tap the device again"); return }
+    if (!queue.hasQueued()) { toast("Choose files first — then tap the device again"); return }
     val dev = p.dev
     val pairing = QrPairing.Pairing(dev.address, dev.port, dev.sessionId, dev.token, expired = false)
     toast("Connecting to ${dev.deviceName}…")
@@ -393,6 +682,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private var ring: RingView? = null
   private var ringPct: TextView? = null
   private var ringBytes: TextView? = null
+  // FINAL POLISH (§13): last real (durable, total) shown on the ring — so a
+  // re-render (PAUSE relabel) restores LIVE values, never resets to 0/0.
+  private var ringDurable: Long = 0L
+  private var ringTotal: Long = 0L
   private var speedView: GradientTextView? = null
   private var speedUnitView: TextView? = null
   private var etaView: TextView? = null
@@ -419,16 +712,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   // QUEUE. Content URIs stream through the engine — nothing is loaded to RAM.
   private val pickFile = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri>? ->
     if (uris.isNullOrEmpty()) return@registerForActivityResult
-    var added = 0
-    uris.forEach { uri ->
-      try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
-      addToQueue(uri, null)
-      added++
-    }
-    if (added > 0) {
-      toast("$added file(s) added — ${sendQueue.size} in queue")
-      if (screen == Screen.SEND) render() else { screen = Screen.SEND; render() }
-    }
+    addUrisBatch(uris)
   }
   // Folder picker (PRIORITY 1): SAF tree — queued RECURSIVELY as individual
   // streamed files. No Android API lets a native app enumerate arbitrary
@@ -444,6 +728,16 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     applyThemeNow()
     val welcomed = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_WELCOMED, false)
     screen = if (welcomed) Screen.HOME else Screen.WELCOME
+    // v1.5 HARDENING: after a recreation, reattach to the ONE live transfer
+    // instead of starting a second one. The controller is the authority.
+    val q = appQueue
+    q?.rebindHost(this)
+    if (appRole != Role.NONE && (q?.current != null || appReceiver != null || appSender != null)) {
+      screen = Screen.TRANSFER // same session, same numbers, no duplicate job
+      bindEngineControl() // progress/ETA/notification controls act through the LIVE Activity
+    } else if (q != null && (q.hasQueued() || q.isPaused)) {
+      screen = Screen.SEND // a live queue survives the recreation
+    }
     handleShareIntent(intent)
     // Mockup navigation: BACK returns to Home from any sub-screen (Android
     // convention for a hub activity); it never loses an active transfer.
@@ -482,14 +776,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       (androidx.core.content.IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) ?: ArrayList()).filterNotNull()
     }
     if (uris.isEmpty()) { toast("Nothing shareable in that request"); return }
-    val added = ArrayList<String>()
-    uris.forEach { u ->
-      val name = queryName(u)
-      if (name != null) { addToQueue(u, name); added.add(name) }
-    }
-    if (added.isEmpty()) { toast("Could not read the shared item(s)"); return }
-    goRoot(Screen.SEND)
-    toast(if (added.size == 1) "Added ${added[0]} to the send queue" else "Added ${added.size} files to the send queue")
+    // v1.5 Phase B: shared files take the SAME batch path as picker files —
+    // one metadata query per URI, off-thread for large shares. Text-only
+    // shares are not silently converted to files; first-class text sharing
+    // arrives in the v1.5 text phase.
+    addUrisBatch(uris, fromShareSheet = true)
   }
 
   override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
@@ -504,12 +795,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     stopIdentityBeacon()
     stopSessionBeacon()
     releaseMulticastLock()
+    // v1.5 Phase C: the queue is gone — release queued preview jobs
+    // (generation bump) and evict the bounded thumbnail cache. Never
+    // throws: preview teardown is best-effort and engine-independent.
+    runCatching { previews.cancelAll() }
     super.onDestroy()
   }
 
   // ================= rendering scaffold =================
 
   private fun render() {
+    if (isFinishing || isDestroyed) return // zombie guard: only the live Activity renders
     ticker?.let { ui.removeCallbacks(it); ticker = null }
     qrView = null; ring = null; ringPct = null; ringBytes = null; speedView = null; speedUnitView = null; etaView = null; pauseBtn = null; speedGraph = null
     pendingNav = null
@@ -540,6 +836,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     // receivers) while on the Send/Transfer screens, so a receiving device
     // can show a REAL sender name and honor trusted auto-accept. Nowhere else.
     if (screen != Screen.SEND && screen != Screen.TRANSFER) stopIdentityBeacon()
+    if (pendingNav != null) addPremiumFooter() // all 5 tabs, exactly once, inside the scroll content
     val scroll = ScrollView(this).apply {
       isVerticalScrollBarEnabled = false
       addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -562,6 +859,125 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     root.addView(host, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     setContentView(root)
   }
+
+  /** PREMIUM SIGNATURE FOOTER (v1.5): the single implementation for Home,
+   *  Transfer, Devices, History and Settings. Last child of the scrollable
+   *  `content` (never an overlay); the bottom nav sits outside the ScrollView
+   *  so it can never be covered. Every colour is a D.* token (Dark/Light
+   *  follow D.apply); sizes are sp (130% safe); every line is explicitly
+   *  MATCH_PARENT + centred, so nothing can left-align. */
+  private fun addPremiumFooter() {
+    fun centred(v: TextView, top: Int): TextView = v.apply {
+      gravity = Gravity.CENTER_HORIZONTAL
+      textAlignment = View.TEXT_ALIGNMENT_CENTER
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+        topMargin = dp(top)
+      }
+    }
+    content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(30)) })
+    content.addView(View(this).apply { // premium divider: teal accent fading out at both edges
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)).apply {
+        marginStart = dp(34); marginEnd = dp(34)
+      }
+      background = android.graphics.drawable.GradientDrawable(
+        android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+        intArrayOf(android.graphics.Color.TRANSPARENT, D.argb(110, D.PRIMARY), D.argb(110, D.PRIMARY), android.graphics.Color.TRANSPARENT))
+    })
+    val footer = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      gravity = Gravity.CENTER_HORIZONTAL
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+      setPadding(0, dp(16), 0, dp(28)) // breathing room above the nav bar
+    }
+    footer.addView(centred(GradientTextView(this).apply { // brand wordmark: same gradient as "FAST."
+      text = "NexDrop"
+      setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 19f)
+      typeface = com.nexdrop.ndt1.ui.Fonts.sora(this@MainActivity, 700)
+      letterSpacing = 0.01f
+      includeFontPadding = false
+    }, 0))
+    footer.addView(centred(textView("PRIVATE • DIRECT • FAST", 10f, D.PRIMARY, 600, 1, 0.26f), 6))
+    footer.addView(centred(textView("Crafted & Developed by PKD", 11f, D.MUTED, 600), 12))
+    footer.addView(centred(textView("© 2026 NexDrop. All rights reserved.", 9.5f, D.argb(200, D.MUTED), 400), 3))
+    content.addView(footer)
+  }
+
+  /** Centralized CAMERA ask — the ONLY place camera is requested. Camera
+   *  serves one purpose: scanning the receiver's NexDrop QR. The in-app
+   *  explanation shows BEFORE Android's dialog; denial has a recovery path
+   *  (Settings + nearby connection) and never breaks the app. */
+  private fun askCameraForScan(onGranted: () -> Unit) {
+    if (hasPermission(Manifest.permission.CAMERA)) { onGranted(); return }
+    cameraPending = onGranted
+    AlertDialog.Builder(this, dialogTheme())
+      .setTitle("Camera for QR scanning")
+      .setMessage("Camera access is needed only to scan the NexDrop pairing QR. " +
+        "The preview stays on this screen; nothing is uploaded or recorded.")
+      .setPositiveButton("Allow") { _, _ -> askPermission(Manifest.permission.CAMERA, REQ_CAMERA) }
+      .setNegativeButton("Not now", null)
+      .show()
+  }
+
+  /** Honest recovery when the camera is denied: what breaks (QR scanning
+   *  only), what still works, and how to allow it later. */
+  private fun cameraDeniedRecovery() {
+    AlertDialog.Builder(this, dialogTheme())
+      .setTitle("Camera permission is required for QR scanning")
+      .setMessage("NexDrop keeps working — nearby devices don't need the camera. " +
+        "To scan QR later, allow Camera for NexDrop in Settings.")
+      .setPositiveButton("Allow in Settings") { _, _ ->
+        try { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+          Uri.fromParts("package", packageName, null))) } catch (_: Exception) {} }
+      .setNeutralButton("Use another connection method", null)
+      .show()
+  }
+
+  /** Centralized POST_NOTIFICATIONS ask (13+): honest explanation first.
+   *  Notifications are OPTIONAL — a denial never blocks a transfer. */
+  private fun askNotifications() {
+    if (Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS)) return
+    AlertDialog.Builder(this, dialogTheme())
+      .setTitle("Allow notifications?")
+      .setMessage("Notifications let NexDrop show transfer progress, pause/resume and completion while the app is in the background. Transfers work without them.")
+      .setPositiveButton("Allow") { _, _ -> askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF) }
+      .setNegativeButton("Not now", null)
+      .show()
+  }
+
+  /** Lightweight "How NexDrop works" help sheet: connect options, sender/
+   *  receiver roles, honest hotspot limits. One dialog from Send+Receive. */
+  private fun showHowToConnectSheet() {
+    AlertDialog.Builder(this, dialogTheme())
+      .setTitle("How to transfer")
+      .setMessage("HOW TO TRANSFER\n" +
+        "1. Connect both phones to the same Wi-Fi — or join one phone's hotspot.\n" +
+        "2. Receiver opens: RECEIVE.\n" +
+        "3. Sender opens: SEND FILES and picks files.\n" +
+        "4. Connect with a Nearby device, or Scan QR.\n" +
+        "5. Receiver taps ACCEPT. The transfer starts.\n" +
+        "6. NexDrop verifies every file with SHA-256 and shows VERIFIED.\n\n" +
+        "CONNECTING YOUR PHONES\n" +
+        "OPTION 1 — SAME WI-FI: both phones on the same Wi-Fi network. Internet is not required.\n\n" +
+        "OPTION 2 — HOTSPOT: phone A turns Hotspot ON (Android Settings → Hotspot & tethering — NexDrop cannot switch it on for you), phone B joins that hotspot. Either phone can then be sender or receiver.\n\n" +
+        "If Nearby discovery cannot see the other phone, some networks block device-to-device traffic — use QR pairing; it always works.\n\n" +
+        "No cloud upload. No account. No internet required. Files move directly between devices.")
+      .setPositiveButton("Close", null)
+      .show()
+  }
+
+  /** Truthful readiness row: ✓ ok=true, ! ok=false (optionally an action),
+   *  • ok=null neutral. No fake green checks — real runtime state only. */
+  private fun readyRow(ok: Boolean?, main: String, actionLabel: String? = null, action: (() -> Unit)? = null): View =
+    row().apply {
+      gravity = Gravity.CENTER_VERTICAL
+      addView(textView(when (ok) { true -> "✓"; false -> "!"; else -> "•" }, 12f,
+        when (ok) { true -> D.OK; false -> D.PRIMARY; else -> D.argb(200, D.MUTED) }, 800).apply {
+        layoutParams = LinearLayout.LayoutParams(dp(18), LinearLayout.LayoutParams.WRAP_CONTENT) })
+      addView(sm(main).apply {
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } })
+      if (actionLabel != null && action != null) addView(btn(actionLabel, "text", height = 26) { action() }.apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(26)) })
+    }
 
   private fun screenTitle(text: String) {
     content.addView(h2(text).apply {
@@ -751,6 +1167,56 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       }
     }
     content.addView(status)
+
+    // QUICK ACTIONS: ONLY destinations that already exist (Devices tab =
+    // real NDD1 nearby discovery + trusted devices; History; Settings;
+    // Diagnostics = Settings > Device Test). Every tile navigates for real.
+    content.addView(sm("Quick actions").apply {
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
+    })
+    fun quick(icon: Int, label: String, target: Screen) = glassCard(pad = 10f).apply {
+      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+      orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+      addView(ImageView(this@MainActivity).apply {
+        setImageResource(icon)
+        imageTintList = android.content.res.ColorStateList.valueOf(D.PRIMARY)
+        layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+      })
+      addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(8), 1) })
+      addView(textView(label, 12f, D.TEXT, 700, 1).apply {
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f }
+      })
+      setOnClickListener { go(target) }
+    }
+    val q1 = row().apply { gravity = Gravity.FILL }
+    q1.addView(quick(R.drawable.ic_dev, "NEARBY DEVICES", Screen.DEVICES).apply {
+      (layoutParams as LinearLayout.LayoutParams).marginEnd = dp(5) })
+    q1.addView(quick(R.drawable.ic_hist, "HISTORY", Screen.HISTORY).apply {
+      (layoutParams as LinearLayout.LayoutParams).marginStart = dp(5) })
+    content.addView(q1)
+    val q2 = row().apply {
+      gravity = Gravity.FILL
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(10) }
+    }
+    q2.addView(quick(R.drawable.ic_spd, "DIAGNOSTICS", Screen.DEVICE_TEST).apply {
+      (layoutParams as LinearLayout.LayoutParams).marginEnd = dp(5) })
+    q2.addView(quick(R.drawable.ic_gear, "SETTINGS", Screen.SETTINGS).apply {
+      (layoutParams as LinearLayout.LayoutParams).marginStart = dp(5) })
+    content.addView(q2)
+
+    // RECENT TRANSFERS: real HistoryStore, shown only when something exists
+    val recent = HistoryStore.list(this).sortedByDescending { it.atMs }.take(3)
+    if (recent.isNotEmpty()) {
+      content.addView(sm("Recent transfers").apply {
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
+      })
+      content.addView(glassCard(pad = 12f).apply {
+        recent.forEachIndexed { i, e ->
+          addView(historyRow(e) { entry -> historyActions(entry) })
+          if (i < recent.size - 1) addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(6)) })
+        }
+      })
+    }
     nav(0)
   }
 
@@ -781,21 +1247,62 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     go(Screen.SEND)
   }
 
-  /** Per-queue-item row: icon, name+size, state pill, remove, tap = actions. */
-  private fun queueRow(item: QItem, index: Int): View {
+  /** Per-queue-item row: preview, name+size, truthful state pill, remove, tap = actions. */
+  private fun queueRow(item: SendQueueController.QueueItem, index: Int): View {
+    // Truthful subline per state (§9/§15): real bytes while transferring,
+    // the honest error when failed, real verification when completed.
+    val stateExtra = when (item.state) {
+      SendQueueController.QState.COMPLETED -> "SHA-256 VERIFIED"
+      SendQueueController.QState.FAILED -> "FAILED · ${item.error?.lineSequence()?.firstOrNull()?.take(64) ?: "error"}" +
+        (if (item.retryCount > 0) " · after ${item.retryCount} attempt(s)" else "")
+      SendQueueController.QState.CANCELLED -> "CANCELLED"
+      else -> null
+    }
     val r = glassCard(pad = 12f).apply {
       orientation = LinearLayout.HORIZONTAL
       gravity = Gravity.CENTER_VERTICAL
-      addView(icBox(R.drawable.ic_file))
+      val sub = queueSub(item, index, stateExtra)
+      val pbox = previewBox(item, index, sub)
+      addView(pbox)
+      // Post-attach: the frame's parent is this card, so warm-cache hits
+      // apply immediately on the live row (see bindRowPreview).
+      bindRowPreview(pbox, sub, item, index)
       addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
       val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
       t.addView(textView(item.name, 13f, D.TEXT, 700).apply {
         maxLines = 2
         ellipsize = android.text.TextUtils.TruncateAt.END
       })
-      t.addView(sm("${SpeedFormat.bytesText(item.size)}  ·  #${index + 1}"))
+      t.addView(sub)
       addView(t)
-      if (item.state != "Sending") {
+      // v1.5 HARDENING (test 12): VISIBLE reorder affordance — not buried
+      // in the tap dialog. Only QUEUED items may move; the active transfer
+      // and terminal states are guarded by the controller (JVM-tested).
+      if (item.state == SendQueueController.QState.QUEUED) {
+        // FIX (the "giant preview card" bug): col() defaults to a
+        // MATCH_PARENT width — inside this HORIZONTAL row that swallowed
+        // the entire row width, collapsing the weighted text column to
+        // ZERO width. The sub-line then wrapped one character per line
+        // and the card grew to a full-screen poster. Wrap the mover
+        // compactly so the weighted text column keeps its space.
+        val mover = col().apply {
+          gravity = Gravity.CENTER_VERTICAL
+          layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        listOf(true to "Move ${item.name} up", false to "Move ${item.name} down").forEach { (up, desc) ->
+          mover.addView(ImageView(this@MainActivity).apply {
+            setImageResource(R.drawable.ic_down) // same glyph; 180° = up
+            if (up) rotation = 180f
+            imageTintList = android.content.res.ColorStateList.valueOf(D.MUTED)
+            layoutParams = LinearLayout.LayoutParams(dp(34), dp(32))
+            setPadding(dp(6), dp(4), dp(6), dp(4))
+            contentDescription = desc
+            setOnClickListener { queue.move(item, up = up); render() }
+          })
+        }
+        addView(mover)
+      }
+      if (!item.isBusy) {
         addView(ImageView(this@MainActivity).apply {
           setImageResource(R.drawable.ic_x)
           imageTintList = android.content.res.ColorStateList.valueOf(D.MUTED)
@@ -803,32 +1310,62 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
           setPadding(dp(8), dp(8), dp(8), dp(8))
           contentDescription = "Remove ${item.name}"
           setOnClickListener {
-            sendQueue.removeAt(index)
-            toast("Removed from queue")
+            if (queue.remove(item)) toast("Removed from queue") else toast("Cancel the transfer first, then remove")
             render()
           }
         })
       }
-      addView(pill(item.state, tint = when (item.state) { "Done" -> D.OK; "Sending" -> D.PRIMARY; else -> D.BLUE }))
+      addView(pill(stateLabel(item.state), tint = stateTint(item.state)))
       setOnClickListener { queueItemActions(item) }
     }
     return r
   }
 
-  /** Tap a queued file: reorder / remove — real queue management. */
-  private fun queueItemActions(item: QItem) {
+  private fun stateLabel(st: SendQueueController.QState): String = when (st) {
+    SendQueueController.QState.QUEUED -> "Queued"
+    SendQueueController.QState.TRANSFERRING -> "Sending"
+    SendQueueController.QState.PAUSED -> "Paused"
+    SendQueueController.QState.RETRYING -> "Retrying"
+    SendQueueController.QState.COMPLETED -> "Completed"
+    SendQueueController.QState.FAILED -> "Failed"
+    SendQueueController.QState.CANCELLED -> "Cancelled"
+  }
+
+  private fun stateTint(st: SendQueueController.QState): Int = when (st) {
+    SendQueueController.QState.COMPLETED -> D.OK
+    SendQueueController.QState.FAILED -> D.DANGER
+    SendQueueController.QState.TRANSFERRING, SendQueueController.QState.RETRYING -> D.PRIMARY
+    SendQueueController.QState.PAUSED, SendQueueController.QState.CANCELLED -> D.MUTED
+    else -> D.BLUE
+  }
+
+  /**
+   * Tap a queued file: reorder / remove / retry — real queue management
+   * with hardened rules (§10/§11/§12): a busy item can only be cancelled,
+   * never reordered into an invalid state or silently removed; a failed
+   * item gets a real manual RETRY through the same engine + SHA flow.
+   */
+  private fun queueItemActions(item: SendQueueController.QueueItem) {
     val opts = ArrayList<String>()
-    if (sendQueue.indexOf(item) > 0) opts.add("Move up")
-    if (sendQueue.indexOf(item) < sendQueue.size - 1) opts.add("Move down")
-    opts.add("Remove")
-    AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+    if (!item.isBusy) {
+      if (sendQueue.indexOf(item) > 0) opts.add("Move up")
+      if (sendQueue.indexOf(item) < sendQueue.size - 1) opts.add("Move down")
+    }
+    if (item.state == SendQueueController.QState.FAILED) opts.add("Retry")
+    if (!item.isBusy) opts.add("Remove")
+    if (item.isBusy) opts.add("Cancel transfer")
+    AlertDialog.Builder(this, dialogTheme())
       .setTitle(item.name)
       .setItems(opts.toTypedArray()) { _, which ->
-        val i = sendQueue.indexOf(item)
         when (val chosen = opts[which]) {
-          "Move up" -> { if (i > 0) { sendQueue.removeAt(i); sendQueue.add(i - 1, item) } }
-          "Move down" -> { if (i >= 0 && i < sendQueue.size - 1) { sendQueue.removeAt(i); sendQueue.add(i + 1, item) } }
-          "Remove" -> { if (i >= 0) sendQueue.removeAt(i) }
+          "Move up" -> queue.move(item, up = true)
+          "Move down" -> queue.move(item, up = false)
+          "Retry" -> if (activePairing == null) {
+            queue.retry(item) // re-armed; the next scan/device tap starts it
+            toast("Re-queued — scan or tap the device to send")
+          } else queue.retry(item)
+          "Remove" -> if (queue.remove(item)) toast("Removed from queue")
+          "Cancel transfer" -> cancelTransfer()
         }
         render()
       }
@@ -839,6 +1376,29 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private fun renderSend() {
     backHeader("Send files")
     content.addView(sub("Choose what you want to transfer."))
+
+    // READY TO SEND — truthful runtime checklist: every row is real state,
+    // no fake green checks, and every NEEDS ACTION row carries its action.
+    val eps = LocalNet.select(activeWifiInterface())
+    val notifOk = Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+    content.addView(glassCard(pad = 12f).apply {
+      addView(textView("READY TO SEND", 11f, D.PRIMARY, 800, 1, 0.18f).apply {
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(6) } })
+      addView(readyRow(eps != null, if (eps != null) "Wi-Fi / local network: connected" else "Wi-Fi / local network: not connected",
+        if (eps != null) null else "OPEN WI-FI SETTINGS") {
+        try { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } catch (_: Exception) {} })
+      addView(readyRow(eps != null, if (eps != null) "Native NDT1 transfer: ready" else "Native transfer: unavailable — use PWA fallback"))
+      addView(readyRow(true, "File access: system picker — no storage permission needed"))
+      addView(readyRow(notifOk, if (notifOk) "Notifications: allowed" else "Notifications: off — transfers still work",
+        if (notifOk) null else "ALLOW") { askNotifications() })
+      addView(readyRow(null, "Receiver required — the other phone opens RECEIVE"))
+    })
+    if (eps == null) content.addView(sm("Both phones need the same Wi-Fi, or one phone's hotspot with the other connected — connect first, then send.").apply {
+      setTextColor(D.MUTED); setPadding(dp(4), dp(6), dp(4), 0) })
+    content.addView(btn("HOW TO CONNECT", "text", height = 32) { showHowToConnectSheet() }.apply {
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)).apply {
+        topMargin = dp(6); gravity = Gravity.CENTER_HORIZONTAL }
+    })
 
     // dashed drop zone
     content.addView(glassCard(dashed = true, pad = 22f, radius = 22f).apply {
@@ -873,6 +1433,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     listOf(
       Triple(R.drawable.ic_img, "Images", "image/*"),
       Triple(R.drawable.ic_vid, "Videos", "video/*"),
+      Triple(R.drawable.ic_file, "Audio", "audio/*"),
       Triple(R.drawable.ic_doc, "Docs", "application/*"),
       Triple(R.drawable.ic_app, "Apps", "application/vnd.android.package-archive"),
       Triple(R.drawable.ic_more, "Other", "*/*"),
@@ -892,12 +1453,46 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     }
     content.addView(chips)
 
-    // SEND QUEUE (PRIORITY 1): real totals, per-item states, add/remove/reorder
-    val queued = sendQueue.toList()
-    content.addView(sm(if (queued.isEmpty()) "No files selected"
-      else "${queued.size} file(s) · ${SpeedFormat.bytesText(queueTotalBytes())} total").apply {
-      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
+    // v1.5 Phase F: quick action — Text. Same queue, same one protocol:
+    // the text becomes a real small .txt on the existing SendQueueController.
+    content.addView(glassCard(pad = 10f).apply {
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(8) }
+      orientation = LinearLayout.HORIZONTAL
+      gravity = Gravity.CENTER_VERTICAL
+      addView(ImageView(this@MainActivity).apply {
+        setImageResource(R.drawable.ic_txt)
+        imageTintList = android.content.res.ColorStateList.valueOf(D.PRIMARY)
+        layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+      })
+      addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
+      addView(textView("SEND TEXT", 12f, D.TEXT, 700, 1).apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } })
+      addView(pill("LOCAL"))
+      setOnClickListener { sendTextFlow() }
+      contentDescription = "Send text"
     })
+
+    // SEND QUEUE (v1.5 Phase D): honest summary (§8), per-item states,
+    // reorder/remove/retry rules, queue pause, CANCEL ALL, clear actions.
+    val queued = sendQueue.toList()
+    if (queued.isEmpty()) {
+      content.addView(sm("No files selected").apply {
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
+      })
+    } else {
+      content.addView(glassCard(pad = 12f).apply {
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
+        addView(sm("${queued.size} file(s) · ${SpeedFormat.bytesText(queueTotalBytes())} total"))
+        val done = queue.completedCount; val failed = queue.failedCount
+        val rem = queue.remainingCount
+        val line = buildString {
+          append("$done completed · $rem remaining")
+          if (failed > 0) append(" · $failed failed")
+          queue.current?.let { append(" · now ${queue.currentPosition}/${queued.size}: ${it.name}") }
+          if (queue.isPaused) append(" · PAUSED")
+        }
+        addView(sm(line).apply { setPadding(0, dp(3), 0, 0) })
+      })
+    }
     queued.forEachIndexed { i, item ->
       content.addView(queueRow(item, i).apply {
         layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
@@ -905,17 +1500,60 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         }
       })
     }
-    if (sendQueue.any { it.state == "Done" }) {
-      content.addView(sm("${sendQueue.count { it.state == "Done" }} already sent this session").apply {
+    if (queued.isNotEmpty()) {
+      val qrow = row().apply {
         layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(8) }
+      }
+      if (queue.hasQueued() || queue.isPaused) {
+        qrow.addView(btn(if (queue.isPaused) "RESUME QUEUE" else "PAUSE QUEUE", "text", height = 36, weight = 1f) {
+          if (queue.isPaused) queue.resumeQueue() else queue.pauseQueue()
+          render()
+        }.apply {
+          layoutParams = LinearLayout.LayoutParams(0, dp(36)).apply { weight = 1f }
+          contentDescription = if (queue.isPaused) "Resume queue" else "Pause queue"
+        })
+        qrow.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(6), 1) })
+      }
+      if (queue.completedCount > 0 || queue.failedCount > 0 || queue.cancelledCount > 0) {
+        qrow.addView(btn("CLEAR", "text", height = 36, weight = 1f) {
+          val opts = ArrayList<String>()
+          if (queue.completedCount > 0) opts.add("Clear sent (${queue.completedCount})")
+          if (queue.failedCount + queue.cancelledCount > 0) opts.add("Clear failed (${queue.failedCount + queue.cancelledCount})")
+          opts.add("Clear all (${queue.totalItems})")
+          AlertDialog.Builder(this, dialogTheme())
+            .setTitle("Clear queue")
+            .setItems(opts.toTypedArray()) { _, which ->
+              when (opts[which].substringBefore(" (")) {
+                "Clear sent" -> { queue.clearCompleted(); toast("Cleared sent") }
+                "Clear failed" -> { queue.clearFailed(); toast("Cleared failed") }
+                else -> { queue.clearAll(); toast("Queue cleared") }
+              }
+              render()
+            }
+            .setNegativeButton("Close", null)
+            .show()
+        }.apply {
+          layoutParams = LinearLayout.LayoutParams(0, dp(36)).apply { weight = 1f }
+          contentDescription = "Clear queue"
+        })
+        qrow.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(6), 1) })
+      }
+      qrow.addView(btn("CANCEL ALL", "text", height = 36, weight = 1f, tintText = D.DANGER) {
+        AlertDialog.Builder(this, dialogTheme())
+          .setTitle("Cancel all transfers?")
+          .setMessage("The current transfer stops and every unfinished file is marked cancelled. Completed files and history are kept.")
+          .setPositiveButton("CANCEL ALL") { _, _ ->
+            queue.cancelAll(); activePairing = null
+            hideTransferUi(); TransferService.stop(this)
+            toast("Queue cancelled"); render()
+          }
+          .setNegativeButton("Keep going", null)
+          .show()
+      }.apply {
+        layoutParams = LinearLayout.LayoutParams(0, dp(36)).apply { weight = 1f }
+        contentDescription = "Cancel all transfers"
       })
-    }
-    if (sendQueue.isNotEmpty()) {
-      content.addView(btn("CLEAR QUEUE", "text", height = 36) {
-        sendQueue.clear(); queueBytesDone = 0
-        toast("Queue cleared")
-        render()
-      }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36)).apply { topMargin = dp(6) } })
+      content.addView(qrow)
     }
 
     // LOCAL DIRECT row (real)
@@ -940,10 +1578,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
     // fill + SEND ALL
     content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0).apply { weight = 1f } })
-    content.addView(btn(if (sendQueue.size > 1) "SEND ALL (${sendQueue.size})" else "CONTINUE", "primary") {
-      if (sendQueue.isEmpty()) { toast("Select a file first"); return@btn }
-      if (!hasPermission(Manifest.permission.CAMERA)) { askPermission(Manifest.permission.CAMERA, REQ_CAMERA); return@btn }
-      launchScan("Scan the receiver's NexDrop QR")
+    content.addView(btn(if (queue.remainingCount > 1) "SEND ALL (${queue.remainingCount})" else "CONTINUE", "primary") {
+      if (!queue.hasQueued()) { toast("Select a file first"); return@btn }
+      askCameraForScan { launchScan("Scan the receiver's NexDrop QR") }
     }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)) })
     // Secondary path BELOW the primary action: the QR flow is the
     // guaranteed route; nearby discovery is a convenience below the fold.
@@ -951,20 +1588,33 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     // network appear here automatically. No peers = honest empty state, and
     // QR pairing always remains. No radar rings: Android exposes no honest
     // distance for arbitrary peers, so none is implied.
-    content.addView(sm("NEARBY DEVICES").apply {
-      setTextColor(D.MUTED); letterSpacing = 0.10f
+    val nearbyLbl = row().apply {
       layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(16); bottomMargin = dp(6) }
+    }
+    nearbyLbl.addView(sm("NEARBY DEVICES").apply {
+      setTextColor(D.MUTED); letterSpacing = 0.10f
+      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f; gravity = Gravity.CENTER_VERTICAL }
     })
+    // v1.5 Phase F: explicit REFRESH — re-renders the real beacon table
+    // (it also auto-updates from 1 Hz beacons; this never invents a scan).
+    nearbyLbl.addView(btn("REFRESH", "text", height = 30) {
+      render(); toast(if (pairablePeers().isEmpty()) "No receivers visible right now — QR pairing always works" else "${pairablePeers().size} receiver(s) visible")
+    }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(30)) })
+    content.addView(nearbyLbl)
     val nearby = pairablePeers()
     content.addView(glassCard(pad = 12f).apply {
       if (nearby.isEmpty()) {
-        if (beaconIdentity == null && beaconSession == null) {
-          addView(textView("Discovery unavailable", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
-          addView(sm("Another local socket holds the discovery port, or multicast is blocked. Scan the receiver's QR instead — pairing is identical."))
-        } else {
-          addView(textView("No NexDrop receivers found", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
-          addView(sm("A device on this network shows up here when it opens the Receive screen. QR pairing always works too."))
-        }
+        val listening = beaconIdentity != null || beaconSession != null
+        addView(textView(if (listening) "Nearby discovery did not find a receiver" else "Discovery unavailable",
+          13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
+        if (!listening) addView(sm(appDiscoveryBindError?.let { "Reason: $it" }
+          ?: "Another local socket holds the discovery port, or multicast is blocked."))
+        else addView(sm("Searching for NexDrop receivers…").apply { setPadding(0, dp(2), 0, 0) })
+        addView(sm("CHECK:\n• Both phones are on the same Wi-Fi or hotspot\n• The receiver has the NexDrop Receive screen open\n• Wi-Fi is enabled\n• Your network allows device-to-device traffic").apply {
+          setTextColor(D.MUTED); setPadding(0, dp(6), 0, dp(8)) })
+        addView(btn("SCAN QR INSTEAD", "outline", height = 38) {
+          askCameraForScan { launchScan("Scan the receiver's NexDrop QR") }
+        }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(38)) })
       } else {
         nearby.forEach { p ->
           val dev = p.dev
@@ -987,11 +1637,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
           setPadding(0, dp(2), 0, 0)
         })
       }
+      // Human answer only (full technical diagnostics live in Settings →
+      // Device Test: live interface, beacon state, devices heard, bind reason).
+      addView(sm(if (nearby.isEmpty()) "No receiver found yet. Full technical diagnostics: Settings → Device Test."
+        else "Nearby discovery: ${nearby.size} receiver(s) visible").apply {
+        setTextColor(D.MUTED); setPadding(0, dp(8), 0, 0)
+        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f)
+      })
     })
-
+    nav(1)
   }
 
-  // ================= 04 RECEIVE + QR =================
   private fun startReceiving() {
     val endpoint = LocalNet.select(activeWifiInterface())
     if (endpoint == null) { screen = Screen.UNAVAILABLE; render(); return }
@@ -1011,7 +1667,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     showQr(QrPairing.encode(session, endpoint.ip, port, deviceLabel()))
     startSessionBeacon(session, port) // nearby senders can now find this session without the QR
     if (Build.VERSION.SDK_INT >= 33 && !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
-      askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
+      askNotifications()
     }
     TransferService.start(this, "Waiting for sender…")
   }
@@ -1020,6 +1676,46 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     val ep = localEndpoint ?: run { screen = Screen.UNAVAILABLE; render(); return }
     screenTitle("Receive")
     content.addView(sub("Let another device scan this QR."))
+    // v1.5 Phase F: real available storage up front — never a guessed value.
+    val rxDl = File(getExternalFilesDir(null) ?: filesDir, "downloads")
+    val rxFree = try { android.os.StatFs(rxDl.path).availableBytes } catch (_: Exception) { -1L }
+    // READY TO RECEIVE — truthful runtime checklist: local network ready,
+    // real listening state, real free storage, notifications optional.
+    val notifOk = Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+    content.addView(glassCard(pad = 12f).apply {
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(8) }
+      addView(textView("READY TO RECEIVE", 11f, D.PRIMARY, 800, 1, 0.18f).apply {
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(6) } })
+      // Real runtime network type from the SELECTED endpoint — never a
+      // generic "connected" claim the device cannot back up.
+      val netName = when (ep.networkType) {
+        "hotspot" -> "Hotspot active"
+        "ethernet" -> "Ethernet connected"
+        else -> "Wi-Fi connected"
+      }
+      addView(readyRow(true, "$netName on this phone — local transfer ready"))
+      addView(readyRow(null, "The sender joins the same Wi-Fi / hotspot"))
+      // Discovery listen state is REAL (beacon bound or not). When it is
+      // down, say what still works and what to check — never imply the QR
+      // creates a network connection.
+      val listening = beaconIdentity != null || beaconSession != null
+      addView(readyRow(listening,
+        if (listening) "NexDrop is listening for senders" else "Nearby discovery: unavailable",
+        if (listening) null else "CHECK CONNECTION") {
+        try { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } catch (_: Exception) {} })
+      if (!listening) addView(sm("Nearby discovery is unavailable on this network right now. " +
+        "QR pairing still works — the sender scans this QR and the transfer uses the same native direct path. " +
+        "Both phones need the same Wi-Fi, or one phone's hotspot with the other connected.").apply {
+        setTextColor(D.MUTED); setPadding(0, dp(6), 0, 0) })
+      addView(readyRow(rxFree > 0, if (rxFree > 0) "Storage: ${SpeedFormat.bytesText(rxFree)} free" else "Storage: unavailable"))
+      addView(readyRow(notifOk, if (notifOk) "Notifications: allowed" else "Notifications: off — transfers still work",
+        if (notifOk) null else "ALLOW") { askNotifications() })
+      addView(readyRow(null, "Keep this Receive screen open while the sender connects"))
+    })
+    content.addView(btn("HOW TO CONNECT", "text", height = 32) { showHowToConnectSheet() }.apply {
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)).apply {
+        topMargin = dp(6); gravity = Gravity.CENTER_HORIZONTAL }
+    })
 
     // QR presentation: .card.g > .qrw (white, radius 18, padding 12, teal glow)
     content.addView(glassCard(glow = true, strokeColor = D.argb(77, D.PRIMARY), pad = 16f).apply {
@@ -1140,7 +1836,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     val box = col().apply { setPadding(dp(16), dp(16), dp(16), dp(16)) }
     box.addView(body("LOCAL DIRECT — pairing details"))
     box.addView(sm(text).apply { setPadding(0, dp(8), 0, 0) })
-    AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+    AlertDialog.Builder(this, dialogTheme())
       .setView(box)
       .setPositiveButton("Close", null)
       .show()
@@ -1286,10 +1982,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     })
     content.addView(headRow)
     content.addView(sm(currentName ?: "file").apply { setPadding(0, dp(4), 0, 0) })
-    // Queue context (PRIORITY 1): "File 2 of 3 — overall 45%" — real bytes
-    if (role == Role.SEND && sendQueue.size > 1) {
-      val done = sendQueue.count { it.state == "Done" }
-      overallView = sm("File ${done + 1} of ${sendQueue.size} — overall —").apply { setPadding(0, dp(2), 0, 0) }
+    // Queue context (v1.5 Phase D, §24): CURRENT file ring + separate
+    // whole-queue line — real bytes, never a percentage average.
+    if (role == Role.SEND && queue.totalItems > 1) {
+      overallView = sm("QUEUE  ${queue.currentPosition}/${queue.totalItems} files · —").apply { setPadding(0, dp(2), 0, 0) }
       content.addView(overallView!!)
     } else overallView = null
 
@@ -1306,9 +2002,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         layoutParams = FrameLayout.LayoutParams(
           ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER)
       }
-      ringPct = bigText("0%", 34f).apply { gravity = Gravity.CENTER }
+      // FINAL POLISH (§13): never "0 MiB of 0 MiB" once the real size is
+      // known. Before the first real PROGRESS sample the sender knows the
+      // exact file size (queue item) and the receiver knows the offer size,
+      // so the ring starts at the honest truth: 0 of REAL TOTAL, plus an
+      // explicit "Preparing…" status. A re-render restores live values.
+      val live = transferGotFirstProgress && ringTotal > 0
+      val d0 = if (live) ringDurable else 0L
+      val t0 = if (live) ringTotal else currentSize
+      ringPct = bigText(if (t0 > 0) "${d0 * 100 / t0}%" else "0%", 34f).apply { gravity = Gravity.CENTER }
       center.addView(ringPct)
-      ringBytes = sm("0 MiB\nof 0 MiB").apply { gravity = Gravity.CENTER }
+      ringBytes = sm(if (t0 > 0) "${SpeedFormat.bytesText(d0)}\nof ${SpeedFormat.bytesText(t0)}" else "Preparing…").apply { gravity = Gravity.CENTER }
       center.addView(ringBytes)
       addView(center)
     }
@@ -1328,7 +2032,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     }.also { speedUnitView = it })
     val speedCol = col().apply { gravity = Gravity.CENTER_HORIZONTAL }
     speedCol.addView(speedRow)
-    etaView = sm("ETA —").apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, 0) }
+    etaView = sm(when {
+      transferGotFirstProgress && paused -> "PAUSED — connection kept alive"
+      transferGotFirstProgress -> "ETA ${UiSpeed.etaText(ringTotal - ringDurable, null)}" // honest: recomputed on next tick
+      else -> "Preparing…" // no fabricated ETA before the first real sample
+    }).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, 0) }
     speedCol.addView(etaView)
     content.addView(speedCol)
 
@@ -1403,6 +2111,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     controls.addView(btn(if (paused) "RESUME" else "PAUSE", "outline", icon = R.drawable.ic_pause) {
       paused = !paused
       if (paused) { receiver?.pause(); sender?.pause() } else { receiver?.resume(); sender?.resume() }
+      if (role == Role.SEND) queue.onTransferPaused(paused) // truthful per-file PAUSED
       render() // relabel PAUSE/RESUME from real state; ring refs rebind, engine untouched
     }.also { pauseBtn = it })
     controls.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
@@ -1418,25 +2127,94 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       }
     })
     val head = col().apply { gravity = Gravity.CENTER_HORIZONTAL }
-    head.addView(h2("Transfer complete"))
-    head.addView(textView(currentName ?: "file", 13f, D.TEXT, 700).apply {
-      gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0)
-    })
-    // Queue summary (PRIORITY 1): honest — only files the engine verified
-    if (role == Role.SEND && sendQueue.isNotEmpty()) {
-      val done = sendQueue.count { it.state == "Done" }
-      if (done > 1) {
-        head.addView(sm("Queue complete — $done file(s) · ${SpeedFormat.bytesText(sendQueue.filter { it.state == "Done" }.sumOf { it.size })}").apply {
-          gravity = Gravity.CENTER; setPadding(0, dp(4), 0, 0)
+    // v1.5 Phase E: the headline itself is honest — "Transfer complete"
+    // only when nothing failed; a mixed queue says so, immediately.
+    val multi = queueResult?.let { (sum, _) -> sum.completed + sum.failed + sum.cancelled > 1 } ?: false
+    val anyFail = queueResult?.let { (sum, _) -> sum.failed > 0 } ?: false
+    head.addView(h2(
+      when {
+        multi && anyFail -> "Completed with failures"
+        multi -> "Queue complete"
+        else -> "Transfer complete"
+      }))
+    if (multi) {
+      // Session totals — real counts, real bytes, never the last file's numbers.
+      queueResult?.let { (summary, durMs) ->
+        val split = buildString {
+          append(if (summary.failed > 0) "${summary.completed} successful · ${summary.failed} failed"
+                 else "${summary.completed} files transferred")
+          if (summary.cancelled > 0) append(" · ${summary.cancelled} cancelled")
+        }
+        head.addView(sm("Queue session — $split · ${SpeedFormat.bytesText(summary.completedBytes)}").apply {
+          gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0)
+        })
+        if (durMs > 0) head.addView(sm("Session duration ${UiSpeed.durationText(durMs)}").apply {
+          gravity = Gravity.CENTER; setPadding(0, dp(2), 0, 0)
         })
       }
+    } else {
+      head.addView(textView(currentName ?: "file", 13f, D.TEXT, 700).apply {
+        gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0)
+      })
+      val bytes = currentFile?.length() ?: currentSize
+      head.addView(sm(if (bytes > 0) "${SpeedFormat.bytesText(bytes)} transferred" else "").apply { gravity = Gravity.CENTER })
     }
-    val bytes = currentFile?.length() ?: currentSize
-    head.addView(sm(if (bytes > 0) "${SpeedFormat.bytesText(bytes)} transferred" else "").apply { gravity = Gravity.CENTER })
     content.addView(head)
 
-    // Average + Duration (real stats)
-    val stats = completedStats
+    // v1.5 Phase F — INCOMING TEXT card: shown only when THIS result is a
+    // fresh bounded .txt receive (cleared at every transfer start). Copy is
+    // the only clipboard access and it is explicit, user-triggered.
+    incomingText?.let { txt ->
+      content.addView(glassCard(pad = 14f).apply {
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(12) }
+        addView(textView("INCOMING TEXT", 12.5f, D.PRIMARY, 700, 1).apply { letterSpacing = 0.10f })
+        addView(sm("${txt.length} characters · ${SpeedFormat.bytesText(txt.toByteArray().size.toLong())}").apply {
+          setTextColor(D.MUTED); setPadding(0, dp(2), 0, dp(6))
+        })
+        addView(textView(TextSharePolicy.preview(txt), 12.5f, D.TEXT, 500).apply {
+          setPadding(dp(12), dp(10), dp(12), dp(10))
+          background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(12).toFloat(); setColor(D.SURFACE); setStroke(dp(1), D.LINE)
+          }
+        })
+        val tr = row().apply { setPadding(0, dp(10), 0, 0) }
+        tr.addView(btn("COPY", "outline", height = 40, weight = 1f) {
+          try {
+            val cm = getSystemService(android.content.ClipboardManager::class.java)
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("NexDrop", txt))
+            toast("Copied to clipboard")
+          } catch (_: Exception) { toast("Clipboard unavailable") }
+        }.apply { layoutParams = LinearLayout.LayoutParams(0, dp(40)).apply { weight = 1f } })
+        tr.addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(8), 1) })
+        tr.addView(btn("SHARE", "outline", height = 40, weight = 1f) {
+          try {
+            startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+              type = "text/plain"; putExtra(Intent.EXTRA_TEXT, txt)
+            }, "Share text"))
+          } catch (_: Exception) { toast("No share target available") }
+        }.apply { layoutParams = LinearLayout.LayoutParams(0, dp(40)).apply { weight = 1f } })
+        tr.addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(8), 1) })
+        tr.addView(btn("SEND AGAIN", "primary", height = 40, weight = 1f) { sendTextFlow(txt) }
+          .apply { layoutParams = LinearLayout.LayoutParams(0, dp(40)).apply { weight = 1f } })
+        addView(tr)
+      })
+    }
+
+    // Average + Duration — SESSION aggregates for a queue (v1.5 Phase E),
+    // per-file stats only for a single transfer. Both are real measured
+    // numbers; the session average is completed bytes over wall clock.
+    val sessionDurMs = queueResult?.second ?: 0L
+    val sessionStats: ThroughputSampler.Stats? =
+      if (multi && sessionDurMs > 0)
+        ThroughputSampler.Stats(
+          durationMs = sessionDurMs,
+          bytes = queueResult?.first?.completedBytes ?: 0L,
+          averageBps = queueResult?.first?.completedBytes?.let { it / (sessionDurMs / 1000.0) },
+          sustainedBps = null, // session average is over wall clock; per-file numbers live in history
+          peakSustainedBps = queuePeakBps,
+        )
+      else completedStats
+    val stats = sessionStats
     val statRow = row().apply {
       layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
         topMargin = dp(14); bottomMargin = dp(8)
@@ -1510,8 +2288,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         r.addView(t)
         return r
       }
+      val shaLine = queueResult?.let { (sum, _) ->
+        if (sum.completed > 1) "${sum.completed} FILES SHA-256 VERIFIED" else "SHA-256 VERIFIED"
+      } ?: "SHA-256 VERIFIED"
       addView(infoRow(R.drawable.ic_shield,
-        textView("SHA-256 VERIFIED", 12.5f, D.OK, 700, 1), sm("")))
+        textView(shaLine, 12.5f, D.OK, 700, 1), sm("")))
       addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(1, dp(8)) })
       addView(infoRow(R.drawable.ic_dev,
         textView("", 12.5f, D.TEXT, 700).apply { text = if (role == Role.SEND) "Android → Android" else "Android → Android" },
@@ -1520,6 +2301,20 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       addView(infoRow(R.drawable.ic_wifi,
         textView("LOCAL DIRECT · Native NDT1 TCP", 12.5f, D.MUTED, 600), sm("")))
     })
+
+    // v1.5 Phase D §25: some files failed — offer the honest RETRY FAILED
+    queueResult?.let { (summary, _) ->
+      if (summary.failed > 0) {
+        content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0).apply { weight = 1f } })
+        content.addView(btn("RETRY FAILED (${summary.failed})", "primary", height = 44) {
+          queue.retryFailed()            // FAILED → QUEUED (honest re-queue)
+          startSendingLegacyScan()       // fresh pairing → same engine + SHA flow
+        }.apply {
+          layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44))
+          contentDescription = "Retry failed files"
+        })
+      }
+    }
 
     // buttons — Open/Done stay; Share summary + View history added (Phase 5)
     content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0).apply { weight = 1f } })
@@ -1636,7 +2431,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       setting(R.drawable.ic_swap, "PWA fallback", "Auto") { openPwa() }
       setting(R.drawable.ic_shield, "SHA-256 verification", "On")
       setting(R.drawable.ic_bell, "Notifications", if (Build.VERSION.SDK_INT >= 33 && hasPermission(Manifest.permission.POST_NOTIFICATIONS)) "On" else "Tap to allow") {
-        if (Build.VERSION.SDK_INT >= 33) askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
+        if (Build.VERSION.SDK_INT >= 33) askNotifications()
       }
       setting(R.drawable.ic_sun, "Appearance", themePref().replaceFirstChar { it.uppercase() }) { go(Screen.SETTINGS) }
       setting(R.drawable.ic_spd, "Diagnostics", "Open") { go(Screen.DEVICE_TEST) }
@@ -1681,7 +2476,12 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     })
     content.addView(glassCard(pad = 12f).apply {
       srow(this, R.drawable.ic_wifi, "Nearby discovery", "Available — local UDP, no internet")
-      srow(this, R.drawable.ic_swap, "Group drop", "Not supported yet — one receiver per session")
+      srow(this, R.drawable.ic_swap, "Group drop", "Not supported — one receiver per session") {
+        AlertDialog.Builder(this@MainActivity, dialogTheme()).setTitle("Group drop")
+          .setMessage("Group Drop is not available yet.\nNexDrop currently supports one receiver per transfer session. " +
+            "The honest blocker: a group send would need one authenticated NDT1 session per receiver with a second orchestration layer — outside this milestone's one-queue architecture. It will not be faked.")
+          .setPositiveButton("Close", null).show()
+      }
       srow(this, R.drawable.ic_dev, "NFC pairing", "Unavailable — Android Beam was removed in Android 10+")
       srow(this, R.drawable.ic_wifi, "Hotspot mode", "Unavailable — Android reserves tethering control to system apps")
     })
@@ -1692,8 +2492,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private fun historyRow(e: HistoryStore.Entry, onTap: ((HistoryStore.Entry) -> Unit)? = null): View {
     val r = row()
     r.addView(ImageView(this).apply {
-      setImageResource(if (e.status == "Failed") R.drawable.ic_x else R.drawable.ic_check)
-      imageTintList = android.content.res.ColorStateList.valueOf(if (e.status == "Failed") D.DANGER else D.OK)
+      setImageResource(if (e.status in listOf("Failed", "Cancelled")) R.drawable.ic_x else R.drawable.ic_check)
+      imageTintList = android.content.res.ColorStateList.valueOf(
+        when (e.status) { "Failed" -> D.DANGER; "Cancelled" -> D.AMBER; else -> D.OK })
       layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
     })
     onTap?.let { r.setOnClickListener { it(e) } }
@@ -1705,6 +2506,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     })
     val right = col().apply { gravity = Gravity.END; layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT) }
     right.addView(textView(SpeedFormat.bytesText(e.bytes), 12f, D.TEXT, 600).apply { gravity = Gravity.END })
+    // v1.5 Phase F: a real resumed record says so — durable-offset truth.
+    if (e.resumed) right.addView(pill("RESUMED").apply {
+      gravity = Gravity.END; setPadding(0, 0, 0, dp(2))
+    })
     right.addView(sm(HistoryStore.dayLabel(e.atMs)).apply {
       gravity = Gravity.END; setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f)
     })
@@ -1716,10 +2521,37 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private fun renderHistory() {
     screenTitle("History")
     content.addView(sub("Real transfer records — tap a row for actions."))
-    val history = HistoryStore.list(this).sortedByDescending { it.atMs }
-    val done = history.count { it.status != "Failed" }
-    content.addView(sm(if (history.isEmpty()) "No transfers yet"
-      else "$done completed · ${history.size - done} failed").apply {
+    val all = HistoryStore.list(this).sortedByDescending { it.atMs }
+    // v1.5 Phase F: filter chips over REAL records — every category is a
+    // truthful record kind; a filter with no records says so honestly.
+    val chipsRow = row().apply {
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(10); bottomMargin = dp(4) }
+    }
+    listOf("ALL" to all.size, "SENT" to all.count { it.sent }, "RECEIVED" to all.count { !it.sent },
+      "FAILED" to all.count { it.status == "Failed" }, "CANCELLED" to all.count { it.status == "Cancelled" }
+    ).forEach { (label, n) ->
+      chipsRow.addView(btn(if (historyFilter == label) label else "$label $n",
+        if (historyFilter == label) "primary" else "outline", height = 30, weight = 1f) {
+        historyFilter = label; render()
+      }.apply {
+        layoutParams = LinearLayout.LayoutParams(0, dp(30)).apply { weight = 1f }
+        if (historyFilter != label) alpha = 0.85f
+      })
+      chipsRow.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(4), 1) })
+    }
+    content.addView(chipsRow)
+    val history = HistoryStore.matching(all, historyFilter)
+    val done = all.count { it.status !in listOf("Failed", "Cancelled") }
+    val cancelled = all.count { it.status == "Cancelled" }
+    content.addView(sm(when {
+      all.isEmpty() -> "No transfers yet"
+      else -> buildString {
+        append("$done completed")
+        val f = all.count { it.status == "Failed" }; if (f > 0) append(" · $f failed")
+        if (cancelled > 0) append(" · $cancelled cancelled")
+        val r = all.count { it.resumed }; if (r > 0) append(" · $r resumed")
+      }
+    }).apply {
       layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(12); bottomMargin = dp(6) }
     })
     if (history.isEmpty()) {
@@ -1799,7 +2631,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         applyKeepAwake(); render()
       }
       srow(this, R.drawable.ic_bell, "Transfer notifications", if (notifOn) "On" else "Tap to allow") {
-        if (Build.VERSION.SDK_INT >= 33) askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
+        if (Build.VERSION.SDK_INT >= 33) askNotifications()
       }
     })
 
@@ -2088,11 +2920,15 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private fun renderUnavailable() {
     screenTitle("NexDrop")
     content.addView(glassCard().apply {
-      addView(textView("●  NATIVE LOCAL UNAVAILABLE", 15f, D.AMBER, 700, 1))
-      addView(sm(LocalNet.unavailableText()).apply { setPadding(0, dp(6), 0, 0) })
-      addView(sm("The native local path needs a reachable local network (same Wi-Fi or hotspot).").apply {
+      addView(textView("●  LOCAL CONNECTION UNAVAILABLE", 15f, D.AMBER, 700, 1))
+      addView(sm("Connect both phones to the same Wi-Fi — or turn ON hotspot on one phone and connect the other phone to it. Internet is not required on a shared local network.").apply { setPadding(0, dp(6), 0, 0) })
+      addView(sm("Two phones each using their own mobile data are not connected to each other — that is not a supported native path. QR pairing cannot create the network connection; the devices still need a reachable local path. Full technical diagnostics: Settings → Device Test.").apply {
         setTextColor(D.MUTED); setPadding(0, dp(6), 0, 0)
       })
+    })
+    content.addView(btn("CHECK CONNECTION", "outline") {
+      try { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } catch (_: Exception) {} }.apply {
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(10) }
     })
     content.addView(btn("OPEN NEXDROP WEB", "primary") { openPwa() }.apply {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(10) }
@@ -2111,8 +2947,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     TransferService.stop(this)
   }
 
-  private fun sendTextFlow() {
+  private fun sendTextFlow(prefill: String? = null) {
     val input = EditText(this).apply {
+      setText(prefill ?: "")
       setHint("Type your text")
       setTextColor(D.TEXT)
       setHintTextColor(D.MUTED)
@@ -2121,12 +2958,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       minLines = 3
       setPadding(dp(16), dp(12), dp(16), dp(12))
     }
-    AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+    AlertDialog.Builder(this, dialogTheme())
       .setTitle("Send text")
       .setView(input)
       .setPositiveButton("Continue") { _, _ ->
         val text = input.text.toString()
         if (text.isBlank()) { toast("Nothing to send"); return@setPositiveButton }
+        // v1.5 Phase F: honest bound — reject, never silently truncate.
+        if (TextSharePolicy.tooLarge(text.toByteArray().size)) {
+          toast("Text too large (max ${SpeedFormat.bytesText(TextSharePolicy.MAX_TEXT_BYTES.toLong())}) — send it as a file instead")
+          return@setPositiveButton
+        }
         val f = File(cacheDir, "nexdrop-text-${System.currentTimeMillis()}.txt")
         f.writeText(text)
         addToQueue(Uri.fromFile(f), f.name)
@@ -2138,116 +2980,188 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   /** SEND flow entry used by Home/FAILED retry where a scan-first flow fits. */
   private fun startSendingLegacyScan() {
-    if (!hasPermission(Manifest.permission.CAMERA)) { askPermission(Manifest.permission.CAMERA, REQ_CAMERA); return }
-    launchScan("Scan the receiver's NexDrop QR")
+    askCameraForScan { launchScan("Scan the receiver's NexDrop QR") }
   }
 
   /**
-   * SEND QUEUE runner (PRIORITY 1): one pairing, N sequential independent
-   * NDT1 connections. Each file re-OFFERs — the receiver consents to every
-   * file. The engine is untouched: this is pure orchestration on top of
-   * TurboSender.send.
+   * SEND flow entry (v1.5 Phase D): one pairing, the controller drains the
+   * queue strictly sequentially — one file at a time, each through the
+   * full OFFER/accept/SHA flow. MainActivity is the Host only; the engine
+   * is the frozen NDT1 TurboSender path.
    */
   private fun sendQueueStart(pairing: QrPairing.Pairing) {
-    if (sendQueue.isEmpty()) { toast("Select files first"); return }
-    if (sendQueue.none { it.state == "Ready" } && sendQueue.any { it.state == "Sending" }) return
+    if (!queue.hasQueued()) { toast("Select files first"); return }
     activePairing = pairing
-    sendQueue.forEach { if (it.state == "Sending") it.state = "Ready" }
-    queueBytesDone = sendQueue.filter { it.state == "Done" }.sumOf { it.size }
-    sendNextInQueue()
+    if (queue.current == null) { // a fresh session starts the honest clock
+      queueSessionStartNanos = System.nanoTime()
+      queuePeakBps = null
+    }
+    queue.start()
   }
 
-  private fun sendNextInQueue() {
+  // ---- SendQueueController.Host: engine + UI bridge ---------------------
+  // Runs on the main thread (the controller is main-thread confined; the
+  // engine's listener callbacks are marshaled below before touching it).
+
+  override fun startTransfer(item: SendQueueController.QueueItem) {
     val pairing = activePairing ?: return
-    val idx = sendQueue.indexOfFirst { it.state == "Ready" }
-    if (idx < 0) { // whole queue verified-complete
-      runOnUiThread {
-        hideTransferUi()
-        val done = sendQueue.filter { it.state == "Done" }
-        val bytes = done.sumOf { it.size }
-        val summary = if (done.size == 1)
-          "${done.first().name}  ·  ${SpeedFormat.bytesText(bytes)}\n${UiSpeed.speedText(completedStats?.averageBps)}  ·  ${UiSpeed.durationText(completedStats?.durationMs ?: 0)}  ·  SHA-256 VERIFIED"
-        else
-          "${done.size} files  ·  ${SpeedFormat.bytesText(bytes)}\nAll SHA-256 VERIFIED"
-        backStack.clear(); screen = Screen.RESULT; render()
-        TransferService.complete(this, summary)
-      }
-      return
+    if (Build.VERSION.SDK_INT >= 33 && !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
+      askNotifications()
     }
-    val item = sendQueue[idx]
-    item.state = "Sending"
-    queueIndex = idx
-    resumeAttempts = 0
-    reconnecting = false
+    // State FIRST (renderTransfer reads role/currentName), then the screen.
     role = Role.SEND
     currentName = item.name
     currentSize = item.size
     currentFile = null
-    transferGotFirstProgress = false
     peerIp = pairing.ip
-    beginTransfer()
-    sendItem(item, pairing)
-  }
-
-  private fun sendItem(item: QItem, pairing: QrPairing.Pairing) {
-    if (Build.VERSION.SDK_INT >= 33 && !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
-      askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
-    }
+    // A fresh queue slot enters the transfer screen; a RETRYING reconnect
+    // (durable-offset resume) keeps the existing screen and its honest
+    // elapsed clock — exactly the v1.4 auto-resume behavior.
+    transferGotFirstProgress = false // per-attempt: a drop must show progress again to resume
+    if (screen != Screen.TRANSFER) beginTransfer()
     TransferService.start(this, "Sending ${item.name}…")
     val session = SessionToken(QrPairing.tokenBytesFrom(pairing), pairing.tokenB64, pairing.sessionId)
     sender = TurboSender(this).also { s ->
-      s.send(item.uri, item.name, item.size, pairing.ip, pairing.port, session, senderListener(item, pairing))
+      s.send(Uri.parse(item.uri), item.name, item.size, pairing.ip, pairing.port, session, senderListener(item))
     }
   }
 
-  private fun senderListener(item: QItem, pairing: QrPairing.Pairing) = object : TurboSender.Listener {
-    override fun onProgress(durable: Long, total: Long) = this@MainActivity.onProgress(durable, total)
+  override fun cancelActiveTransfer() { receiver?.cancel(); sender?.cancel() }
+
+  override fun pauseActive(pause: Boolean) {
+    if (pause) { receiver?.pause(); sender?.pause() } else { receiver?.resume(); sender?.resume() }
+  }
+
+  override fun schedule(delayMs: Long, action: () -> Unit) { ui.postDelayed(action, delayMs) }
+
+  override fun onQueueChanged() {
+    // State changes are rare (per file / per user action) — never per
+    // progress tick. Re-render only the screens that show queue state.
+    if (screen == Screen.SEND || screen == Screen.TRANSFER) render()
+  }
+
+  override fun onQueueFinished(summary: SendQueueController.Summary) {
+    runOnUiThread {
+      hideTransferUi()
+      val durMs = if (queueSessionStartNanos > 0) (System.nanoTime() - queueSessionStartNanos) / 1_000_000 else 0L
+      queueSessionStartNanos = 0L
+      queueResult = summary to durMs
+      completedSha = null // per-file SHAs live in history; result card shows the honest split
+      activePairing = null
+      backStack.clear(); screen = Screen.RESULT; render()
+      val ok = summary.completed > 0 && summary.failed == 0
+      TransferService.complete(this,
+        if (ok) "Queue complete — ${summary.completed} file(s) · ${SpeedFormat.bytesText(summary.completedBytes)}"
+        else "${summary.completed} sent · ${summary.failed} failed — see the result screen")
+    }
+  }
+
+  private fun senderListener(item: SendQueueController.QueueItem) = object : TurboSender.Listener {
+    override fun onProgress(durable: Long, total: Long) {
+      queue.onTransferProgress(durable) // volatile write; UI ticks read it
+      this@MainActivity.onProgress(durable, total)
+    }
     override fun onComplete(sha256: String, stats: ThroughputSampler.Stats) {
-      item.state = "Done"
-      queueBytesDone += item.size
-      peerIp = pairing.ip
+      peerIp = activePairing?.ip
       sender?.lastProfile?.let { lastTxProfileText = it.textSummary() }
       runOnUiThread {
+        // History dedup (v1.5 Phase E): a duplicate engine onComplete must
+        // not write the same file into history twice, and a completion
+        // racing a user CANCEL must not turn the file into COMPLETED after
+        // the queue already recorded the truthful CANCELLED state. Only an
+        // in-flight file may complete — same invariant as the controller.
+        if (!item.isBusy) return@runOnUiThread
         completedSha = sha256
         completedStats = stats
-        recordHistory(item.name, stats.averageBps, stats.durationMs, sha256, verified = true)
-        sendNextInQueue() // advances to the next file or shows RESULT
+        // The result screen's PEAK is the session maximum of real
+        // sustained peaks — never just the last file's number.
+        stats.peakSustainedBps?.let { pk ->
+          queuePeakBps = maxOf(queuePeakBps ?: 0.0, pk)
+        }
+        // v1.5 Phase F: resumed is real — this file completed only after
+        // one or more durable-offset reconnects (Phase D retry budget).
+        recordHistory(item.name, stats.averageBps, stats.durationMs, sha256, verified = true, resumed = item.retryCount > 0)
+        queue.onTransferCompleted(item) // the only path to COMPLETED → next file or RESULT
       }
     }
-    override fun onError(message: String) = runOnUiThread { onSendError(item, pairing, message) }
+    override fun onError(message: String) = runOnUiThread { onSendError(item, message) }
   }
 
   /**
-   * AUTO-RESUME (Phase 3): a mid-transfer drop does NOT restart from zero.
-   * The receiver retains the .ndtpart and its durable offset; we reconnect
-   * with the same session and resume from READY(durableOffset). Retries are
-   * bounded (5, backoff 1s..8s) and stop the moment the QR session (10 min)
-   * can no longer authorize us — then the honest FAILED screen. The user
-   * can disable this in Settings → TRANSFER → Automatic resume.
+   * v1.5 Phase D failure handling — with the EXISTING resume semantics:
+   * a mid-transfer drop reconnects through the controller's bounded
+   * RETRYING (3 attempts, 1s/2s/4s backoff) and resumes from the receiver's
+   * REAL durable offset (never zero, never fabricated). A hard failure is
+   * recorded honestly (history + notification) and ISOLATED: the queue
+   * proceeds to the next QUEUED file; the failure is never hidden.
    */
-  private fun onSendError(item: QItem, pairing: QrPairing.Pairing, message: String) {
-    if (transferGotFirstProgress && autoResumePref() && resumeAttempts < 5 && item.state == "Sending") {
-      resumeAttempts++
-      sender = null
-      transferGotFirstProgress = false
-      reconnecting = true
-      if (screen == Screen.TRANSFER) etaView?.text = "Connection lost — reconnecting (attempt $resumeAttempts)…"
-      val wait = minOf(1000L shl (resumeAttempts - 1), 8000L)
-      ui.postDelayed({
-        if (item.state == "Sending" && activePairing == pairing) sendItem(item, pairing)
-      }, wait)
+  private fun onSendError(item: SendQueueController.QueueItem, message: String) {
+    if (activePairing == null) { // queue was cancelled mid-flight
       return
     }
-    transferFailed("Could not reach ${pairing.ip}:${pairing.port}\n$message")
+    val resumable = transferGotFirstProgress && autoResumePref() &&
+      item.state == SendQueueController.QState.TRANSFERRING
+    if (!resumable) {
+      // Honest per-file failure record — the same fields the v1.4 FAILED
+      // screen wrote, kept as a real history event.
+      HistoryStore.record(this, HistoryStore.Entry(
+        name = item.name, bytes = item.size, sent = true,
+        atMs = System.currentTimeMillis(), sha256 = "", verified = false,
+        speedBps = 0.0, durationMs = 0L,
+        status = "Failed", reason = message.lineSequence().firstOrNull()?.take(120) ?: "failed"))
+      TransferService.fail(this, "${item.name} — ${message.lineSequence().firstOrNull()?.take(100) ?: "failed"}")
+    }
+    queue.onTransferError(item, message, canAutoResume = resumable)
   }
 
-  private fun recordHistory(name: String, bps: Double?, durMs: Long?, sha: String, verified: Boolean) {
+  /** ONE cancel path: on-screen button and notification action both land here. */
+  private fun cancelTransfer() {
+    if (role == Role.SEND) {
+      // v1.5 Phase F: a cancel is a truthful history record — status
+      // CANCELLED, never Done, never Failed, verification honestly false.
+      // (Duplicate-complete protection is Phase E's isBusy guard: no
+      // later engine callback can add a second record for this file.)
+      queue.current?.let { item ->
+        if (benchModeMiB == null) HistoryStore.record(this, HistoryStore.Entry(
+          name = item.name, bytes = item.size, sent = true,
+          atMs = System.currentTimeMillis(), sha256 = "", verified = false,
+          speedBps = 0.0, durationMs = 0L,
+          status = "Cancelled", reason = "Cancelled by user"))
+      }
+      queue.cancelCurrentTransfer() // engine stop via Host + truthful CANCELLED state
+      activePairing = null // no post-cancel sender error may record a FAILED entry
+      hideTransferUi()
+      TransferService.stop(this)
+      toast("Transfer cancelled")
+      screen = if (queue.totalItems > 0) Screen.SEND else Screen.HOME
+      render()
+      return
+    }
+    receiver?.cancel(); sender?.cancel()
+    // v1.5 Phase F: same truthful CANCELLED record on the receive side.
+    if (benchModeMiB == null && currentName != null) HistoryStore.record(this, HistoryStore.Entry(
+      name = currentName!!, bytes = currentSize, sent = false,
+      atMs = System.currentTimeMillis(), sha256 = "", verified = false,
+      speedBps = 0.0, durationMs = 0L,
+      status = "Cancelled", reason = "Cancelled by user"))
+    hideTransferUi()
+    TransferService.stop(this)
+    toast("Transfer cancelled")
+    screen = Screen.HOME; render()
+  }
+
+  private fun recordHistory(name: String, bps: Double?, durMs: Long?, sha: String, verified: Boolean, resumed: Boolean = false) {
     HistoryStore.record(this, HistoryStore.Entry(
       name = name, bytes = currentSize, sent = role == Role.SEND,
       atMs = System.currentTimeMillis(), sha256 = sha, verified = verified,
-      speedBps = bps ?: 0.0, durationMs = durMs ?: 0L))
+      speedBps = bps ?: 0.0, durationMs = durMs ?: 0L, resumed = resumed))
   }
 
+  /**
+   * Receive/benchmark failure path (v1.4 semantics kept). Send-queue
+   * failures no longer land here — per-file failure isolation routes
+   * through onSendError + the controller, and the queue continues.
+   */
   private fun transferFailed(message: String) {
     // Real failed-transfer record (never for benchmarks, never for user
     // cancels — cancel has its own path). status="Failed" + reason.
@@ -2268,22 +3182,23 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   @Volatile private var failedMessage: String? = null
 
-  private fun hideTransferUi() { sender = null; receiver = null; TransferService.engineControl = null; setTransferActive(false) }
+  private fun hideTransferUi() { sender = null; receiver = null; TransferService.engineControl = null; setTransferActive(false); rxWatchdogDisarm() }
 
-  /** ONE cancel path: on-screen button and notification action both land here. */
-  private fun cancelTransfer() {
-    receiver?.cancel(); sender?.cancel()
-    // Queue: only the in-flight file is cancelled; Done stays done, the
-    // rest stay Ready — the user returns to the queue, not a dead end.
-    if (role == Role.SEND) {
-      sendQueue.getOrNull(queueIndex)?.let { if (it.state == "Sending") it.state = "Ready" }
-      activePairing = null
+  /** Notification actions control the LIVE engine only (Phase 3). The same
+   *  semantics as the on-screen buttons: toggle pause, hard cancel.
+   *  v1.5 HARDENING: called from beginTransfer AND from onCreate rehydrate —
+   *  a recreated Activity rebinds the callbacks so progress, ETA, notification
+   *  Pause/Cancel and the watchdog all act through the LIVE Activity. */
+  private fun bindEngineControl() {
+    TransferService.engineControl = { cmd ->
+      runOnUiThread {
+        when (cmd) {
+          "pause" -> { paused = !paused; if (paused) { receiver?.pause(); sender?.pause() } else { receiver?.resume(); sender?.resume() }
+            if (role == Role.SEND) queue.onTransferPaused(paused) }
+          "cancel" -> cancelTransfer()
+        }
+      }
     }
-    hideTransferUi()
-    TransferService.stop(this)
-    toast("Transfer cancelled")
-    if (role == Role.SEND && sendQueue.isNotEmpty()) { screen = Screen.SEND; render() }
-    else { screen = Screen.HOME; render() }
   }
 
   private fun setTransferActive(on: Boolean) {
@@ -2320,28 +3235,25 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
 
   private fun beginTransfer() {
     setTransferActive(true)
+    // v1.5 Phase E: a fresh transfer must not inherit a stale queue
+    // session's result data (headline/stats split of an earlier queue).
+    queueResult = null; queuePeakBps = null
+    // v1.5 Phase F: stale received text never leaks into the next result.
+    incomingText = null
     runConditions = transferConditions() // Phase 11: real conditions, once per transfer
     transferStartNanos = System.nanoTime()
     paused = false
     transferGotFirstProgress = false
+    ringDurable = 0; ringTotal = 0 // §13: per-file ring snapshot starts clean
     lastGraphSampleMs = 0; lastGraphDurable = -1; lastNotifMs = 0
-    // Notification actions control the LIVE engine only (Phase 3). The same
-    // semantics as the on-screen buttons: toggle pause, hard cancel.
-    TransferService.engineControl = { cmd ->
-      runOnUiThread {
-        when (cmd) {
-          "pause" -> { paused = !paused; if (paused) { receiver?.pause(); sender?.pause() } else { receiver?.resume(); sender?.resume() } }
-          "cancel" -> cancelTransfer()
-        }
-      }
-    }
+    bindEngineControl()
     backStack.clear(); screen = Screen.TRANSFER
     render()
   }
 
   override fun onProgress(durable: Long, total: Long) {
-    reconnecting = false
     runOnUiThread {
+      if (role == Role.RECEIVE && benchModeMiB == null) rxWatchdogArm() // feeds appLastRxProgressMs too
       if (screen != Screen.TRANSFER) return@runOnUiThread
       currentSize = total
       val elapsedS = (System.nanoTime() - transferStartNanos) / 1e9
@@ -2350,21 +3262,24 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       ring?.progress = pct / 100f
       ringPct?.text = "$pct%"
       ringBytes?.text = "${SpeedFormat.bytesText(durable)}\nof ${SpeedFormat.bytesText(total)}"
+      ringDurable = durable; ringTotal = total // live values for honest re-renders
       transferGotFirstProgress = true
       val sp = UiSpeed.speedText(if (paused) null else bps)
       val numeric = !sp.startsWith("N/A")
       speedView?.text = if (numeric) sp.substringBefore(" ") else "N/A"
       speedUnitView?.visibility = if (numeric) View.VISIBLE else View.GONE
+      val cur = queue.current
+      val retrying = cur?.state == SendQueueController.QState.RETRYING
       etaView?.text = if (paused) "PAUSED — connection kept alive"
-        else if (reconnecting) "Reconnecting…"
+        else if (retrying) "Reconnect ${minOf((cur?.retryCount ?: 0) + 1, queue.maxAutoRetries)} of ${queue.maxAutoRetries} — resuming from durable offset"
         else "ETA ${UiSpeed.etaText(total - durable, bps)}"
-      // Queue overall (PRIORITY 1): real bytes across the whole queue
-      if (role == Role.SEND && sendQueue.size > 1) {
-        val totQ = queueTotalBytes()
-        val doneQ = queueBytesDone + durable
+      // Queue overall (v1.5 Phase D §7/§24): byte-based aggregate —
+      // completed bytes + real durable bytes of the in-flight file.
+      if (role == Role.SEND && queue.totalItems > 1) {
+        val totQ = queue.totalBytes
+        val doneQ = queue.overallBytes
         val opct = if (totQ > 0) (doneQ * 100 / totQ).toInt() else 0
-        val pos = maxOf(sendQueue.indexOfFirst { it.state == "Sending" }, 0)
-        overallView?.text = "File ${pos + 1} of ${sendQueue.size} — overall $opct%"
+        overallView?.text = "QUEUE  ${queue.currentPosition}/${queue.totalItems} files  ·  ${SpeedFormat.bytesText(doneQ)} / ${SpeedFormat.bytesText(totQ)}  ·  $opct%"
       }
       // LIVE GRAPH + NOTIFICATION (Phases 3/4): real delta-bytes/delta-time
       // samples; graph <=4 Hz, notification <=1 Hz so UI never competes with
@@ -2449,6 +3364,16 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       recordHistory(file.name, stats.averageBps, stats.durationMs, sha256, verified = true)
       backStack.clear(); screen = Screen.RESULT
       render()
+      // v1.5 Phase F INCOMING TEXT: a real bounded .txt that arrived through
+      // the same authenticated NDT1 session becomes copyable text. Read off
+      // the UI thread (bounded ≤256 KiB), shown only on the fresh result
+      // screen — never persisted anywhere else, never auto-copied.
+      if (TextSharePolicy.isShareableText(file.name, file.length())) {
+        thread {
+          val txt = try { file.readText() } catch (_: Exception) { null }
+          runOnUiThread { if (txt != null && screen == Screen.RESULT && incomingText == null) { incomingText = txt; render() } }
+        }
+      }
       TransferService.complete(this,
         "${file.name}  ·  ${SpeedFormat.bytesText(file.length())}\n" +
         "${UiSpeed.speedText(stats.averageBps)}  ·  ${UiSpeed.durationText(stats.durationMs)}  ·  SHA-256 VERIFIED")
@@ -2468,10 +3393,14 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     val details = buildString {
       append(SpeedFormat.bytesText(e.bytes)).append(if (e.sent) "  ·  Sent" else "  ·  Received")
       append("  ·  ").append(HistoryStore.dayLabel(e.atMs))
-      if (e.status != "Failed") {
+      if (e.status == "Cancelled") {
+        append("\nStatus: CANCELLED — by user, honestly recorded")
+        append("\nSHA-256: not verified (no completion)")
+      } else if (e.status != "Failed") {
         append("\n").append(UiSpeed.speedText(e.speedBps)).append("  ·  ")
           .append(UiSpeed.durationText(e.durationMs))
         append("\nSHA-256: ").append(if (e.verified) "VERIFIED" else "unverified")
+        if (e.resumed) append("\nResumed from durable offset after a connection drop")
       } else {
         append("\nStatus: FAILED")
         if (e.reason.isNotEmpty()) append("\n").append(e.reason)
@@ -2488,7 +3417,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       setPadding(0, dp(8), 0, dp(4))
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     })
-    val dlg = AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+    val dlg = AlertDialog.Builder(this, dialogTheme())
       .setView(box)
       .setPositiveButton("Close", null)
       .create()
@@ -2512,9 +3441,28 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
         }
       })
     }
-    if (!e.sent && e.status != "Failed" && f.exists()) {
+    if (!e.sent && e.status !in listOf("Failed", "Cancelled") && f.exists()) {
       act("Open file") { openFile(f) }
       act("Share") { shareFile(f) }
+      // v1.5 Phase F: real bounded .txt records offer explicit Copy text.
+      if (TextSharePolicy.isShareableText(f.name, f.length())) {
+        act("Copy text") {
+          try {
+            val cm = getSystemService(android.content.ClipboardManager::class.java)
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("NexDrop", f.readText()))
+            toast("Copied to clipboard")
+          } catch (_: Exception) { toast("Could not read the text") }
+        }
+      }
+    }
+    // v1.5 Phase F: SEND AGAIN — a completed sent record restarts the same
+    // one-queue send flow. Android may have expired the original content
+    // grant, so the honest guidance is to re-pick if needed.
+    if (e.sent && e.status == "Done") {
+      act("Send again") {
+        screen = Screen.SEND; render()
+        toast("Re-pick the file if needed, then pair — one queue, same flow")
+      }
     }
     if (e.status == "Failed") {
       act(if (e.sent) "Retry — send again" else "Retry — receive again") {
@@ -2584,8 +3532,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   // ================= benchmark (Device Test, unchanged logic) =================
   private fun startBenchmark(mib: Int) {
     benchModeMiB = mib
-    if (!hasPermission(Manifest.permission.CAMERA)) { askPermission(Manifest.permission.CAMERA, REQ_CAMERA); return }
-    launchScan("Scan the receiver's NexDrop QR (benchmark $mib MiB)")
+    askCameraForScan { launchScan("Scan the receiver's NexDrop QR (benchmark $mib MiB)") }
   }
 
   private fun runBenchmark(pairing: QrPairing.Pairing, mib: Int) {
@@ -2633,7 +3580,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
       put("benchmark", true)
       put("device", Build.MODEL)
     }
-    AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog)
+    AlertDialog.Builder(this, dialogTheme())
       .setTitle("Share run JSON?")
       .setMessage(json.take(400))
       .setPositiveButton("Share") { _, _ ->
@@ -2673,27 +3620,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
     }
   }
 
-  private fun pendingName(uri: Uri): String? =
-    if (uri.scheme == "file") File(uri.path!!).name else queryName(uri)
-
-  private fun pendingSize(uri: Uri): Long =
-    if (uri.scheme == "file") File(uri.path!!).length() else querySize(uri)
-
-  private fun queryName(uri: Uri): String? {
-    contentResolver.query(uri, null, null, null, null)?.use { c ->
-      val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-      if (idx >= 0 && c.moveToFirst()) return c.getString(idx)
-    }
-    return uri.lastPathSegment
-  }
-
-  private fun querySize(uri: Uri): Long {
-    contentResolver.query(uri, null, null, null, null)?.use { c ->
-      val idx = c.getColumnIndex(android.provider.OpenableColumns.SIZE)
-      if (idx >= 0 && c.moveToFirst() && !c.isNull(idx)) return c.getLong(idx)
-    }
-    return -1
-  }
+  // (v1.5 Phase B) pendingName/pendingSize/queryName/querySize removed:
+  // superseded by FileMeta.load — ONE ContentResolver query per URI instead
+  // of separate name+size queries. Behavior for file:// URIs is preserved
+  // inside FileMeta (plain File stats).
 
   private fun openPwa() {
     try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PWA_URL))) }
@@ -2714,17 +3644,56 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener {
   private fun hasPermission(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
   private fun askPermission(p: String, code: Int) { ActivityCompat.requestPermissions(this, arrayOf(p), code) }
   override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-    if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-      when (requestCode) {
-        REQ_CAMERA -> if (benchModeMiB != null) startBenchmark(benchModeMiB!!) else {
-          if (sendQueue.isNotEmpty()) launchScan("Scan the receiver's NexDrop QR") else { screen = Screen.SEND; render() }
-        }
+    val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+    when (requestCode) {
+      REQ_CAMERA -> {
+        val next = cameraPending; cameraPending = null
+        if (granted) (next ?: { // activity may have been recreated mid-request
+          launchScan(if (benchModeMiB != null) "Scan the receiver's NexDrop QR (benchmark ${benchModeMiB} MiB)"
+            else "Scan the receiver's NexDrop QR")
+        })()
+        else cameraDeniedRecovery()
       }
-    } else toast("Permission required for this mode")
+      REQ_NOTIF -> if (!granted) toast("Notifications are off. Transfers still work, but background progress notifications are unavailable.")
+      REQ_LOC -> if (!granted) toast("Wi-Fi link telemetry stays unavailable. Transfers are unaffected.")
+      else -> {}
+    }
   }
   private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
+  /** v1.5 HARDENING (physical test 16): dialogs followed the DARK Material
+   *  theme even in Light mode — dark sheets with unreadable custom-view text.
+   *  Centralized: every AlertDialog now follows the app's theme tokens. */
+  private fun dialogTheme(): Int =
+    if (themeIsLight()) android.R.style.Theme_Material_Light_Dialog
+    else android.R.style.Theme_Material_Dialog
+
   companion object {
+    // v1.5 HARDENING: the process-scoped transfer truth (see field comments).
+    private var appScreen = Screen.HOME
+    private var appRole = Role.NONE
+    private var appReceiver: TurboReceiver? = null
+    private var appSender: TurboSender? = null
+    private var appCurrentFile: File? = null
+    private var appCurrentName: String? = null
+    private var appCurrentSize = 0L
+    private var appCompletedSha: String? = null
+    private var appCompletedStats: ThroughputSampler.Stats? = null
+    private var appQueuePeakBps: Double? = null
+    private var appIncomingText: String? = null
+    private var appHistoryFilter = "ALL"
+    private var appTransferGotFirstProgress = false
+    private var appQueue: SendQueueController? = null
+    private var appActivePairing: QrPairing.Pairing? = null
+    private var appQueueSessionStartNanos = 0L
+    private var appQueueResult: Pair<SendQueueController.Summary, Long>? = null
+    private var appBenchModeMiB: Int? = null
+    private var appPeerIp: String? = null
+    private var appLastRxProgressMs = 0L
+    private var appTransferStartNanos = 0L
+    private var appRxWatchdogArmed = false
+    private var appTransferPaused = false
+    private var appDiscoveryBindError: String? = null
     const val PWA_URL = "https://pdfly-source.github.io/nexdrop/"
     const val PWA_FALLBACK_NOTE =
       "The PWA (WebRTC path) pairs with the normal QR flow there. Resume safety: reconnecting within the 10-minute session resumes from the durable offset — never from zero."

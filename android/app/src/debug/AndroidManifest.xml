@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DEBUG-BUILD ONLY (src/debug is never merged into release builds).
+     Test-only provider for the v1.5 Phase C instrumented preview tests:
+     gives the content:// APK bridge a real content face to stream from,
+     hosted in the app's own process (see ApkBridgeProvider javadoc). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <provider
+      android:name="com.nexdrop.ndt1.ApkBridgeProvider"
+      android:authorities="com.nexdrop.ndt1.test.apkbridge"
+      android:exported="true" />
+  </application>
+</manifest>
