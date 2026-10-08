@@ -10,7 +10,8 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 const PORT = 3999; // Same permitted local test origin as the existing two-device suite.
 const requireConnection = process.env.NEXDROP_E2E_REQUIRE_CONNECTION !== '0';
-const url = `http://localhost:${PORT}/nexdrop/`;
+// The WebApp's canonical entry (the bare root now shows the public gateway).
+const url = `http://localhost:${PORT}/nexdrop/#/home`;
 const mime: Record<string,string> = { '.html':'text/html','.js':'application/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.webmanifest':'application/manifest+json','.svg':'image/svg+xml' };
 let passed = 0;
 function check(value: unknown, label: string) { assert.ok(value, label); passed++; console.log(`  ✓ ${label}`); }

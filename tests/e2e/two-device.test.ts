@@ -220,7 +220,8 @@ async function main() {
   pageA.on('pageerror', (e) => console.log('  [A pageerror]', String(e).slice(0, 300)));
   pageB.on('pageerror', (e) => console.log('  [B pageerror]', String(e).slice(0, 300)));
 
-  const url = `http://localhost:${PORT}/nexdrop/`;
+  // The WebApp's canonical entry (the bare root now shows the public gateway).
+const url = `http://localhost:${PORT}/nexdrop/#/home`;
   await pageA.goto(url, { waitUntil: 'domcontentloaded' });
   await pageB.goto(url, { waitUntil: 'domcontentloaded' });
   await goToDevicesTab(pageA);

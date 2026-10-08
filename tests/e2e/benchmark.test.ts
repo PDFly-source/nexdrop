@@ -214,7 +214,8 @@ async function main() {
   pageA.on('pageerror', (e) => console.log('  [A pageerror]', String(e).slice(0, 200)));
   pageB.on('pageerror', (e) => console.log('  [B pageerror]', String(e).slice(0, 200)));
 
-  const url = `http://localhost:${PORT}/nexdrop/`;
+  // The WebApp's canonical entry (the bare root now shows the public gateway).
+const url = `http://localhost:${PORT}/nexdrop/#/home`;
   // HERMETIC: block the signaling service on both pages and pair via the
   // manual code path. The WebRTC DataChannel transport — the thing being
   // measured — is identical to the one-scan flow, and no external service
