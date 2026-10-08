@@ -24,6 +24,8 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FileItem } from '@/types/transfer';
 import { WifiOff } from 'lucide-react';
 
+import Gateway from '@/components/gateway/Gateway';
+
 const emptySubscribe = () => () => {};
 
 /**
@@ -209,7 +211,7 @@ function NexDropMainContent() {
   }, [hasActiveTransfer, activeTab]);
 
   return (
-    <div className="min-h-screen bg-nd-bg-0 text-nd-text-primary selection:bg-nd-teal/20 selection:text-nd-teal-bright flex flex-col justify-between">
+    <div id="webapp-root" className="min-h-screen bg-nd-bg-0 text-nd-text-primary selection:bg-nd-teal/20 selection:text-nd-teal-bright flex flex-col justify-between">
       {/* LAYER 1 — first-launch onboarding (shows once per browser) */}
       <OnboardingOverlay />
 
@@ -404,6 +406,29 @@ function NexDropMainContent() {
 }
 
 export default function HomePage() {
+  /**
+   * PREMIUM PUBLIC GATEWAY: a bare "/" visit (no URL hash) shows the premium
+   * 3D gateway (components/gateway/Gateway.tsx). ANY hash — #/home,
+   * #/transfers, #/devices, #/settings, #join= invite links — renders the
+   * WebApp exactly as before, untouched.
+   *
+   * Hydration-safe: the static export prerenders the WebApp DOM (matching the
+   * first client render); the inline pre-paint script in app/layout.tsx adds
+   * the nd-gateway class to <html> when the hash is empty so the prerendered
+   * shell is hidden from first paint; the swap to <Gateway /> happens after
+   * mount. When the visitor picks "Open WebApp" the hash becomes #/home, the
+   * class is toggled off, and the real WebApp mounts via this same listener.
+   */
+  const [gateway, setGateway] = useState<boolean>(false);
+  useEffect(() => {
+    const update = () => setGateway(window.location.hash === '');
+    update();
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
+
+  if (gateway) return <Gateway />;
+
   return (
     <Suspense
       fallback={

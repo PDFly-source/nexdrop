@@ -210,3 +210,15 @@ body {
     transform: none;
   }
 }
+
+
+/* ---------------------------------------------------------------------------
+ * Premium public gateway (components/gateway/Gateway.tsx)
+ * On a bare "/" visit (no hash) the pre-painted WebApp shell is hidden by the
+ * inline pre-paint script in app/layout.tsx (html.nd-gateway) until React
+ * mounts the gateway. Any hash (#/home, #join=…) keeps the WebApp visible
+ * exactly as before — this rule is inert for the actual WebApp experience.
+ * ------------------------------------------------------------------------- */
+html.nd-gateway #webapp-root {
+  display: none;
+}
