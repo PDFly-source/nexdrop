@@ -198,6 +198,9 @@ jobs:
           name: NexDrop-debug.apk
           path: NexDrop-debug.apk
           if-no-files-found: error
+          # INFRA FIX: explicit max retention so the validation APK stays
+          # downloadable for manual testing regardless of org defaults.
+          retention-days: 90
 
       - name: Upload NexDropTV-debug.apk artifact
         uses: actions/upload-artifact@v4
