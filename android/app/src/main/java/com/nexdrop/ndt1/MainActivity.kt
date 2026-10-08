@@ -392,22 +392,45 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
    * never faked.
    */
   private fun previewBox(item: SendQueueController.QueueItem, index: Int, sub: TextView): android.widget.FrameLayout {
-    val uriObj = Uri.parse(item.uri)
-    val key = previewCacheKey(item.uri, item.size, item.lastModified)
     val frame = android.widget.FrameLayout(this).apply {
-      layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+      // FINAL POLISH: deterministic bounded thumb — 64 dp square, never
+      // wrap/height-fill, never a poster. The preview area is a thumbnail
+      // inside a compact row; real previews crop within these bounds.
+      layoutParams = LinearLayout.LayoutParams(dp(64), dp(64))
       background = GlassSurface()
       clipToOutline = true
-      tag = key
+      tag = previewCacheKey(item.uri, item.size, item.lastModified)
       contentDescription = "Preview: ${item.name}"
     }
     frame.addView(ImageView(this).apply {
+      // Honest typed fallback: a proportional glyph INSIDE the bounded
+      // thumb — never a giant empty placeholder, never a tiny lost icon.
       setImageResource(kindIcon(item.kind))
       imageTintList = android.content.res.ColorStateList.valueOf(D.MUTED)
-      layoutParams = android.widget.FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER)
-      setPadding(dp(11), dp(11), dp(11), dp(11))
+      layoutParams = android.widget.FrameLayout.LayoutParams(
+        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+        android.widget.FrameLayout.LayoutParams.MATCH_PARENT)
+      setPadding(dp(18), dp(18), dp(18), dp(18))
       scaleType = ImageView.ScaleType.FIT_CENTER
     })
+    return frame
+  }
+
+  /**
+   * Preview request for a queue row — called AFTER the frame is attached
+   * to its card. FIX (warm-cache re-renders never showed thumbnails): the
+   * cache-hit callback fires SYNCHRONOUSLY inside request(); when the
+   * request was made while the row was still under construction the frame
+   * had no parent yet, the detach guard dropped the result, and every
+   * re-render (queue event, state change, move buttons) rebuilt the row
+   * with the typed icon forever. Requesting post-attach makes the
+   * synchronous hit land on the live row; the async miss path still drops
+   * harmlessly if a later render replaced the row — the next render then
+   * finds the warm cache, per the documented PreviewProvider contract.
+   */
+  private fun bindRowPreview(frame: android.widget.FrameLayout, sub: TextView, item: SendQueueController.QueueItem, index: Int) {
+    val uriObj = Uri.parse(item.uri)
+    val key = previewCacheKey(item.uri, item.size, item.lastModified)
     previews.request(uriObj, item.size, item.lastModified, item.kind, item.mime) { res ->
       // The row may have been rebuilt by a later render() — only the row
       // whose frame still carries this key is updated.
@@ -431,14 +454,16 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         else -> {} // TypedIcon/Unavailable: the honest typed icon already shows
       }
     }
-    return frame
   }
 
   private fun applyThumb(frame: android.widget.FrameLayout, bmp: android.graphics.Bitmap) {
     frame.removeAllViews()
     frame.addView(ImageView(this).apply {
+      // CENTER_CROP inside the fixed 64 dp thumb: the preview fills the
+      // bounded area and crops the overflow — no dark letterbox bands, no
+      // black/empty card. The frame stays 64 dp regardless of aspect ratio.
       setImageBitmap(bmp)
-      scaleType = ImageView.ScaleType.FIT_CENTER
+      scaleType = ImageView.ScaleType.CENTER_CROP
       layoutParams = android.widget.FrameLayout.LayoutParams(
         android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
         android.widget.FrameLayout.LayoutParams.MATCH_PARENT)
@@ -657,6 +682,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private var ring: RingView? = null
   private var ringPct: TextView? = null
   private var ringBytes: TextView? = null
+  // FINAL POLISH (§13): last real (durable, total) shown on the ring — so a
+  // re-render (PAUSE relabel) restores LIVE values, never resets to 0/0.
+  private var ringDurable: Long = 0L
+  private var ringTotal: Long = 0L
   private var speedView: GradientTextView? = null
   private var speedUnitView: TextView? = null
   private var etaView: TextView? = null
@@ -1233,7 +1262,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       orientation = LinearLayout.HORIZONTAL
       gravity = Gravity.CENTER_VERTICAL
       val sub = queueSub(item, index, stateExtra)
-      addView(previewBox(item, index, sub))
+      val pbox = previewBox(item, index, sub)
+      addView(pbox)
+      // Post-attach: the frame's parent is this card, so warm-cache hits
+      // apply immediately on the live row (see bindRowPreview).
+      bindRowPreview(pbox, sub, item, index)
       addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
       val t = col().apply { layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } }
       t.addView(textView(item.name, 13f, D.TEXT, 700).apply {
@@ -1246,7 +1279,16 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       // in the tap dialog. Only QUEUED items may move; the active transfer
       // and terminal states are guarded by the controller (JVM-tested).
       if (item.state == SendQueueController.QState.QUEUED) {
-        val mover = col().apply { gravity = Gravity.CENTER_VERTICAL }
+        // FIX (the "giant preview card" bug): col() defaults to a
+        // MATCH_PARENT width — inside this HORIZONTAL row that swallowed
+        // the entire row width, collapsing the weighted text column to
+        // ZERO width. The sub-line then wrapped one character per line
+        // and the card grew to a full-screen poster. Wrap the mover
+        // compactly so the weighted text column keeps its space.
+        val mover = col().apply {
+          gravity = Gravity.CENTER_VERTICAL
+          layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
         listOf(true to "Move ${item.name} up", false to "Move ${item.name} down").forEach { (up, desc) ->
           mover.addView(ImageView(this@MainActivity).apply {
             setImageResource(R.drawable.ic_down) // same glyph; 180° = up
@@ -1960,9 +2002,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         layoutParams = FrameLayout.LayoutParams(
           ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER)
       }
-      ringPct = bigText("0%", 34f).apply { gravity = Gravity.CENTER }
+      // FINAL POLISH (§13): never "0 MiB of 0 MiB" once the real size is
+      // known. Before the first real PROGRESS sample the sender knows the
+      // exact file size (queue item) and the receiver knows the offer size,
+      // so the ring starts at the honest truth: 0 of REAL TOTAL, plus an
+      // explicit "Preparing…" status. A re-render restores live values.
+      val live = transferGotFirstProgress && ringTotal > 0
+      val d0 = if (live) ringDurable else 0L
+      val t0 = if (live) ringTotal else currentSize
+      ringPct = bigText(if (t0 > 0) "${d0 * 100 / t0}%" else "0%", 34f).apply { gravity = Gravity.CENTER }
       center.addView(ringPct)
-      ringBytes = sm("0 MiB\nof 0 MiB").apply { gravity = Gravity.CENTER }
+      ringBytes = sm(if (t0 > 0) "${SpeedFormat.bytesText(d0)}\nof ${SpeedFormat.bytesText(t0)}" else "Preparing…").apply { gravity = Gravity.CENTER }
       center.addView(ringBytes)
       addView(center)
     }
@@ -1982,7 +2032,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     }.also { speedUnitView = it })
     val speedCol = col().apply { gravity = Gravity.CENTER_HORIZONTAL }
     speedCol.addView(speedRow)
-    etaView = sm("ETA —").apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, 0) }
+    etaView = sm(when {
+      transferGotFirstProgress && paused -> "PAUSED — connection kept alive"
+      transferGotFirstProgress -> "ETA ${UiSpeed.etaText(ringTotal - ringDurable, null)}" // honest: recomputed on next tick
+      else -> "Preparing…" // no fabricated ETA before the first real sample
+    }).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, 0) }
     speedCol.addView(etaView)
     content.addView(speedCol)
 
@@ -3190,6 +3244,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     transferStartNanos = System.nanoTime()
     paused = false
     transferGotFirstProgress = false
+    ringDurable = 0; ringTotal = 0 // §13: per-file ring snapshot starts clean
     lastGraphSampleMs = 0; lastGraphDurable = -1; lastNotifMs = 0
     bindEngineControl()
     backStack.clear(); screen = Screen.TRANSFER
@@ -3207,6 +3262,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       ring?.progress = pct / 100f
       ringPct?.text = "$pct%"
       ringBytes?.text = "${SpeedFormat.bytesText(durable)}\nof ${SpeedFormat.bytesText(total)}"
+      ringDurable = durable; ringTotal = total // live values for honest re-renders
       transferGotFirstProgress = true
       val sp = UiSpeed.speedText(if (paused) null else bps)
       val numeric = !sp.startsWith("N/A")
