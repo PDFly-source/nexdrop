@@ -1351,6 +1351,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         if (notifOk) null else "ALLOW") { askNotifications() })
       addView(readyRow(null, "Receiver required — the other phone opens RECEIVE"))
     })
+    if (eps == null) content.addView(sm("Both phones need the same Wi-Fi, or one phone's hotspot with the other connected — connect first, then send.").apply {
+      setTextColor(D.MUTED); setPadding(dp(4), dp(6), dp(4), 0) })
     content.addView(btn("HOW TO CONNECT", "text", height = 32) { showHowToConnectSheet() }.apply {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)).apply {
         topMargin = dp(6); gravity = Gravity.CENTER_HORIZONTAL }
@@ -1642,9 +1644,27 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(8) }
       addView(textView("READY TO RECEIVE", 11f, D.PRIMARY, 800, 1, 0.18f).apply {
         layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(6) } })
-      addView(readyRow(true, "Local network: ready — endpoint selected"))
-      addView(readyRow(beaconIdentity != null || beaconSession != null,
-        if (beaconIdentity != null || beaconSession != null) "NexDrop is listening for senders" else "Listening unavailable — QR pairing still works"))
+      // Real runtime network type from the SELECTED endpoint — never a
+      // generic "connected" claim the device cannot back up.
+      val netName = when (ep.networkType) {
+        "hotspot" -> "Hotspot active"
+        "ethernet" -> "Ethernet connected"
+        else -> "Wi-Fi connected"
+      }
+      addView(readyRow(true, "$netName on this phone — local transfer ready"))
+      addView(readyRow(null, "The sender joins the same Wi-Fi / hotspot"))
+      // Discovery listen state is REAL (beacon bound or not). When it is
+      // down, say what still works and what to check — never imply the QR
+      // creates a network connection.
+      val listening = beaconIdentity != null || beaconSession != null
+      addView(readyRow(listening,
+        if (listening) "NexDrop is listening for senders" else "Nearby discovery: unavailable",
+        if (listening) null else "CHECK CONNECTION") {
+        try { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } catch (_: Exception) {} })
+      if (!listening) addView(sm("Nearby discovery is unavailable on this network right now. " +
+        "QR pairing still works — the sender scans this QR and the transfer uses the same native direct path. " +
+        "Both phones need the same Wi-Fi, or one phone's hotspot with the other connected.").apply {
+        setTextColor(D.MUTED); setPadding(0, dp(6), 0, 0) })
       addView(readyRow(rxFree > 0, if (rxFree > 0) "Storage: ${SpeedFormat.bytesText(rxFree)} free" else "Storage: unavailable"))
       addView(readyRow(notifOk, if (notifOk) "Notifications: allowed" else "Notifications: off — transfers still work",
         if (notifOk) null else "ALLOW") { askNotifications() })
@@ -2846,11 +2866,15 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private fun renderUnavailable() {
     screenTitle("NexDrop")
     content.addView(glassCard().apply {
-      addView(textView("●  NATIVE LOCAL UNAVAILABLE", 15f, D.AMBER, 700, 1))
-      addView(sm(LocalNet.unavailableText()).apply { setPadding(0, dp(6), 0, 0) })
-      addView(sm("The native local path needs a reachable local network (same Wi-Fi or hotspot).").apply {
+      addView(textView("●  LOCAL CONNECTION UNAVAILABLE", 15f, D.AMBER, 700, 1))
+      addView(sm("Connect both phones to the same Wi-Fi — or turn ON hotspot on one phone and connect the other phone to it. Internet is not required on a shared local network.").apply { setPadding(0, dp(6), 0, 0) })
+      addView(sm("Two phones each using their own mobile data are not connected to each other — that is not a supported native path. QR pairing cannot create the network connection; the devices still need a reachable local path. Full technical diagnostics: Settings → Device Test.").apply {
         setTextColor(D.MUTED); setPadding(0, dp(6), 0, 0)
       })
+    })
+    content.addView(btn("CHECK CONNECTION", "outline") {
+      try { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } catch (_: Exception) {} }.apply {
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(10) }
     })
     content.addView(btn("OPEN NEXDROP WEB", "primary") { openPwa() }.apply {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(10) }
