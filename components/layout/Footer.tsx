@@ -3,51 +3,62 @@
 import React from 'react';
 import Link from 'next/link';
 
+/**
+ * Official NexDrop brand signature footer — shared identity with the
+ * Android App and the 3D gateway. Presentation only; no transfer logic.
+ */
 export const Footer: React.FC = () => {
   return (
-    <footer className="w-full border-t border-white/[0.08] bg-nd-bg-0 py-10 text-xs text-nd-text-secondary">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold tracking-tight text-nd-text-primary">NexDrop</span>
-              <span className="text-white/45">/</span>
-              <span className="text-xs text-nd-text-secondary">Local-First Utilities</span>
-            </div>
-            <p className="mt-1 text-xs text-nd-text-secondary">
-              Private. Direct. Fast. Browser-to-browser P2P file and text sharing.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <a href="#how-it-works" className="hover:text-nd-text-primary transition-colors">
-              How it works
-            </a>
-            <Link href="/security" className="hover:text-nd-text-primary transition-colors">
-              Security
-            </Link>
-            <Link href="/privacy" className="hover:text-nd-text-primary transition-colors">
-              Privacy
-            </Link>
-            <Link href="/about" className="hover:text-nd-text-primary transition-colors">
-              About
-            </Link>
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noreferrer noopener"
-              className="hover:text-nd-text-primary transition-colors"
-            >
-              GitHub
-            </a>
-            <span className="text-white/45 font-mono">v1.0.0</span>
-          </div>
+    <footer className="w-full border-t border-white/[0.08] bg-nd-bg-0 text-nd-text-secondary">
+      <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 py-10 text-center sm:px-6">
+        {/* Wordmark */}
+        <div className="text-base font-semibold tracking-tight text-nd-text-primary">
+          Nex<span className="text-nd-teal-bright">Drop</span>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-white/[0.04] flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-nd-text-secondary/80">
-          <p>© {new Date().getFullYear()} NexDrop. Zero telemetry, zero tracking.</p>
-          <p>Powered by WebRTC & Web Crypto API</p>
+        {/* Brand tagline */}
+        <p
+          className="text-[10px] uppercase text-nd-text-muted"
+          style={{ letterSpacing: '0.32em' }}
+        >
+          Private · Direct · Fast
+        </p>
+
+        {/* Signature */}
+        <div className="mt-2 flex flex-col items-center gap-1 text-[11px] leading-relaxed text-nd-text-secondary/80">
+          <p>Crafted &amp; Developed by PKD</p>
+          <p>© 2026 NexDrop. All rights reserved.</p>
         </div>
+
+        {/* Thin divider */}
+        <div className="mt-3 h-px w-16 bg-white/[0.08]" />
+
+        {/* Existing destinations only */}
+        <nav className="mt-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs">
+          <Link href="/security" className="transition-colors hover:text-nd-text-primary">
+            Security
+          </Link>
+          <Link href="/privacy" className="transition-colors hover:text-nd-text-primary">
+            Privacy
+          </Link>
+          <Link href="/about" className="transition-colors hover:text-nd-text-primary">
+            About
+          </Link>
+          <Link href="/app" className="transition-colors hover:text-nd-text-primary">
+            App
+          </Link>
+          <a href="#/home" className="transition-colors hover:text-nd-text-primary">
+            WebApp
+          </a>
+          <a
+            href="https://github.com/PDFly-source/nexdrop"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="transition-colors hover:text-nd-text-primary"
+          >
+            GitHub
+          </a>
+        </nav>
       </div>
     </footer>
   );

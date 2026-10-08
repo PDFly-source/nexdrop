@@ -177,7 +177,12 @@ const GATEWAY_CSS = `
 .ndgw footer{position:relative;z-index:5;text-align:center;color:var(--mute);font-size:.82rem;padding:30px 6vw 50px;border-top:1px solid var(--line);background:var(--bg)}
 .ndgw footer a{color:var(--mute);margin:0 10px}
 .ndgw footer a:hover{color:var(--acc)}
-.ndgw .fg{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;max-width:1200px;margin:auto;text-align:left}
+.ndgw .fg{display:flex;flex-direction:column;align-items:center;gap:12px;max-width:1200px;margin:auto;text-align:center}
+.ndgw .fg .logo{font-size:1.15rem}
+.ndgw .fg .fgTag{font-size:.64rem;letter-spacing:.34em;text-transform:uppercase;color:var(--acc);opacity:.9}
+.ndgw .fg .fgSig{font-size:.76rem;color:var(--mute);line-height:1.7}
+.ndgw .fg .fgDv{width:56px;height:1px;background:var(--line)}
+.ndgw .fg .fgNav{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 0}
 
 /* Reveal */
 .ndgw .rv{opacity:0;transform:translateY(50px) scale(.97);transition:opacity 1s,transform 1s cubic-bezier(.2,.8,.2,1)}
@@ -827,19 +832,23 @@ export default function Gateway() {
       </main>
 
       <footer>
+        {/* Official NexDrop brand signature — same identity as the Android
+            App and the WebApp footer. Presentation only. */}
         <div className="fg">
-          <div>
-            <div className="logo" style={{ fontSize: '1.1rem' }}>Nex<b>Drop</b></div>
-            © 2026 · Private, direct file &amp; text transfer · Native NDT1 TCP on Android ·
-            WebRTC in the browser
+          <div className="logo">Nex<b>Drop</b></div>
+          <div className="fgTag">Private · Direct · Fast</div>
+          <div className="fgSig">
+            Crafted &amp; Developed by PKD
+            <br />© 2026 NexDrop. All rights reserved.
           </div>
-          <div>
+          <div className="fgDv" />
+          <nav className="fgNav">
             <Link href="/security">Security</Link>
             <Link href="/privacy">Privacy</Link>
             <Link href="/about">About</Link>
             <Link href="/app">App</Link>
             <a href={WEBAPP_URL}>WebApp</a>
-          </div>
+          </nav>
         </div>
       </footer>
     </div>
