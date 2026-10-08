@@ -270,6 +270,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private var beaconSession: DiscoveryBeacon? = null   // receiver mode: advertise token + listen
   private var beaconIdentity: DiscoveryBeacon? = null  // send mode: identity presence + listen
   private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+  /** v1.5 readiness: action to run once CAMERA is granted (askCameraForScan). */
+  private var cameraPending: (() -> Unit)? = null
   private data class SeenPeer(val dev: DiscoveryBeacon.DiscoveredDevice, val atMs: Long)
   private val identityByIp = java.util.concurrent.ConcurrentHashMap<String, SeenPeer>()
   private var nearbySignature = ""
@@ -867,9 +869,86 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     }, 0))
     footer.addView(centred(textView("PRIVATE • DIRECT • FAST", 10f, D.PRIMARY, 600, 1, 0.26f), 6))
     footer.addView(centred(textView("Crafted & Developed by PKD", 11f, D.MUTED, 600), 12))
-    footer.addView(centred(textView("© 2026 NexDrop. All rights reserved.", 9.5f, D.argb(165, D.MUTED), 400), 3))
+    footer.addView(centred(textView("© 2026 NexDrop. All rights reserved.", 9.5f, D.argb(200, D.MUTED), 400), 3))
     content.addView(footer)
   }
+
+  /** Centralized CAMERA ask — the ONLY place camera is requested. Camera
+   *  serves one purpose: scanning the receiver's NexDrop QR. The in-app
+   *  explanation shows BEFORE Android's dialog; denial has a recovery path
+   *  (Settings + nearby connection) and never breaks the app. */
+  private fun askCameraForScan(onGranted: () -> Unit) {
+    if (hasPermission(Manifest.permission.CAMERA)) { onGranted(); return }
+    cameraPending = onGranted
+    AlertDialog.Builder(this, dialogTheme())
+      .setTitle("Camera for QR scanning")
+      .setMessage("Camera access is needed only to scan the NexDrop pairing QR. " +
+        "The preview stays on this screen; nothing is uploaded or recorded.")
+      .setPositiveButton("Allow") { _, _ -> askPermission(Manifest.permission.CAMERA, REQ_CAMERA) }
+      .setNegativeButton("Not now", null)
+      .show()
+  }
+
+  /** Honest recovery when the camera is denied: what breaks (QR scanning
+   *  only), what still works, and how to allow it later. */
+  private fun cameraDeniedRecovery() {
+    AlertDialog.Builder(this, dialogTheme())
+      .setTitle("Camera permission is required for QR scanning")
+      .setMessage("NexDrop keeps working — nearby devices don't need the camera. " +
+        "To scan QR later, allow Camera for NexDrop in Settings.")
+      .setPositiveButton("Allow in Settings") { _, _ ->
+        try { startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+          Uri.fromParts("package", packageName, null))) } catch (_: Exception) {} }
+      .setNeutralButton("Use another connection method", null)
+      .show()
+  }
+
+  /** Centralized POST_NOTIFICATIONS ask (13+): honest explanation first.
+   *  Notifications are OPTIONAL — a denial never blocks a transfer. */
+  private fun askNotifications() {
+    if (Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS)) return
+    AlertDialog.Builder(this, dialogTheme())
+      .setTitle("Allow notifications?")
+      .setMessage("Notifications let NexDrop show transfer progress, pause/resume and completion while the app is in the background. Transfers work without them.")
+      .setPositiveButton("Allow") { _, _ -> askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF) }
+      .setNegativeButton("Not now", null)
+      .show()
+  }
+
+  /** Lightweight "How NexDrop works" help sheet: connect options, sender/
+   *  receiver roles, honest hotspot limits. One dialog from Send+Receive. */
+  private fun showHowToConnectSheet() {
+    AlertDialog.Builder(this, dialogTheme())
+      .setTitle("How to transfer")
+      .setMessage("HOW TO TRANSFER\n" +
+        "1. Connect both phones to the same Wi-Fi — or join one phone's hotspot.\n" +
+        "2. Receiver opens: RECEIVE.\n" +
+        "3. Sender opens: SEND FILES and picks files.\n" +
+        "4. Connect with a Nearby device, or Scan QR.\n" +
+        "5. Receiver taps ACCEPT. The transfer starts.\n" +
+        "6. NexDrop verifies every file with SHA-256 and shows VERIFIED.\n\n" +
+        "CONNECTING YOUR PHONES\n" +
+        "OPTION 1 — SAME WI-FI: both phones on the same Wi-Fi network. Internet is not required.\n\n" +
+        "OPTION 2 — HOTSPOT: phone A turns Hotspot ON (Android Settings → Hotspot & tethering — NexDrop cannot switch it on for you), phone B joins that hotspot. Either phone can then be sender or receiver.\n\n" +
+        "If Nearby discovery cannot see the other phone, some networks block device-to-device traffic — use QR pairing; it always works.\n\n" +
+        "No cloud upload. No account. No internet required. Files move directly between devices.")
+      .setPositiveButton("Close", null)
+      .show()
+  }
+
+  /** Truthful readiness row: ✓ ok=true, ! ok=false (optionally an action),
+   *  • ok=null neutral. No fake green checks — real runtime state only. */
+  private fun readyRow(ok: Boolean?, main: String, actionLabel: String? = null, action: (() -> Unit)? = null): View =
+    row().apply {
+      gravity = Gravity.CENTER_VERTICAL
+      addView(textView(when (ok) { true -> "✓"; false -> "!"; else -> "•" }, 12f,
+        when (ok) { true -> D.OK; false -> D.PRIMARY; else -> D.argb(200, D.MUTED) }, 800).apply {
+        layoutParams = LinearLayout.LayoutParams(dp(18), LinearLayout.LayoutParams.WRAP_CONTENT) })
+      addView(sm(main).apply {
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply { weight = 1f } })
+      if (actionLabel != null && action != null) addView(btn(actionLabel, "text", height = 26) { action() }.apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(26)) })
+    }
 
   private fun screenTitle(text: String) {
     content.addView(h2(text).apply {
@@ -1256,6 +1335,27 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     backHeader("Send files")
     content.addView(sub("Choose what you want to transfer."))
 
+    // READY TO SEND — truthful runtime checklist: every row is real state,
+    // no fake green checks, and every NEEDS ACTION row carries its action.
+    val eps = LocalNet.select(activeWifiInterface())
+    val notifOk = Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+    content.addView(glassCard(pad = 12f).apply {
+      addView(textView("READY TO SEND", 11f, D.PRIMARY, 800, 1, 0.18f).apply {
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(6) } })
+      addView(readyRow(eps != null, if (eps != null) "Wi-Fi / local network: connected" else "Wi-Fi / local network: not connected",
+        if (eps != null) null else "OPEN WI-FI SETTINGS") {
+        try { startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)) } catch (_: Exception) {} })
+      addView(readyRow(eps != null, if (eps != null) "Native NDT1 transfer: ready" else "Native transfer: unavailable — use PWA fallback"))
+      addView(readyRow(true, "File access: system picker — no storage permission needed"))
+      addView(readyRow(notifOk, if (notifOk) "Notifications: allowed" else "Notifications: off — transfers still work",
+        if (notifOk) null else "ALLOW") { askNotifications() })
+      addView(readyRow(null, "Receiver required — the other phone opens RECEIVE"))
+    })
+    content.addView(btn("HOW TO CONNECT", "text", height = 32) { showHowToConnectSheet() }.apply {
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)).apply {
+        topMargin = dp(6); gravity = Gravity.CENTER_HORIZONTAL }
+    })
+
     // dashed drop zone
     content.addView(glassCard(dashed = true, pad = 22f, radius = 22f).apply {
       layoutParams = (layoutParams as LinearLayout.LayoutParams).apply {
@@ -1436,8 +1536,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0).apply { weight = 1f } })
     content.addView(btn(if (queue.remainingCount > 1) "SEND ALL (${queue.remainingCount})" else "CONTINUE", "primary") {
       if (!queue.hasQueued()) { toast("Select a file first"); return@btn }
-      if (!hasPermission(Manifest.permission.CAMERA)) { askPermission(Manifest.permission.CAMERA, REQ_CAMERA); return@btn }
-      launchScan("Scan the receiver's NexDrop QR")
+      askCameraForScan { launchScan("Scan the receiver's NexDrop QR") }
     }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)) })
     // Secondary path BELOW the primary action: the QR flow is the
     // guaranteed route; nearby discovery is a convenience below the fold.
@@ -1461,15 +1560,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     val nearby = pairablePeers()
     content.addView(glassCard(pad = 12f).apply {
       if (nearby.isEmpty()) {
-        if (beaconIdentity == null && beaconSession == null) {
-          addView(textView("Discovery unavailable", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
-          addView(sm(appDiscoveryBindError?.let { "Reason: $it" }
-            ?: "Another local socket holds the discovery port, or multicast is blocked."))
-          addView(sm("Scan the receiver's QR instead — pairing is identical."))
-        } else {
-          addView(textView("No NexDrop receivers found", 13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
-          addView(sm("A device on this network shows up here when it opens the Receive screen. QR pairing always works too."))
-        }
+        val listening = beaconIdentity != null || beaconSession != null
+        addView(textView(if (listening) "Nearby discovery did not find a receiver" else "Discovery unavailable",
+          13f, D.TEXT, 700).apply { setPadding(0, 0, 0, dp(2)) })
+        if (!listening) addView(sm(appDiscoveryBindError?.let { "Reason: $it" }
+          ?: "Another local socket holds the discovery port, or multicast is blocked."))
+        else addView(sm("Searching for NexDrop receivers…").apply { setPadding(0, dp(2), 0, 0) })
+        addView(sm("CHECK:\n• Both phones are on the same Wi-Fi or hotspot\n• The receiver has the NexDrop Receive screen open\n• Wi-Fi is enabled\n• Your network allows device-to-device traffic").apply {
+          setTextColor(D.MUTED); setPadding(0, dp(6), 0, dp(8)) })
+        addView(btn("SCAN QR INSTEAD", "outline", height = 38) {
+          askCameraForScan { launchScan("Scan the receiver's NexDrop QR") }
+        }.apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(38)) })
       } else {
         nearby.forEach { p ->
           val dev = p.dev
@@ -1492,12 +1593,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
           setPadding(0, dp(2), 0, 0)
         })
       }
-      // v1.5 HARDENING (test 18): real diagnostics — live interface, beacon
-      // state, every device heard (identity-only included), bind reason.
-      addView(sm("Diagnostics · interface: ${activeWifiInterface() ?: "none"} · beacon: " +
-        (if (beaconIdentity != null || beaconSession != null) "listening" else "stopped") +
-        " · heard ${identityByIp.size} device(s)" +
-        (appDiscoveryBindError?.let { " · bind: $it" } ?: "")).apply {
+      // Human answer only (full technical diagnostics live in Settings →
+      // Device Test: live interface, beacon state, devices heard, bind reason).
+      addView(sm(if (nearby.isEmpty()) "No receiver found yet. Full technical diagnostics: Settings → Device Test."
+        else "Nearby discovery: ${nearby.size} receiver(s) visible").apply {
         setTextColor(D.MUTED); setPadding(0, dp(8), 0, 0)
         setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f)
       })
@@ -1524,7 +1623,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     showQr(QrPairing.encode(session, endpoint.ip, port, deviceLabel()))
     startSessionBeacon(session, port) // nearby senders can now find this session without the QR
     if (Build.VERSION.SDK_INT >= 33 && !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
-      askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
+      askNotifications()
     }
     TransferService.start(this, "Waiting for sender…")
   }
@@ -1536,9 +1635,24 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     // v1.5 Phase F: real available storage up front — never a guessed value.
     val rxDl = File(getExternalFilesDir(null) ?: filesDir, "downloads")
     val rxFree = try { android.os.StatFs(rxDl.path).availableBytes } catch (_: Exception) { -1L }
-    if (rxFree >= 0) content.addView(sm("Storage available · ${SpeedFormat.bytesText(rxFree)} free").apply {
-      setTextColor(D.MUTED)
-      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(2) }
+    // READY TO RECEIVE — truthful runtime checklist: local network ready,
+    // real listening state, real free storage, notifications optional.
+    val notifOk = Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+    content.addView(glassCard(pad = 12f).apply {
+      layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(8) }
+      addView(textView("READY TO RECEIVE", 11f, D.PRIMARY, 800, 1, 0.18f).apply {
+        layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(6) } })
+      addView(readyRow(true, "Local network: ready — endpoint selected"))
+      addView(readyRow(beaconIdentity != null || beaconSession != null,
+        if (beaconIdentity != null || beaconSession != null) "NexDrop is listening for senders" else "Listening unavailable — QR pairing still works"))
+      addView(readyRow(rxFree > 0, if (rxFree > 0) "Storage: ${SpeedFormat.bytesText(rxFree)} free" else "Storage: unavailable"))
+      addView(readyRow(notifOk, if (notifOk) "Notifications: allowed" else "Notifications: off — transfers still work",
+        if (notifOk) null else "ALLOW") { askNotifications() })
+      addView(readyRow(null, "Keep this Receive screen open while the sender connects"))
+    })
+    content.addView(btn("HOW TO CONNECT", "text", height = 32) { showHowToConnectSheet() }.apply {
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)).apply {
+        topMargin = dp(6); gravity = Gravity.CENTER_HORIZONTAL }
     })
 
     // QR presentation: .card.g > .qrw (white, radius 18, padding 12, teal glow)
@@ -2243,7 +2357,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       setting(R.drawable.ic_swap, "PWA fallback", "Auto") { openPwa() }
       setting(R.drawable.ic_shield, "SHA-256 verification", "On")
       setting(R.drawable.ic_bell, "Notifications", if (Build.VERSION.SDK_INT >= 33 && hasPermission(Manifest.permission.POST_NOTIFICATIONS)) "On" else "Tap to allow") {
-        if (Build.VERSION.SDK_INT >= 33) askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
+        if (Build.VERSION.SDK_INT >= 33) askNotifications()
       }
       setting(R.drawable.ic_sun, "Appearance", themePref().replaceFirstChar { it.uppercase() }) { go(Screen.SETTINGS) }
       setting(R.drawable.ic_spd, "Diagnostics", "Open") { go(Screen.DEVICE_TEST) }
@@ -2290,7 +2404,8 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       srow(this, R.drawable.ic_wifi, "Nearby discovery", "Available — local UDP, no internet")
       srow(this, R.drawable.ic_swap, "Group drop", "Not supported — one receiver per session") {
         AlertDialog.Builder(this@MainActivity, dialogTheme()).setTitle("Group drop")
-          .setMessage("Honest status: not supported. The exact architectural blocker: a group send would need one authenticated NDT1 session per receiver, driven by a SECOND orchestration layer next to the single SendQueueController — while this milestone's rules (one queue, one orchestration, no second transfer system) keep that out of scope. We will not fake it with simulated multi-device rows.")
+          .setMessage("Group Drop is not available yet.\nNexDrop currently supports one receiver per transfer session. " +
+            "The honest blocker: a group send would need one authenticated NDT1 session per receiver with a second orchestration layer — outside this milestone's one-queue architecture. It will not be faked.")
           .setPositiveButton("Close", null).show()
       }
       srow(this, R.drawable.ic_dev, "NFC pairing", "Unavailable — Android Beam was removed in Android 10+")
@@ -2442,7 +2557,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         applyKeepAwake(); render()
       }
       srow(this, R.drawable.ic_bell, "Transfer notifications", if (notifOn) "On" else "Tap to allow") {
-        if (Build.VERSION.SDK_INT >= 33) askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
+        if (Build.VERSION.SDK_INT >= 33) askNotifications()
       }
     })
 
@@ -2787,8 +2902,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
 
   /** SEND flow entry used by Home/FAILED retry where a scan-first flow fits. */
   private fun startSendingLegacyScan() {
-    if (!hasPermission(Manifest.permission.CAMERA)) { askPermission(Manifest.permission.CAMERA, REQ_CAMERA); return }
-    launchScan("Scan the receiver's NexDrop QR")
+    askCameraForScan { launchScan("Scan the receiver's NexDrop QR") }
   }
 
   /**
@@ -2814,7 +2928,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   override fun startTransfer(item: SendQueueController.QueueItem) {
     val pairing = activePairing ?: return
     if (Build.VERSION.SDK_INT >= 33 && !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
-      askPermission(Manifest.permission.POST_NOTIFICATIONS, REQ_NOTIF)
+      askNotifications()
     }
     // State FIRST (renderTransfer reads role/currentName), then the screen.
     role = Role.SEND
@@ -3338,8 +3452,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   // ================= benchmark (Device Test, unchanged logic) =================
   private fun startBenchmark(mib: Int) {
     benchModeMiB = mib
-    if (!hasPermission(Manifest.permission.CAMERA)) { askPermission(Manifest.permission.CAMERA, REQ_CAMERA); return }
-    launchScan("Scan the receiver's NexDrop QR (benchmark $mib MiB)")
+    askCameraForScan { launchScan("Scan the receiver's NexDrop QR (benchmark $mib MiB)") }
   }
 
   private fun runBenchmark(pairing: QrPairing.Pairing, mib: Int) {
@@ -3451,13 +3564,20 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private fun hasPermission(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
   private fun askPermission(p: String, code: Int) { ActivityCompat.requestPermissions(this, arrayOf(p), code) }
   override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-    if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-      when (requestCode) {
-        REQ_CAMERA -> if (benchModeMiB != null) startBenchmark(benchModeMiB!!) else {
-          if (queue.hasQueued()) launchScan("Scan the receiver's NexDrop QR") else { screen = Screen.SEND; render() }
-        }
+    val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+    when (requestCode) {
+      REQ_CAMERA -> {
+        val next = cameraPending; cameraPending = null
+        if (granted) (next ?: { // activity may have been recreated mid-request
+          launchScan(if (benchModeMiB != null) "Scan the receiver's NexDrop QR (benchmark ${benchModeMiB} MiB)"
+            else "Scan the receiver's NexDrop QR")
+        })()
+        else cameraDeniedRecovery()
       }
-    } else toast("Permission required for this mode")
+      REQ_NOTIF -> if (!granted) toast("Notifications are off. Transfers still work, but background progress notifications are unavailable.")
+      REQ_LOC -> if (!granted) toast("Wi-Fi link telemetry stays unavailable. Transfers are unaffected.")
+      else -> {}
+    }
   }
   private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 

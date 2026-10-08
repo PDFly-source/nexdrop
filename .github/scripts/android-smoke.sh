@@ -298,13 +298,17 @@ tap_by_text 'SEND FILES'
 sleep 2
 dump_ui
 grep -qi 'Select files' ui.xml || { echo 'SMOKE FAIL: drop zone missing'; cat ui.xml; exit 1; }
-grep -qi 'CONTINUE' ui.xml || { echo 'SMOKE FAIL: CONTINUE missing'; cat ui.xml; exit 1; }
 grep -qi 'Images' ui.xml || { echo 'SMOKE FAIL: category chips missing'; cat ui.xml; exit 1; }
+# v1.5 readiness: the READY TO SEND checklist legitimately pushes the
+# primary action below the fold — assert it with the scroll-aware helper.
+require_text 'CONTINUE'
 if resumed | grep -q CaptureActivity; then echo 'SMOKE FAIL: scanner opened without a file'; exit 1; fi
 # CONTINUE without a file must NOT open the scanner either
 tap_by_text 'CONTINUE'
 sleep 1
 if resumed | grep -q CaptureActivity; then echo 'SMOKE FAIL: scanner opened with no file selected'; exit 1; fi
+adb shell input swipe 160 150 160 500 300   # back to the top for the header audit
+sleep 1
 shot 03-send-files
 echo 'Send files OK — no scanner until a real file is picked'
 
@@ -336,10 +340,14 @@ sleep 8
 adb shell pidof "$PKG" > /dev/null || { echo 'SMOKE FAIL: died starting receive'; adb logcat -d > logcat.txt; exit 1; }
 dump_ui
 grep -qi 'scan this QR' ui.xml || { echo 'SMOKE FAIL: receive QR copy missing'; cat ui.xml; exit 1; }
-grep -qi 'LOCAL DIRECT' ui.xml || { echo 'SMOKE FAIL: LOCAL DIRECT missing'; cat ui.xml; exit 1; }
-grep -qi 'Waiting for device' ui.xml || { echo 'SMOKE FAIL: waiting state missing'; cat ui.xml; exit 1; }
-grep -qi 'Expires' ui.xml || { echo 'SMOKE FAIL: real QR expiry missing'; cat ui.xml; exit 1; }
-grep -qi 'REFRESH QR' ui.xml || { echo 'SMOKE FAIL: REFRESH QR missing'; cat ui.xml; exit 1; }
+# v1.5 readiness: the READY TO RECEIVE checklist sits above the QR, so the
+# lower rows are below the fold — assert them with scroll-aware helpers.
+require_text 'LOCAL DIRECT'
+require_text 'Waiting for device'
+require_text 'Expires'
+require_text 'REFRESH QR'
+adb shell input swipe 160 150 160 500 300   # back to the top: layout audit + QR screenshot
+sleep 1
 assert_layout 'receive' 0
 shot 04-receive-qr
 
