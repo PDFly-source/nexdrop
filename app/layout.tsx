@@ -50,6 +50,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark bg-nd-bg-0 text-nd-text-primary">
       <body className="bg-nd-bg-0 text-nd-text-primary antialiased min-h-screen">
+        {/* Pre-paint gateway hint: on a bare "/" visit (no hash) the prerendered
+            WebApp shell is hidden until React mounts the premium gateway (see
+            components/gateway/Gateway.tsx). Any hash (#/home, #join=…) leaves
+            the WebApp visible exactly as before. Runs before first paint. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){function u(){document.documentElement.classList.toggle('nd-gateway',location.hash==='')}u();addEventListener('hashchange',u)})();",
+          }}
+        />
         {children}
       </body>
     </html>
