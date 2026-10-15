@@ -150,6 +150,13 @@ jobs:
           echo "NEXDROP_KEYSTORE_PASSWORD=${{ secrets.NEXDROP_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
           echo "NEXDROP_KEY_PASSWORD=${{ secrets.NEXDROP_KEY_PASSWORD }}" >> "$GITHUB_ENV"
 
+      - name: Launcher branding regression gate (official artwork, old-icon detection)
+        working-directory: android
+        run: |
+          set -eu
+          cd "$GITHUB_WORKSPACE"
+          npm exec --yes --package=tsx@4.20.5 -- tsx tests/branding.test.ts
+
       - name: Build :app SIGNED release APK (production signing pipeline)
         working-directory: android
         run: ./gradlew --no-daemon --stacktrace :app:assembleRelease
