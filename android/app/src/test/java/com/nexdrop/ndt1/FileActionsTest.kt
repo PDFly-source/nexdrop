@@ -114,10 +114,11 @@ class FileActionsTest {
     assertEquals(File(dl, "moved.apk"), resolved)
   }
 
-  @Test fun pathOutsideAppRootsIsRefused() {
+  @Test fun pathOutsideAppRootsFallsBackToDownloads() {
     val dl = roots()[0]
-    // untrusted persisted path pointing at private app data → refused
-    assertNull(FileMimes.safeResolve(listOf(dl), "/data/data/com.android/files/sec", "sec"))
+    // an untrusted persisted path pointing outside app storage is ignored;
+    // the record still resolves honestly to downloads/<name>
+    assertEquals(File(dl, "sec"), FileMimes.safeResolve(listOf(dl), "/data/data/com.android/files/sec", "sec"))
   }
 
   @Test fun traversalNamesAreRefused() {
