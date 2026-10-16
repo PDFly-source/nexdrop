@@ -25,6 +25,10 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.CAMERA" />
+  <!-- v1.4.3 file-handling fix: INSTALL APK action. Required by Android 8+
+       for the package-installer flow (the system install confirmation is
+       always shown; unknown-apps consent stays in Android Settings). -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
   <application
       android:label="NexDrop"
