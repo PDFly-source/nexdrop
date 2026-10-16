@@ -106,9 +106,9 @@ object FileMimes {
    */
   fun safeResolve(roots: List<File>, persistedPath: String?, name: String): File? {
     fun insideRoots(f: File): Boolean {
-      val canon = try { f.canonicalPath else return false } catch (_: Exception) { return false }
+      val canon = try { f.canonicalPath } catch (_: Exception) { return false }
       return roots.any { root ->
-        val rc = try { root.canonicalPath else return@any false } catch (_: Exception) { return@any false }
+        val rc = try { root.canonicalPath } catch (_: Exception) { return@any false }
         canon == rc || canon.startsWith(rc + File.separator)
       }
     }

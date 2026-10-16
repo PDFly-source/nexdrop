@@ -740,7 +740,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private fun installApkAction(f: File) {
     when (val r = FileActions.installApk(this, f)) {
       is FileActions.FileActionResult.Launched -> toast(r.detail)
-      is FileActions.FileActionResult.Failed -> fileMsg("Install not started", r.detail)
+      is FileActions.FileActionResult.Failed -> fileMsg("Install not started", r.reason)
     }
   }
 
@@ -2371,7 +2371,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         addView(btn("OPEN FILE", "outline", height = 44, weight = 1f) { openFile(f) }.apply {
           layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
         })
-        addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
+        addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
         addView(btn("SAVE FILE", "outline", height = 44, weight = 1f) { saveFile(f) }.apply {
           layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
         })
@@ -2398,7 +2398,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       }.apply {
         layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
       })
-      addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
+      addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
       addView(btn("DONE", "primary", height = 44, weight = 1f) { goRoot(Screen.HOME) }.apply {
         layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
       })
@@ -3481,12 +3481,12 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         append("\nStatus: FAILED")
         if (e.reason.isNotEmpty()) append("\n").append(e.reason)
       }
-    }
-    // v1.4.3 honesty: a record must never imply a file exists that doesn't.
-    if (!e.sent) {
-      append("\nFile: ")
-      if (f != null && f.exists()) append("ON DEVICE · downloads/${f.name}")
-      else append("NOT ON THIS DEVICE (deleted or moved) — record kept for history")
+      // v1.4.3 honesty: a record must never imply a file exists that doesn't.
+      if (!e.sent) {
+        append("\nFile: ")
+        if (f != null && f.exists()) append("ON DEVICE · downloads/${f.name}")
+        else append("NOT ON THIS DEVICE (deleted or moved) — record kept for history")
+      }
     }
     // NOTE: appcompat's AlertDialog silently drops the item list when a
     // message is also set (verified live: title+message rendered, items
