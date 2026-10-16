@@ -3571,7 +3571,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private fun shareFile(f: File) {
     when (val r = FileActions.share(this, f)) {
       is FileActions.FileActionResult.Launched -> {}
-      is FileActions.FileActionResult.Failed -> fileMsg("Share failed", r.detail)
+      is FileActions.FileActionResult.Failed -> fileMsg("Share failed", r.reason)
     }
   }
 
@@ -3606,7 +3606,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private fun openFile(f: File) {
     when (val r = FileActions.open(this, f)) {
       is FileActions.FileActionResult.Launched -> {}
-      is FileActions.FileActionResult.Failed -> fileMsg("Could not open file", r.detail)
+      is FileActions.FileActionResult.Failed -> fileMsg("Could not open file", r.reason)
     }
   }
 
