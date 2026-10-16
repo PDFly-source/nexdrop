@@ -29,7 +29,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
@@ -699,6 +698,56 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   private var lastNotifMs = 0L
 
   // ---- activity result contracts (unchanged engine flow) ----
+  /**
+   * v1.4.3 SAVE FILE (SAF): one in-flight save at a time. The source file
+   * is only ever READ — a save never moves, modifies or deletes it.
+   */
+  @Volatile private var savePending: File? = null
+  /** v1.4.3 multi-file fix: EVERY file completed in this receive session,
+   *  in arrival order — the result screen exposes per-file actions for all
+   *  of them, never only the last one. Cleared when a new session starts. */
+  private val sessionReceived = java.util.concurrent.CopyOnWriteArrayList<File>()
+  private val saveDoc = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    val source = savePending
+    savePending = null
+    if (result.resultCode != RESULT_OK || result.data?.data == null) {
+      toast("Save cancelled")
+      return@registerForActivityResult
+    }
+    if (source == null) { toast("Nothing to save"); return@registerForActivityResult }
+    val target = result.data!!.data!!
+    thread(name = "ndt1-save") {
+      val res = FileActions.copyTo(contentResolver, source, target)
+      runOnUiThread { when (res) {
+        is FileActions.SaveResult.Saved ->
+          toast("Saved ${res.displayName} · ${SpeedFormat.bytesText(res.bytes)} (size verified)")
+        is FileActions.SaveResult.Failed -> fileMsg("Save failed", res.reason)
+      } }
+    }
+  }
+  private fun saveFile(f: File) {
+    if (!f.exists()) { fileMsg("Save failed", "File not found on this device. It may have been deleted or moved."); return }
+    savePending = f
+    try { saveDoc.launch(FileActions.saveIntent(this, f)) } catch (e: Exception) {
+      savePending = null
+      fileMsg("Save failed", "Could not open the save dialog: ${e.message ?: "unsupported on this device"}.")
+    }
+  }
+  /** Honest, actionable file-action feedback (long messages don't fit a toast). */
+  private fun fileMsg(title: String, message: String) {
+    AlertDialog.Builder(this, dialogTheme())
+      .setTitle(title)
+      .setMessage(message)
+      .setPositiveButton("OK", null)
+      .show()
+  }
+  private fun installApkAction(f: File) {
+    when (val r = FileActions.installApk(this, f)) {
+      is FileActions.FileActionResult.Launched -> toast(r.detail)
+      is FileActions.FileActionResult.Failed -> fileMsg("Install not started", r.reason)
+    }
+  }
+
   private val scanQr = registerForActivityResult(ScanContract()) { result ->
     val contentQr = result.contents
     if (contentQr.isNullOrEmpty()) return@registerForActivityResult
@@ -1649,6 +1698,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   }
 
   private fun startReceiving() {
+    sessionReceived.clear() // v1.4.3: fresh receive session, fresh per-file list
     val endpoint = LocalNet.select(activeWifiInterface())
     if (endpoint == null) { screen = Screen.UNAVAILABLE; render(); return }
     val session = Handshake.newSessionToken()
@@ -2316,15 +2366,65 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       }
     }
 
-    // buttons — Open/Done stay; Share summary + View history added (Phase 5)
+    // buttons — v1.4.3 file actions: OPEN / SAVE / INSTALL APK / SHARE FILE
+    // (real actions on the actual received file; APK files get the
+    // package-installer route), then DONE. DONE never deletes the file.
     content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0).apply { weight = 1f } })
-    val btns = row()
     val f = currentFile
-    if (f != null) btns.addView(btn("OPEN FILE", "outline") { openFile(f) })
-    else btns.addView(btn("OPEN FILE", "outline") { toast("Nothing to open on this device") })
-    btns.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
-    btns.addView(btn("DONE", "primary") { goRoot(Screen.HOME) })
-    content.addView(btns)
+    // v1.4.3 multi-file fix: in a multi-file receive session the result
+    // screen exposes actions for EVERY received file — tap a row to get
+    // that file's own Open / Save / (Install) / Share. Never only the last
+    // file. Single-file sessions and the send role keep the direct buttons.
+    if (role == Role.RECEIVE && sessionReceived.size > 1) {
+      content.addView(textView("RECEIVED FILES · ${sessionReceived.size}", 12.5f, D.MUTED, 700, 1).apply {
+        gravity = Gravity.CENTER; setPadding(0, dp(2), 0, dp(4))
+      })
+      sessionReceived.forEach { received ->
+        content.addView(btn("${received.name} · ${SpeedFormat.bytesText(received.length())}", "outline", height = 40) {
+          fileActionsDialog(received)
+        }.apply {
+          layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(40))
+          contentDescription = "Actions for ${received.name}"
+        })
+        content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(4)) })
+      }
+    } else if (f != null && f.exists()) {
+      content.addView(row().apply {
+        addView(btn("OPEN FILE", "outline", height = 44, weight = 1f) { openFile(f) }.apply {
+          layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
+        })
+        addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
+        addView(btn("SAVE FILE", "outline", height = 44, weight = 1f) { saveFile(f) }.apply {
+          layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
+        })
+      })
+      if (FileMimes.isApkName(f.name)) {
+        content.addView(btn("INSTALL APK", "outline", height = 44) { installApkAction(f) }.apply {
+          layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44))
+          contentDescription = "Install ${f.name} via Android's package installer"
+        })
+      }
+      content.addView(btn("SHARE FILE", "outline", height = 44) { shareFile(f) }.apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44))
+        contentDescription = "Share the received file bytes"
+      })
+    } else if (f != null) {
+      content.addView(btn("OPEN FILE", "outline") { openFile(f) }) // honest missing-file error from FileActions
+    } else {
+      content.addView(btn("OPEN FILE", "outline") { toast("Nothing to open on this device") })
+    }
+    content.addView(row().apply {
+      setPadding(0, dp(8), 0, 0)
+      addView(btn(if (role == Role.SEND) "KEEP SENDING" else "KEEP RECEIVING", "outline", height = 44, weight = 1f) {
+        if (role == Role.SEND) { screen = Screen.SEND; render() } else startReceiving()
+      }.apply {
+        layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
+      })
+      addView(Space(this@MainActivity).apply { layoutParams = LinearLayout.LayoutParams(dp(10), 1) })
+      addView(btn("DONE", "primary", height = 44, weight = 1f) { goRoot(Screen.HOME) }.apply {
+        layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
+      })
+    })
     content.addView(row().apply {
       setPadding(0, dp(8), 0, 0)
       addView(btn("SHARE SUMMARY", "outline", height = 44, weight = 1f) { shareSummary() }.apply {
@@ -2335,13 +2435,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
       })
     })
-    content.addView(btn(if (role == Role.SEND) "KEEP SENDING" else "KEEP RECEIVING", "text", height = 36) {
-      screen = if (role == Role.SEND) Screen.SEND else { startReceiving(); return@btn }
-      render()
-    }.apply {
-      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36))
-      setPadding(0, dp(2), 0, dp(2))
-    })
+
 
     // TRUSTED DEVICES (v1.4): offered only after a SHA-256-verified transfer
     // from a sender whose stable identity arrived via real beacon packets.
@@ -3150,11 +3244,12 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     screen = Screen.HOME; render()
   }
 
-  private fun recordHistory(name: String, bps: Double?, durMs: Long?, sha: String, verified: Boolean, resumed: Boolean = false) {
+  private fun recordHistory(name: String, bps: Double?, durMs: Long?, sha: String, verified: Boolean, resumed: Boolean = false, path: String = "") {
     HistoryStore.record(this, HistoryStore.Entry(
       name = name, bytes = currentSize, sent = role == Role.SEND,
       atMs = System.currentTimeMillis(), sha256 = sha, verified = verified,
-      speedBps = bps ?: 0.0, durationMs = durMs ?: 0L, resumed = resumed))
+      speedBps = bps ?: 0.0, durationMs = durMs ?: 0L, resumed = resumed,
+      path = path))
   }
 
   /**
@@ -3360,8 +3455,11 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       completedSha = sha256
       completedStats = stats
       currentFile = file
+      // v1.4.3: honest stored name (may carry the duplicate-name "(n)" suffix)
+      currentName = file.name
+      sessionReceived.add(file)
       hideTransferUi()
-      recordHistory(file.name, stats.averageBps, stats.durationMs, sha256, verified = true)
+      recordHistory(file.name, stats.averageBps, stats.durationMs, sha256, verified = true, path = file.absolutePath)
       backStack.clear(); screen = Screen.RESULT
       render()
       // v1.5 Phase F INCOMING TEXT: a real bounded .txt that arrived through
@@ -3385,32 +3483,18 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   }
 
   /**
-   * History actions (§7): detail + OPEN / SHARE / DELETE / RETRY — every
-   * action gated on REAL state (file on disk, real failure record).
+   * Shared action-sheet dialog (v1.4.3): title + honest details + full-width
+   * action rows. ONE implementation used by BOTH the History record dialog
+   * and the multi-file Transfer Complete list — every action goes through
+   * the same shared FileActions service.
    */
-  private fun historyActions(e: HistoryStore.Entry) {
-    val f = File(File(getExternalFilesDir(null) ?: filesDir, "downloads"), e.name)
-    val details = buildString {
-      append(SpeedFormat.bytesText(e.bytes)).append(if (e.sent) "  ·  Sent" else "  ·  Received")
-      append("  ·  ").append(HistoryStore.dayLabel(e.atMs))
-      if (e.status == "Cancelled") {
-        append("\nStatus: CANCELLED — by user, honestly recorded")
-        append("\nSHA-256: not verified (no completion)")
-      } else if (e.status != "Failed") {
-        append("\n").append(UiSpeed.speedText(e.speedBps)).append("  ·  ")
-          .append(UiSpeed.durationText(e.durationMs))
-        append("\nSHA-256: ").append(if (e.verified) "VERIFIED" else "unverified")
-        if (e.resumed) append("\nResumed from durable offset after a connection drop")
-      } else {
-        append("\nStatus: FAILED")
-        if (e.reason.isNotEmpty()) append("\n").append(e.reason)
-      }
-    }
+  private fun actionSheet(fileName: String, details: String,
+    addActions: (((String, () -> Unit) -> Unit)) -> Unit) {
     // NOTE: appcompat's AlertDialog silently drops the item list when a
     // message is also set (verified live: title+message rendered, items
     // didn't), so the action list is a custom view in the app's own style.
     val box = col().apply { setPadding(dp(6), dp(14), dp(6), dp(4)) }
-    box.addView(textView(e.name, 17f, D.TEXT, 700, 1).apply {
+    box.addView(textView(fileName, 17f, D.TEXT, 700, 1).apply {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     })
     box.addView(textView(details, 12.5f, D.MUTED, 500).apply {
@@ -3441,8 +3525,73 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         }
       })
     }
-    if (!e.sent && e.status !in listOf("Failed", "Cancelled") && f.exists()) {
+    addActions { label, fn -> act(label, fn) }
+    dlg.show()
+  }
+
+  /**
+   * v1.4.3 multi-file fix: per-file actions from the Transfer Complete
+   * list — every received file gets its own Open / Save / (Install) / Share,
+   * resolved to THAT exact file, never only the last one.
+   */
+  private fun fileActionsDialog(f: File) {
+    actionSheet(f.name, SpeedFormat.bytesText(f.length()) + "  ·  received in this session") { act ->
       act("Open file") { openFile(f) }
+      act("Save file") { saveFile(f) }
+      if (FileMimes.isApkName(f.name)) act("Install APK") { installApkAction(f) }
+      act("Share") { shareFile(f) }
+      if (TextSharePolicy.isShareableText(f.name, f.length())) {
+        act("Copy text") {
+          try {
+            val cm = getSystemService(android.content.ClipboardManager::class.java)
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("NexDrop", f.readText()))
+            toast("Copied to clipboard")
+          } catch (_: Exception) { toast("Could not read the text") }
+        }
+      }
+    }
+  }
+
+  /**
+   * History actions (§7): detail + OPEN / SHARE / DELETE / RETRY — every
+   * action gated on REAL state (file on disk, real failure record).
+   */
+  private fun historyActions(e: HistoryStore.Entry) {
+    // v1.4.3: resolve the record's file through the guarded shared path
+    // (persisted absolute path first, downloads/name fallback; traversal
+    // and out-of-app paths are refused).
+    val f = HistoryStore.resolveFile(this, e)
+    val details = buildString {
+      append(SpeedFormat.bytesText(e.bytes)).append(if (e.sent) "  ·  Sent" else "  ·  Received")
+      append("  ·  ").append(HistoryStore.dayLabel(e.atMs))
+      if (e.status == "Cancelled") {
+        append("\nStatus: CANCELLED — by user, honestly recorded")
+        append("\nSHA-256: not verified (no completion)")
+      } else if (e.status != "Failed") {
+        append("\n").append(UiSpeed.speedText(e.speedBps)).append("  ·  ")
+          .append(UiSpeed.durationText(e.durationMs))
+        append("\nSHA-256: ").append(if (e.verified) "VERIFIED" else "unverified")
+        if (e.resumed) append("\nResumed from durable offset after a connection drop")
+      } else {
+        append("\nStatus: FAILED")
+        if (e.reason.isNotEmpty()) append("\n").append(e.reason)
+      }
+      // v1.4.3 honesty: a record must never imply a file exists that doesn't.
+      if (!e.sent) {
+        append("\nFile: ")
+        if (f != null && f.exists()) append("ON DEVICE · downloads/${f.name}")
+        else append("NOT ON THIS DEVICE (deleted or moved) — record kept for history")
+      }
+    }
+    // v1.4.3: the action list moved into the shared actionSheet() dialog —
+    // ONE implementation used by BOTH History records and the multi-file
+    // Transfer Complete list.
+    actionSheet(e.name, details) { act ->
+    val fileOnDevice = !e.sent && e.status !in listOf("Failed", "Cancelled") && f != null && f.exists()
+    if (fileOnDevice && f != null) {
+      act("Open file") { openFile(f) }
+      act("Save file") { saveFile(f) }
+      if (FileMimes.isApkName(f.name)) act("Install APK") { installApkAction(f) }
       act("Share") { shareFile(f) }
       // v1.5 Phase F: real bounded .txt records offer explicit Copy text.
       if (TextSharePolicy.isShareableText(f.name, f.length())) {
@@ -3475,22 +3624,19 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       toast("Record deleted")
       render()
     }
-    dlg.show()
+    }
   }
 
-  /** Real SHARE of a received file via FileProvider (never a copy to RAM). */
+  /**
+   * Real SHARE of a received file via the shared FileActions service
+   * (v1.4.3): robust MIME (APK shares as package-archive), ClipData grant
+   * — never a copy to RAM, never a file:// URI.
+   */
   private fun shareFile(f: File) {
-    try {
-      val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", f)
-      val ext = f.extension.lowercase()
-      val mime = android.webkit.MimeTypeMap.getSingleton()
-        .getMimeTypeFromExtension(ext) ?: "application/octet-stream"
-      startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-        type = mime
-        putExtra(Intent.EXTRA_STREAM, uri)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-      }, "Share ${f.name}"))
-    } catch (_: Exception) { toast("No app can share this file type") }
+    when (val r = FileActions.share(this, f)) {
+      is FileActions.FileActionResult.Launched -> {}
+      is FileActions.FileActionResult.Failed -> fileMsg("Share failed", r.reason)
+    }
   }
 
   /** Shareable completion summary (Phase 5) — every value from THIS transfer. */
@@ -3514,18 +3660,17 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     } catch (_: Exception) { toast("Sharing unavailable") }
   }
 
+  /**
+   * OPEN via the shared FileActions service (v1.4.3). Root-cause fix:
+   * direct ACTION_VIEW (no chooser wrapper), robust MIME table (MimeTypeMap
+   * has no .apk entry on most devices), existence check with an honest
+   * recovery message, ClipData + grant for URI acceptance. Success is only
+   * reported when the system actually accepted the launch request.
+   */
   private fun openFile(f: File) {
-    try {
-      val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", f)
-      val ext = f.extension.lowercase()
-      val mime = android.webkit.MimeTypeMap.getSingleton()
-        .getMimeTypeFromExtension(ext) ?: "application/octet-stream"
-      startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, mime)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-      }, "Open ${f.name}"))
-    } catch (e: Exception) {
-      toast("No app can open this file type")
+    when (val r = FileActions.open(this, f)) {
+      is FileActions.FileActionResult.Launched -> {}
+      is FileActions.FileActionResult.Failed -> fileMsg("Could not open file", r.reason)
     }
   }
 

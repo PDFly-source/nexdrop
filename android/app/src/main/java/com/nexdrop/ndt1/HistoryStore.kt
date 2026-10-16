@@ -24,6 +24,9 @@ object HistoryStore {
     val status: String = "Done", // Done | Failed | Cancelled (real outcomes only)
     val reason: String = "",    // failure reason when status=Failed
     val resumed: Boolean = false, // v1.5 Phase F: completed after ≥1 real durable-offset resume
+    /** v1.4.3: durable absolute path of the RECEIVED file (empty for sent
+     *  records and old records — those fall back to downloads/<name>). */
+    val path: String = "",
   )
 
   private const val FILE = "transfer-history.json"
@@ -47,6 +50,7 @@ object HistoryStore {
         status = j.optString("status", if (j.optBoolean("ok")) "Done" else "Failed"),
         reason = j.optString("reason", ""),
         resumed = j.optBoolean("resumed"),
+        path = j.optString("path", ""),
       )
     }
   } catch (_: Exception) { emptyList() }
@@ -80,6 +84,7 @@ object HistoryStore {
         put("at", e.atMs); put("sha", e.sha256); put("ok", e.verified)
         put("bps", e.speedBps); put("dur", e.durationMs)
         put("status", e.status); put("reason", e.reason); put("resumed", e.resumed)
+        if (e.path.isNotEmpty()) put("path", e.path)
       })
       // bound: keep the newest MAX records
       val trimmed = JSONArray()
@@ -99,6 +104,18 @@ object HistoryStore {
     "FAILED" -> list.filter { it.status == "Failed" }
     "CANCELLED" -> list.filter { it.status == "Cancelled" }
     else -> list // ALL
+  }
+
+  /**
+   * v1.4.3 — resolve a record's real file, safely. The persisted absolute
+   * path wins when it is still valid; downloads/<name> is the fallback for
+   * old records. FileMimes.safeResolve guards against traversal and any
+   * path outside the app's own storage roots (untrusted JSON input).
+   */
+  fun resolveFile(context: Context, e: Entry): File? {
+    val roots = listOfNotNull(context.getExternalFilesDir(null), context.filesDir)
+      .map { File(it, "downloads") }
+    return FileMimes.safeResolve(roots, e.path.takeIf { it.isNotEmpty() }, e.name)
   }
 
   /** "Today" / "Yesterday" / "12 Mar" — same words as the mockup. */

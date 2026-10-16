@@ -36,7 +36,11 @@ class PermissionReadinessTests {
       "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", // Device Test telemetry only (runtime)
       "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_DATA_SYNC", // background transfers
       "POST_NOTIFICATIONS",             // optional, 13+ (runtime)
-      "CAMERA"                          // QR scanning only (runtime)
+      "CAMERA",                         // QR scanning only (runtime)
+      // v1.4.3: INSTALL APK action (received APK files) — required by
+      // Android 8+ for the package-installer flow. Never bypasses the
+      // system install confirmation or the unknown-apps consent screen.
+      "REQUEST_INSTALL_PACKAGES"
     ), perms)
   }
 

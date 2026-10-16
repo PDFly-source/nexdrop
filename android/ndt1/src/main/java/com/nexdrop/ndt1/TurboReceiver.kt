@@ -252,7 +252,13 @@ class TurboReceiver(
               listener.onProgress(durable, offer.sizeBytes)
               val (_, senderSha) = decodeComplete(frame.second)
               val receiverSha = writer.sha256Hex()
-              val target = File(downloadDir, offer.name)
+              // v1.4.3 duplicate-name fix: a file that already exists in the
+              // download dir is NEVER silently overwritten — the new copy
+              // gets a deterministic " (n)" suffix, first free slot. Wire
+              // protocol, chunking and SHA-256 verification are untouched;
+              // this only names the verified bytes on disk.
+              val target = File(downloadDir,
+                FileNaming.collisionFreeName(offer.name) { candidate -> File(downloadDir, candidate).exists() })
               if (receiverSha == senderSha) {
                 writer.finalizeTo(target)
                 synchronized(out) { out.write(encodeHeader(FrameType.VERIFY_OK, 4) + encodeOffset(offer.fileId, 0).copyOf(4)) }
