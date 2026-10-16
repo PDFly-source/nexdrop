@@ -703,6 +703,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
    * is only ever READ — a save never moves, modifies or deletes it.
    */
   @Volatile private var savePending: File? = null
+  /** v1.4.3 multi-file fix: EVERY file completed in this receive session,
+   *  in arrival order — the result screen exposes per-file actions for all
+   *  of them, never only the last one. Cleared when a new session starts. */
+  private val sessionReceived = java.util.concurrent.CopyOnWriteArrayList<File>()
   private val saveDoc = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
     val source = savePending
     savePending = null
@@ -1694,6 +1698,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
   }
 
   private fun startReceiving() {
+    sessionReceived.clear() // v1.4.3: fresh receive session, fresh per-file list
     val endpoint = LocalNet.select(activeWifiInterface())
     if (endpoint == null) { screen = Screen.UNAVAILABLE; render(); return }
     val session = Handshake.newSessionToken()
@@ -2366,7 +2371,24 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     // package-installer route), then DONE. DONE never deletes the file.
     content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, 0).apply { weight = 1f } })
     val f = currentFile
-    if (f != null && f.exists()) {
+    // v1.4.3 multi-file fix: in a multi-file receive session the result
+    // screen exposes actions for EVERY received file — tap a row to get
+    // that file's own Open / Save / (Install) / Share. Never only the last
+    // file. Single-file sessions and the send role keep the direct buttons.
+    if (role == Role.RECEIVE && sessionReceived.size > 1) {
+      content.addView(textView("RECEIVED FILES · ${sessionReceived.size}", 12.5f, D.MUTED, 700, 1).apply {
+        gravity = Gravity.CENTER; setPadding(0, dp(2), 0, dp(4))
+      })
+      sessionReceived.forEach { received ->
+        content.addView(btn("${received.name} · ${SpeedFormat.bytesText(received.length())}", "outline", height = 40) {
+          fileActionsDialog(received)
+        }.apply {
+          layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(40))
+          contentDescription = "Actions for ${received.name}"
+        })
+        content.addView(Space(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(4)) })
+      }
+    } else if (f != null && f.exists()) {
       content.addView(row().apply {
         addView(btn("OPEN FILE", "outline", height = 44, weight = 1f) { openFile(f) }.apply {
           layoutParams = LinearLayout.LayoutParams(0, dp(44)).apply { weight = 1f }
@@ -3433,6 +3455,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       completedSha = sha256
       completedStats = stats
       currentFile = file
+      // v1.4.3: honest stored name (may carry the duplicate-name "(n)" suffix)
+      currentName = file.name
+      sessionReceived.add(file)
       hideTransferUi()
       recordHistory(file.name, stats.averageBps, stats.durationMs, sha256, verified = true, path = file.absolutePath)
       backStack.clear(); screen = Screen.RESULT
@@ -3455,6 +3480,76 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
 
   override fun onError(message: String) {
     runOnUiThread { transferFailed(message) }
+  }
+
+  /**
+   * Shared action-sheet dialog (v1.4.3): title + honest details + full-width
+   * action rows. ONE implementation used by BOTH the History record dialog
+   * and the multi-file Transfer Complete list — every action goes through
+   * the same shared FileActions service.
+   */
+  private fun actionSheet(fileName: String, details: String,
+    addActions: (((String, () -> Unit) -> Unit)) -> Unit) {
+    // NOTE: appcompat's AlertDialog silently drops the item list when a
+    // message is also set (verified live: title+message rendered, items
+    // didn't), so the action list is a custom view in the app's own style.
+    val box = col().apply { setPadding(dp(6), dp(14), dp(6), dp(4)) }
+    box.addView(textView(fileName, 17f, D.TEXT, 700, 1).apply {
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    })
+    box.addView(textView(details, 12.5f, D.MUTED, 500).apply {
+      setPadding(0, dp(8), 0, dp(4))
+      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    })
+    val dlg = AlertDialog.Builder(this, dialogTheme())
+      .setView(box)
+      .setPositiveButton("Close", null)
+      .create()
+    fun act(label: String, fn: () -> Unit) {
+      box.addView(TextView(this).apply {
+        text = label
+        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13.5f)
+        typeface = Fonts.sora(this@MainActivity, 600)
+        letterSpacing = 0.04f
+        setTextColor(D.PRIMARY)
+        gravity = Gravity.CENTER
+        includeFontPadding = false
+        isClickable = true
+        background = android.graphics.drawable.GradientDrawable().apply {
+          setStroke(dp(1), D.argb(64, D.PRIMARY))
+          cornerRadius = dp(12).toFloat()
+        }
+        setOnClickListener { dlg.dismiss(); fn() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply {
+          topMargin = dp(8)
+        }
+      })
+    }
+    addActions { label, fn -> act(label, fn) }
+    dlg.show()
+  }
+
+  /**
+   * v1.4.3 multi-file fix: per-file actions from the Transfer Complete
+   * list — every received file gets its own Open / Save / (Install) / Share,
+   * resolved to THAT exact file, never only the last one.
+   */
+  private fun fileActionsDialog(f: File) {
+    actionSheet(f.name, SpeedFormat.bytesText(f.length()) + "  ·  received in this session") { act ->
+      act("Open file") { openFile(f) }
+      act("Save file") { saveFile(f) }
+      if (FileMimes.isApkName(f.name)) act("Install APK") { installApkAction(f) }
+      act("Share") { shareFile(f) }
+      if (TextSharePolicy.isShareableText(f.name, f.length())) {
+        act("Copy text") {
+          try {
+            val cm = getSystemService(android.content.ClipboardManager::class.java)
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("NexDrop", f.readText()))
+            toast("Copied to clipboard")
+          } catch (_: Exception) { toast("Could not read the text") }
+        }
+      }
+    }
   }
 
   /**
@@ -3488,41 +3583,10 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
         else append("NOT ON THIS DEVICE (deleted or moved) — record kept for history")
       }
     }
-    // NOTE: appcompat's AlertDialog silently drops the item list when a
-    // message is also set (verified live: title+message rendered, items
-    // didn't), so the action list is a custom view in the app's own style.
-    val box = col().apply { setPadding(dp(6), dp(14), dp(6), dp(4)) }
-    box.addView(textView(e.name, 17f, D.TEXT, 700, 1).apply {
-      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-    })
-    box.addView(textView(details, 12.5f, D.MUTED, 500).apply {
-      setPadding(0, dp(8), 0, dp(4))
-      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-    })
-    val dlg = AlertDialog.Builder(this, dialogTheme())
-      .setView(box)
-      .setPositiveButton("Close", null)
-      .create()
-    fun act(label: String, fn: () -> Unit) {
-      box.addView(TextView(this).apply {
-        text = label
-        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13.5f)
-        typeface = Fonts.sora(this@MainActivity, 600)
-        letterSpacing = 0.04f
-        setTextColor(D.PRIMARY)
-        gravity = Gravity.CENTER
-        includeFontPadding = false
-        isClickable = true
-        background = android.graphics.drawable.GradientDrawable().apply {
-          setStroke(dp(1), D.argb(64, D.PRIMARY))
-          cornerRadius = dp(12).toFloat()
-        }
-        setOnClickListener { dlg.dismiss(); fn() }
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply {
-          topMargin = dp(8)
-        }
-      })
-    }
+    // v1.4.3: the action list moved into the shared actionSheet() dialog —
+    // ONE implementation used by BOTH History records and the multi-file
+    // Transfer Complete list.
+    actionSheet(e.name, details) { act ->
     val fileOnDevice = !e.sent && e.status !in listOf("Failed", "Cancelled") && f != null && f.exists()
     if (fileOnDevice && f != null) {
       act("Open file") { openFile(f) }
@@ -3560,7 +3624,7 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
       toast("Record deleted")
       render()
     }
-    dlg.show()
+    }
   }
 
   /**

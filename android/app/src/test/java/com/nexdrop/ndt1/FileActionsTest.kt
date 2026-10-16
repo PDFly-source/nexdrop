@@ -3,6 +3,7 @@ package com.nexdrop.ndt1
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -158,5 +159,44 @@ class FileActionsTest {
     assertEquals(4, head?.size)
     assertTrue(head!!.contentEquals(zipMagic))
     assertTrue(f.delete())
+  }
+
+  // ---- v1.4.3 multi-file fix: every record resolves to ITS OWN file ----
+
+  @Test fun multiFileRecordsResolveIndividually() {
+    val dl = roots()[0]
+    val f1 = File(dl, "photo.jpg").apply { writeText("one") }
+    // the collision-renamed second copy must be its OWN resolvable record
+    val f2 = File(dl, "photo (1).jpg").apply { writeText("two") }
+    val r1 = FileMimes.safeResolve(listOf(dl), f1.absolutePath, "photo.jpg")
+    val r2 = FileMimes.safeResolve(listOf(dl), f2.absolutePath, "photo (1).jpg")
+    assertEquals(f1.absolutePath, r1?.absolutePath)
+    assertEquals(f2.absolutePath, r2?.absolutePath)
+    assertNotEquals(r1?.absolutePath, r2?.absolutePath)
+    f1.delete(); f2.delete()
+  }
+
+  @Test fun missingFileRecordDoesNotAffectSiblingRecords() {
+    val dl = roots()[0]
+    val f2 = File(dl, "kept.pdf").apply { writeText("keep") }
+    // record 1's file was deleted; record 2 still resolves exactly
+    val r1 = FileMimes.safeResolve(listOf(dl), File(dl, "gone.apk").absolutePath, "gone.apk")
+    val r2 = FileMimes.safeResolve(listOf(dl), f2.absolutePath, "kept.pdf")
+    assertEquals(File(dl, "gone.apk"), r1) // resolution returns the path; existence is the caller's honest check
+    assertEquals(f2.absolutePath, r2?.absolutePath)
+    f2.delete()
+  }
+
+  @Test fun duplicateReceiveNeverOverwritesExistingFile() {
+    // the ndt1 FileNaming contract, exercised through the same package the
+    // receiver uses at the finalize step: same offer name twice -> two
+    // distinct stored names, the first file preserved untouched
+    val taken = mutableSetOf("data.zip")
+    val n1 = FileNaming.collisionFreeName("data.zip") { it in taken }
+    assertEquals("data (1).zip", n1)
+    taken.add(n1)
+    val n2 = FileNaming.collisionFreeName("data.zip") { it in taken }
+    assertEquals("data (2).zip", n2)
+    assertNotEquals(n1, n2)
   }
 }
