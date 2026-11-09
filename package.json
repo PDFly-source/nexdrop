@@ -1,6 +1,6 @@
 {
   "name": "nexdrop",
-  "version": "1.0.0",
+  "version": "1.5.0",
   "private": true,
   "description": "NexDrop \u2014 Private, Direct, Fast P2P file & text sharing. 100% client-side, no server, no accounts.",
   "scripts": {
