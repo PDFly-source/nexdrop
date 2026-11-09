@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { BrandSplash } from '@/components/brand/BrandSplash';
 
 const SITE_URL = 'https://pdfly-source.github.io/nexdrop/';
 
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark bg-nd-bg-0 text-nd-text-primary">
       <body className="bg-nd-bg-0 text-nd-text-primary antialiased min-h-screen">
+      <BrandSplash />
         {/* Pre-paint gateway hint: on a bare "/" visit (no hash) the prerendered
             WebApp shell is hidden until React mounts the premium gateway (see
             components/gateway/Gateway.tsx). Any hash (#/home, #join=…) leaves
