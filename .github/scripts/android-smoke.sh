@@ -303,9 +303,14 @@ RESOLVE=$(adb shell cmd package resolve-activity --brief -a android.intent.actio
 echo "resolve-activity: ${RESOLVE:-<empty>}"
 QA=$(adb shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER com.nexdrop.ndt1 2>&1 | tail -3 | tr -d '\r' || true)
 echo "query-activities: ${QA:-<empty>}"
-case "$RESOLVE" in *com.nexdrop.ndt1/.SplashActivity*) echo 'PREFLIGHT: launcher=SplashActivity PASS';;
-  *) case "$QA" in *com.nexdrop.ndt1/.SplashActivity*) echo "PREFLIGHT: resolve-activity failed, query-activities PASS ($QA)";; SPLASH_FAIL=1;;
-     *) echo 'PREFLIGHT: launcher resolution FAIL - stopping before splash tests'; SPLASH_FAIL=1;; esac;; esac
+PREFLIGHT_OK=0
+case "$RESOLVE$QA" in *com.nexdrop.ndt1/.SplashActivity*) PREFLIGHT_OK=1;; esac
+if [ "$PREFLIGHT_OK" -eq 1 ]; then
+  echo 'PREFLIGHT: launcher=SplashActivity PASS'
+else
+  echo 'PREFLIGHT: launcher resolution FAIL - stopping before splash tests'
+  SPLASH_FAIL=1
+fi
 if [ "$SPLASH_FAIL" -ne 0 ]; then echo 'PREFLIGHT BLOCKED - splash matrix not executed'; diag preflight-blocked; exit 1; fi
 
 echo '== S1) launcher intent resolves to SplashActivity =='
