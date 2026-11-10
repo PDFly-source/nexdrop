@@ -24,7 +24,7 @@ android {
     // maintenance: recovered-transfer result-average scope fix (display
     // telemetry only — wire protocol, durability, resume, SHA-256 and
     // performance byte-identical to 1.4.2)
-    versionName = (project.findProperty("versionNameOverride") as String?) ?: "1.5.1"
+    versionName = "1.5.1"
     // v1.5 Phase C: instrumented preview tests (PreviewInstrumentedTest)
     // run on the CI emulator via :app:connectedDebugAndroidTest.
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
