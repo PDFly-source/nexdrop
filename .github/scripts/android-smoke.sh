@@ -251,7 +251,7 @@ PYA
 }
 resumed_component() {
   # dumpsys prints the task stack first, so `grep -m1` matched a STALE task entry
-  # and never the resumed activity. mResumedActivity is authoritative; window
+  # and never the resumed_component activity. mResumedActivity is authoritative; window
   # focus is the fallback when the field is absent on newer builds.
   local out
   out=$(adb shell dumpsys activity activities 2>/dev/null | grep -m1 -E "mResumedActivity|topResumedActivity" || true)
@@ -266,7 +266,7 @@ mkdir -p screenshots
 diag() {
   local t="$1"
   mkdir -p screenshots
-  { echo "# diag $t $(date -u +%FT%TZ)"; echo "# pid=$(pid_now)"; echo "# resumed=$(resumed_component)"; echo "# mainRecords=$(main_records)"; } > "screenshots/diag-$t.txt"
+  { echo "# diag $t $(date -u +%FT%TZ)"; echo "# pid=$(pid_now)"; echo "# resumed_component=$(resumed_component)"; echo "# mainRecords=$(main_records)"; } > "screenshots/diag-$t.txt"
   adb shell dumpsys activity activities >> "screenshots/diag-$t.txt" 2>&1 || true
   adb logcat -d -s NexDropSplash:V AndroidRuntime:E ActivityTaskManager:I > "screenshots/diag-$t-logcat.txt" 2>&1 || true
   tail -40 "screenshots/diag-$t-logcat.txt" || true
@@ -378,12 +378,12 @@ RC=0; AMOUT=$(adb shell am start -W -a android.intent.action.MAIN -c android.int
 echo "am start rc=$RC :: $(printf '%s' "$AMOUT" | tr '\n' ' ' | cut -c1-160)"
 [ "$RC" -eq 0 ] || { echo "SPLASH: am start FAILED rc=$RC"; SPLASH_FAIL=1; diag s2-amstart-failed; }
 sleep 0.7; adb exec-out screencap -p > screenshots/30-splash-cold.png
-TOP=$(resumed); echo "resumed during splash window: $TOP"
-case "$TOP" in *SplashActivity*) echo "SPLASH: rendered PASS (resumed=$TOP, pid=$(pid_now))";; *) echo "SPLASH: rendered FAIL (resumed=$TOP)"; SPLASH_FAIL=1;; esac
+TOP=$(resumed_component); echo "resumed_component during splash window: $TOP"
+case "$TOP" in *SplashActivity*) echo "SPLASH: rendered PASS (resumed_component=$TOP, pid=$(pid_now))";; *) echo "SPLASH: rendered FAIL (resumed_component=$TOP)"; SPLASH_FAIL=1;; esac
 diag s2-splash
 T0=$(date +%s%N)
-if wait_activity "MainActivity" 40; then D=$(( ($(date +%s%N)-T0)/1000000 )); echo "SPLASH: transition SplashActivity -> MainActivity PASS (${D}ms, resumed=$(resumed_component), mainRecords=$(main_records))"; [ "$D" -le 4500 ] && echo 'SPLASH: 4s fail-safe within bound PASS' || { echo 'SPLASH: 4s fail-safe exceeded FAIL'; SPLASH_FAIL=1; }
-else echo 'SPLASH: transition FAIL (MainActivity never resumed)'; SPLASH_FAIL=1; fi
+if wait_activity "MainActivity" 40; then D=$(( ($(date +%s%N)-T0)/1000000 )); echo "SPLASH: transition SplashActivity -> MainActivity PASS (${D}ms, resumed_component=$(resumed_component), mainRecords=$(main_records))"; [ "$D" -le 4500 ] && echo 'SPLASH: 4s fail-safe within bound PASS' || { echo 'SPLASH: 4s fail-safe exceeded FAIL'; SPLASH_FAIL=1; }
+else echo 'SPLASH: transition FAIL (MainActivity never resumed_component)'; SPLASH_FAIL=1; fi
 adb exec-out screencap -p > screenshots/31-after-splash-main.png
 
 echo '== S3) rotation: portrait -> landscape -> portrait =='
@@ -391,14 +391,14 @@ for R in 1 0; do
   adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation $R
   adb shell am force-stop "$PKG"; adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
   sleep 0.7; adb exec-out screencap -p > "screenshots/32-splash-rot${R}.png"
-  if wait_activity "MainActivity" 40 && [ "$(main_records)" -le 1 ]; then echo "SPLASH: rotation user_rotation=$R PASS (resumed=$(resumed_component), mainRecords=$(main_records))"; else echo "SPLASH: rotation user_rotation=$R FAIL (resumed=$(resumed_component), mainRecords=$(main_records))"; SPLASH_FAIL=1; fi
+  if wait_activity "MainActivity" 40 && [ "$(main_records)" -le 1 ]; then echo "SPLASH: rotation user_rotation=$R PASS (resumed_component=$(resumed_component), mainRecords=$(main_records))"; else echo "SPLASH: rotation user_rotation=$R FAIL (resumed_component=$(resumed_component), mainRecords=$(main_records))"; SPLASH_FAIL=1; fi
 done
 
 echo '== S4) offline launch (wifi+mobile data off) =='
 adb shell svc wifi disable; adb shell svc data disable; adb shell am force-stop "$PKG"
 adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
 sleep 0.7; adb exec-out screencap -p > screenshots/33-splash-offline.png
-if wait_activity "MainActivity" 40; then echo "SPLASH: offline launch PASS (resumed=$(resumed_component))"; else echo "SPLASH: offline launch FAIL (resumed=$(resumed_component))"; SPLASH_FAIL=1; fi
+if wait_activity "MainActivity" 40; then echo "SPLASH: offline launch PASS (resumed_component=$(resumed_component))"; else echo "SPLASH: offline launch FAIL (resumed_component=$(resumed_component))"; SPLASH_FAIL=1; fi
 adb shell svc wifi enable
 
 echo '== S5) splash at small and large display sizes =='
@@ -414,7 +414,7 @@ echo '== S6) WebView unavailable -> splash must not hang (fail-safe) =='
 if adb shell pm disable-user --user 0 com.google.android.webview >/dev/null 2>&1; then
   adb shell am force-stop "$PKG"; adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
   sleep 0.7; adb exec-out screencap -p > screenshots/35-splash-webview-disabled.png
-  if wait_activity "MainActivity" 40; then echo "SPLASH: webview-failure fallback PASS (resumed=$(resumed_component))"; else echo "SPLASH: webview-failure fallback FAIL (resumed=$(resumed_component))"; SPLASH_FAIL=1; fi
+  if wait_activity "MainActivity" 40; then echo "SPLASH: webview-failure fallback PASS (resumed_component=$(resumed_component))"; else echo "SPLASH: webview-failure fallback FAIL (resumed_component=$(resumed_component))"; SPLASH_FAIL=1; fi
   adb shell pm enable com.google.android.webview >/dev/null 2>&1 || true
 else echo 'SPLASH: webview-failure NOT RUN (could not disable webview package)'; fi
 
