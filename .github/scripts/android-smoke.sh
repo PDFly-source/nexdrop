@@ -262,8 +262,10 @@ resumed_component() {
 }
 main_records() { adb shell dumpsys activity activities 2>/dev/null | grep -c "ActivityRecord{.*com\.nexdrop\.ndt1/\.MainActivity" || true; }
 pid_now() { adb shell pidof com.nexdrop.ndt1 2>/dev/null | tr -d '\r' || true; }
+mkdir -p screenshots
 diag() {
   local t="$1"
+  mkdir -p screenshots
   { echo "# diag $t $(date -u +%FT%TZ)"; echo "# pid=$(pid_now)"; echo "# resumed=$(resumed_component)"; echo "# mainRecords=$(main_records)"; } > "screenshots/diag-$t.txt"
   adb shell dumpsys activity activities >> "screenshots/diag-$t.txt" 2>&1 || true
   adb logcat -d -s NexDropSplash:V AndroidRuntime:E ActivityTaskManager:I > "screenshots/diag-$t-logcat.txt" 2>&1 || true
@@ -295,16 +297,45 @@ echo "$BADGE"
 case "$BADGE" in *"versionCode='$EXP_CODE'"*) : ;; *) echo "PREFLIGHT BLOCKED: artifact versionCode != $EXP_CODE"; exit 1;; esac
 case "$BADGE" in *"versionName='$EXP_NAME'"*) : ;; *) echo "PREFLIGHT BLOCKED: artifact versionName != $EXP_NAME"; exit 1;; esac
 echo "artifact matches source: $EXP_NAME / $EXP_CODE"
-CERT=$("$AS" verify --print-certs "$APK_PATH" 2>/dev/null | grep -m1 -i "SHA-256 digest" | awk "{print $NF}" || true)
-echo "signing cert sha256: ${CERT:-unknown}"
-"$AS" verify -v "$APK_PATH" 2>/dev/null | grep -E "v[0-9].*(true|false)" | head -4 || true
+APPROVED_CERT=11cb2ab82ba751fea04d101bd3a1498b852581f999056a3bc371e47e326a861a
+PC=$("$AS" verify --print-certs "$APK_PATH" 2>&1 || true)
+echo "-- apksigner --print-certs (raw) --"; printf "%s\n" "$PC" | head -8
+CERT=$(printf "%s\n" "$PC" | grep -oiE "SHA-256 digest:[[:space:]]*[0-9a-fA-F]{64}" | head -1 | grep -oiE "[0-9a-fA-F]{64}" | tr "A-F" "a-f")
+if [ -z "$CERT" ]; then
+  KT=$(find "$JAVA_HOME/bin" -name keytool 2>/dev/null | head -1)
+  if [ -n "$KT" ]; then
+    KO=$("$KT" -printcert -jarfile "$APK_PATH" 2>&1 || true)
+    echo "-- keytool -printcert (fallback) --"; printf "%s\n" "$KO" | grep -m2 -iE "Owner|SHA256" || true
+    CERT=$(printf "%s\n" "$KO" | grep -m1 -i "SHA256:" | sed "s/.*SHA256:[[:space:]]*//" | tr -d ": \r" | tr "A-F" "a-f")
+  fi
+fi
+echo "signing cert sha256: ${CERT:-UNRESOLVED}"
+if [ -z "$CERT" ]; then echo "PREFLIGHT BLOCKED: signing certificate could not be resolved (never treated as pass)"; diag preflight-cert-unresolved; exit 1; fi
+if [ "$CERT" != "$APPROVED_CERT" ]; then echo "PREFLIGHT BLOCKED: cert $CERT != approved $APPROVED_CERT"; diag preflight-cert-mismatch; exit 1; fi
+echo "signing identity PASS: $CERT == approved NexDrop release identity"
 echo "-- gradle / install tasks in this script (ordering proof) --"
 grep -nE "connectedDebugAndroidTest|gradlew |adb (un)?install" "$0" | sed "s/^/  /"
 echo '-- device --'; adb devices; adb shell getprop ro.build.version.sdk || true
-echo '-- remove whatever gradle left installed (debug build shares the application id) --'
-RC=0; OUT=$(adb uninstall com.nexdrop.ndt1 2>&1) || RC=$?
-echo "uninstall rc=$RC :: $(printf '%s' "$OUT" | tr '\n' ' ' | cut -c1-100)"
-adb shell pm list packages | grep nexdrop || echo '(package absent, as intended)'
+echo '-- package state before install (uninstall diagnostics) --'
+BEFORE=$(adb shell pm list packages 2>/dev/null | grep -c "com.nexdrop.ndt1" || true)
+echo "package present before: ${BEFORE:-0}"
+adb shell dumpsys package com.nexdrop.ndt1 2>/dev/null | grep -E "pkgFlags|flags=|User 0|installed=" | head -5 || echo "(no package to inspect)"
+if [ "${BEFORE:-0}" -gt 0 ]; then
+  RC=0; OUT=$(adb shell pm uninstall com.nexdrop.ndt1 2>&1) || RC=$?
+  echo "uninstall rc=$RC :: $(printf "%s" "$OUT" | tr "\n" " " | cut -c1-120)"
+  if [ "$RC" -ne 0 ]; then
+    RC2=0; OUT2=$(adb shell pm uninstall --user 0 com.nexdrop.ndt1 2>&1) || RC2=$?
+    echo "uninstall --user 0 rc=$RC2 :: $(printf "%s" "$OUT2" | tr "\n" " " | cut -c1-120)"
+  fi
+  AFTER=$(adb shell pm list packages 2>/dev/null | grep -c "com.nexdrop.ndt1" || true)
+  echo "package present after uninstall attempt: ${AFTER:-0}"
+  if [ "${AFTER:-0}" -gt 0 ]; then
+    echo "NOTE: uninstall did not remove the package (device-managed state); the following adb install -r -d replaces the APK in place"
+    echo "      data/cache is NOT proven wiped - recorded as a limitation, not as a clean uninstall"
+  fi
+else
+  echo "clean device: package absent before install, nothing to uninstall"
+fi
 echo '-- install the exact release artifact --'
 RC=0; OUT=$(adb install -r -d "$APK_PATH" 2>&1) || RC=$?
 echo "install rc=$RC :: $(printf '%s' "$OUT" | tr '\n' ' ' | cut -c1-160)"
