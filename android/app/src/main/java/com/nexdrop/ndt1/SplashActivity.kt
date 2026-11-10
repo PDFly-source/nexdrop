@@ -10,22 +10,23 @@ import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 
 /**
  * NexDrop v1.4.7 cold-start splash.
  *
- * The branding is the supplied artwork (symbol + wordmark + tagline) rendered by
- * assets/splash/index.html, bundled in the APK so every launch is offline-safe.
+ * Branding comes from assets/splash/index.html bundled in the APK (offline-safe).
  *
- * Advance path (all independent, all idempotent):
- *  1. onPageFinished -> openApp after MIN_DISPLAY_MS (animation not cut short)
- *  2. fail-safe timer armed in onCreate BEFORE the WebView exists, so a WebView
- *     construction/asset/JS failure can never trap the user on the splash
- *  3. any throwable during setup advances immediately
- * A process-wide [transitioned] flag makes the transition idempotent across
- * activity recreation (rotation) so MainActivity is never started twice.
+ * Transition contract, all triggers funnel through one atomic claim so that
+ * exactly ONE MainActivity start happens per process:
+ *  - onPageFinished  -> after MIN_DISPLAY_MS (animation not cut short)
+ *  - fail-safe timer -> armed in onCreate BEFORE the WebView exists
+ *  - setup failure   -> immediate
+ * On activity recreation (rotation) after the claim, the new instance finishes
+ * immediately instead of re-showing the splash or launching a second MainActivity.
  */
 class SplashActivity : AppCompatActivity() {
 
@@ -36,16 +37,18 @@ class SplashActivity : AppCompatActivity() {
   @SuppressLint("SetJavaScriptEnabled")
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-
-    // Armed first: nothing below this line can prevent the user reaching the app.
-    handler.postDelayed({ openApp("fail-safe-4s") }, MAX_DISPLAY_MS)
-    Log.i(TAG, "onCreate: fail-safe armed (${MAX_DISPLAY_MS}ms); transitioned=$transitioned")
+    Log.i(TAG, "onCreate: pid=${android.os.Process.myPid()} transitioned=$transitioned launches=$launches")
 
     if (transitioned) {
-      Log.i(TAG, "recreated after transition - advancing without re-showing splash")
-      openApp("already-transitioned")
+      // Recreated after the hand-off: the app is already behind us.
+      Log.i(TAG, "recreated after transition -> finishing without relaunch")
+      finish()
       return
     }
+
+    // Armed before the WebView exists: no setup failure can trap the user here.
+    handler.postDelayed({ openApp("fail-safe-${MAX_DISPLAY_MS}ms") }, MAX_DISPLAY_MS)
+    Log.i(TAG, "fail-safe armed (${MAX_DISPLAY_MS}ms)")
 
     try {
       val view = WebView(this).apply {
@@ -61,8 +64,8 @@ class SplashActivity : AppCompatActivity() {
             Log.i(TAG, "onPageFinished: $url")
             if (!launched) handler.postDelayed({ openApp("page-finished") }, MIN_DISPLAY_MS)
           }
-          override fun onReceivedError(v: WebView?, req: android.webkit.WebResourceRequest?, err: android.webkit.WebResourceError?) {
-            Log.e(TAG, "onReceivedError: ${err?.errorCode} ${err?.description}")
+          override fun onReceivedError(v: WebView?, r: WebResourceRequest?, e: WebResourceError?) {
+            Log.e(TAG, "onReceivedError: ${e?.errorCode} ${e?.description}")
           }
         }
       }
@@ -77,20 +80,35 @@ class SplashActivity : AppCompatActivity() {
     }
   }
 
-  /** Advances to MainActivity exactly once per process, whatever the trigger. */
+  /** Atomically claims the single transition; returns true only for the winner. */
+  private fun claimTransition(reason: String): Boolean {
+    synchronized(LOCK) {
+      if (transitioned) {
+        Log.i(TAG, "transition REJECTED ($reason): already transitioned, launches=$launches")
+        return false
+      }
+      transitioned = true
+      launches += 1
+      Log.i(TAG, "transition ACCEPTED ($reason) launches=$launches pid=${android.os.Process.myPid()}")
+      return true
+    }
+  }
+
   private fun openApp(reason: String) {
     if (launched) {
-      Log.i(TAG, "openApp($reason) ignored: already launched")
+      Log.i(TAG, "openApp($reason) ignored: this instance already launched")
       return
     }
     launched = true
-    transitioned = true
     handler.removeCallbacksAndMessages(null)
-    Log.i(TAG, "openApp($reason): starting MainActivity (finishing=$isFinishing)")
+    if (!claimTransition(reason)) {
+      finish()
+      return
+    }
     try {
       startActivity(Intent(this, MainActivity::class.java))
+      Log.i(TAG, "MainActivity start requested (finishing=$isFinishing)")
     } catch (t: Throwable) {
-      // Never leave the user on a dead splash screen.
       Log.e(TAG, "MainActivity start failed", t)
     }
     finish()
@@ -106,13 +124,11 @@ class SplashActivity : AppCompatActivity() {
       } catch (t: Throwable) {
         Log.w(TAG, "detaching WebView failed", t)
       }
-      // Destroying a live WebView inside onDestroy can throw and take the process
-      // down while MainActivity is starting; defer it one frame.
       Handler(Looper.getMainLooper()).post {
         try { dying.destroy() } catch (t: Throwable) { Log.w(TAG, "WebView destroy failed", t) }
       }
     }
-    Log.i(TAG, "onDestroy")
+    Log.i(TAG, "onDestroy (transitioned=$transitioned launches=$launches)")
     super.onDestroy()
   }
 
@@ -121,8 +137,9 @@ class SplashActivity : AppCompatActivity() {
     const val MIN_DISPLAY_MS = 1_450L
     const val MAX_DISPLAY_MS = 4_000L
     const val SPLASH_URL = "file:///android_asset/splash/index.html"
+    val LOCK = Any()
 
-    /** Process-wide: true once MainActivity has been requested. */
     @Volatile var transitioned = false
+    @Volatile var launches = 0
   }
 }
