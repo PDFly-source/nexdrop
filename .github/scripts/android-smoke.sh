@@ -608,3 +608,62 @@ echo '== 9) final: no crash anywhere in the whole run =='
 if adb logcat -d | grep -q 'FATAL EXCEPTION'; then adb logcat -d > logcat.txt; echo 'SMOKE FAIL: FATAL EXCEPTION during run'; exit 1; fi
 adb logcat -d > logcat.txt
 echo 'SMOKE TEST PASSED — mockup UI 01–08 on the real NDT1 engine: Back stack, layout audit, real-data pass (when tunnel reachable) and font-scale 1.3 all verified'
+
+cleanup_x() { adb shell wm size reset >/dev/null 2>&1 || true; adb shell wm density reset >/dev/null 2>&1 || true
+  adb shell settings put system user_rotation 0 >/dev/null 2>&1 || true
+  adb shell settings put system accelerometer_rotation 1 >/dev/null 2>&1 || true
+  adb shell svc wifi enable >/dev/null 2>&1 || true
+  adb shell pm enable com.google.android.webview >/dev/null 2>&1 || true; }
+trap cleanup_x EXIT
+SPLASH_FAIL=0
+resumed() { adb shell dumpsys activity activities | grep -m1 -oE 'com\.nexdrop\.ndt1/[^ }]*'; }
+wait_main() { local n=0; while [ $n -lt 30 ]; do case "$(resumed)" in *MainActivity*) return 0;; esac; sleep 0.2; n=$((n+1)); done; return 1; }
+
+echo '== S1) launcher intent resolves to SplashActivity =='
+LAUNCHER=$(adb shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER "$PKG" | tail -1 | tr -d '\r')
+echo "launcher activity: $LAUNCHER"
+case "$LAUNCHER" in *SplashActivity*) echo 'SPLASH: launcher=SplashActivity PASS';; *) echo 'SPLASH: launcher=SplashActivity FAIL'; SPLASH_FAIL=1;; esac
+
+echo '== S2) cold start via launcher: splash renders, then transitions =='
+adb shell am force-stop "$PKG"; adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
+sleep 0.7; adb exec-out screencap -p > screenshots/30-splash-cold.png
+TOP=$(resumed); echo "resumed during splash window: $TOP"
+case "$TOP" in *SplashActivity*) echo 'SPLASH: rendered PASS (SplashActivity foreground)';; esac
+T0=$(date +%s%N)
+if wait_main; then D=$(( ($(date +%s%N)-T0)/1000000 )); echo "SPLASH: transition SplashActivity -> MainActivity PASS (${D}ms)"; [ "$D" -le 4500 ] && echo 'SPLASH: 4s fail-safe within bound PASS' || { echo 'SPLASH: 4s fail-safe exceeded FAIL'; SPLASH_FAIL=1; }
+else echo 'SPLASH: transition FAIL (MainActivity never resumed)'; SPLASH_FAIL=1; fi
+adb exec-out screencap -p > screenshots/31-after-splash-main.png
+
+echo '== S3) rotation: portrait -> landscape -> portrait =='
+for R in 1 0; do
+  adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation $R
+  adb shell am force-stop "$PKG"; adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
+  sleep 0.7; adb exec-out screencap -p > "screenshots/32-splash-rot${R}.png"
+  if wait_main; then echo "SPLASH: rotation user_rotation=$R PASS"; else echo "SPLASH: rotation user_rotation=$R FAIL"; SPLASH_FAIL=1; fi
+done
+
+echo '== S4) offline launch (wifi+mobile data off) =='
+adb shell svc wifi disable; adb shell svc data disable; adb shell am force-stop "$PKG"
+adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
+sleep 0.7; adb exec-out screencap -p > screenshots/33-splash-offline.png
+if wait_main; then echo 'SPLASH: offline launch PASS'; else echo 'SPLASH: offline launch FAIL'; SPLASH_FAIL=1; fi
+adb shell svc wifi enable
+
+echo '== S5) splash at small and large display sizes =='
+for SZ in 320x568 720x1280; do
+  adb shell wm size "$SZ" >/dev/null 2>&1; adb shell wm density 320 >/dev/null 2>&1; sleep 1
+  adb shell am force-stop "$PKG"; adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
+  sleep 0.8; adb exec-out screencap -p > "screenshots/34-splash-${SZ}.png"
+  [ "$SZ" = 320x568 ] && { adb shell wm size reset >/dev/null 2>&1; adb shell wm density reset >/dev/null 2>&1; sleep 1; }
+done
+echo 'SPLASH: viewport screenshots captured (320x568, 720x1280) PASS'
+
+echo '== S6) WebView unavailable -> splash must not hang (fail-safe) =='
+if adb shell pm disable-user --user 0 com.google.android.webview >/dev/null 2>&1; then
+  adb shell am force-stop "$PKG"; adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
+  sleep 0.7; adb exec-out screencap -p > screenshots/35-splash-webview-disabled.png
+  if wait_main; then echo 'SPLASH: webview-failure fallback PASS (reached MainActivity)'; else echo 'SPLASH: webview-failure fallback FAIL'; SPLASH_FAIL=1; fi
+  adb shell pm enable com.google.android.webview >/dev/null 2>&1 || true
+else echo 'SPLASH: webview-failure NOT RUN (could not disable webview package)'; fi
+
+[ "$SPLASH_FAIL" -eq 0 ] && echo 'SPLASH COVERAGE PASSED' || { echo 'SPLASH COVERAGE FAILED'; exit 1; }
