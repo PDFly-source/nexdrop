@@ -666,4 +666,9 @@ if adb shell pm disable-user --user 0 com.google.android.webview >/dev/null 2>&1
   adb shell pm enable com.google.android.webview >/dev/null 2>&1 || true
 else echo 'SPLASH: webview-failure NOT RUN (could not disable webview package)'; fi
 
+echo '== S7) splash diagnostics dump =='
+adb logcat -d -s NexDropSplash:V AndroidRuntime:E ActivityTaskManager:I WebViewFactory:I chromium:V > screenshots/diag-splash-logcat.txt 2>&1 || true
+adb shell dumpsys activity activities > screenshots/diag-splash-activities.txt 2>&1 || true
+grep -E "NexDropSplash" screenshots/diag-splash-logcat.txt | tail -20 || true
+
 [ "$SPLASH_FAIL" -eq 0 ] && echo 'SPLASH COVERAGE PASSED' || { echo 'SPLASH COVERAGE FAILED'; exit 1; }
