@@ -286,6 +286,22 @@ splash_live() {
   ' | grep -c "^LIVE" || true
 }
 focus_component() { adb shell dumpsys window 2>/dev/null | grep -m1 "mCurrentFocus" | grep -oE "com\.nexdrop\.ndt1/[A-Za-z0-9_.$]+" | head -1; }
+diag() {
+  local t="${1:-snapshot}"
+  mkdir -p screenshots 2>/dev/null || true
+  {
+    echo "# diag $t $(date -u +%FT%TZ)"
+    echo "# pid=$(pid_now)"
+    echo "# resumed=$(resumed_component)"
+    echo "# focus=$(focus_component)"
+    echo "# activeMain=$(active_main)"
+    echo "# taskIds=[$(main_task_ids)]"
+    echo "# liveSplash=$(splash_live)"
+  } > "screenshots/diag-$t.txt" 2>/dev/null || true
+  adb shell dumpsys activity activities >> "screenshots/diag-$t.txt" 2>&1 || true
+  adb logcat -d -s NexDropSplash:V AndroidRuntime:E ActivityTaskManager:I > "screenshots/diag-$t-logcat.txt" 2>&1 || true
+  tail -25 "screenshots/diag-$t-logcat.txt" 2>/dev/null || true
+}
 wait_activity() { # $1 = expected suffix, $2 = attempts (x0.25s)
   local want="$1" n=0 cur
   while [ $n -lt "${2:-40}" ]; do
