@@ -258,7 +258,7 @@ jobs:
           arch: x86_64
           target: default
           force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back virtualscene
+          emulator-options: -no-window -no-snapshot -wipe-data -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back virtualscene
           emulator-boot-timeout: 1800
           disable-animations: true
           script: bash "$GITHUB_WORKSPACE/.github/scripts/android-smoke.sh"

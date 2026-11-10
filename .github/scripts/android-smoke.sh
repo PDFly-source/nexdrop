@@ -280,18 +280,26 @@ wait_activity() { # $1 = expected suffix, $2 = attempts (x0.25s)
 }
 
 echo '== S0) release artifact install + preflight (F2) =='
-APK_PATH=$(find "$GITHUB_WORKSPACE" -maxdepth 3 -name 'NexDrop-release.apk' 2>/dev/null | head -1)
-echo "artifact: ${APK_PATH:-NOT FOUND}"
-[ -n "$APK_PATH" ] || { echo 'PREFLIGHT BLOCKED: release APK artifact missing'; exit 1; }
-ART_SHA=$(sha256sum "$APK_PATH" | cut -d' ' -f1); echo "artifact sha256: $ART_SHA"; ls -l "$APK_PATH" || true
+APK_PATH="$GITHUB_WORKSPACE/NexDrop-release.apk"
+[ -f "$APK_PATH" ] || APK_PATH=$(find "$GITHUB_WORKSPACE" -maxdepth 2 -name "NexDrop-release.apk" 2>/dev/null | head -1)
+echo "artifact: ${APK_PATH:-NOT FOUND} (must be the downloaded artifact; repo copies rc1-apk/ rc2-apk/ t-apk/ exist)"
+GRADLE_MK="$GITHUB_WORKSPACE/android/app/build.gradle.kts"
+EXP_CODE=$(grep -oE "versionCode = [0-9]+" "$GRADLE_MK" | grep -oE "[0-9]+" | head -1)
+EXP_NAME=$(grep -oE "versionName = \"[^\"]+\"" "$GRADLE_MK" | cut -d'"' -f2 | head -1)
+echo "source of truth: $EXP_NAME / $EXP_CODE"
+ART_SHA=$(sha256sum "$APK_PATH" | cut -d" " -f1); echo "artifact sha256: $ART_SHA"; ls -l "$APK_PATH" || true
 BT=$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort -V | tail -1)
 AS=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
-"$BT" dump badging "$APK_PATH" 2>/dev/null | grep -E "^package:|^sdkVersion|^targetSdkVersion" | head -3 || true
-CERT=$("$AS" verify --print-certs "$APK_PATH" 2>/dev/null | grep -m1 -i "SHA-256 digest" | awk '{print $NF}' || true)
+BADGE=$("$BT" dump badging "$APK_PATH" 2>/dev/null | head -1 || true)
+echo "$BADGE"
+case "$BADGE" in *"versionCode='$EXP_CODE'"*) : ;; *) echo "PREFLIGHT BLOCKED: artifact versionCode != $EXP_CODE"; exit 1;; esac
+case "$BADGE" in *"versionName='$EXP_NAME'"*) : ;; *) echo "PREFLIGHT BLOCKED: artifact versionName != $EXP_NAME"; exit 1;; esac
+echo "artifact matches source: $EXP_NAME / $EXP_CODE"
+CERT=$("$AS" verify --print-certs "$APK_PATH" 2>/dev/null | grep -m1 -i "SHA-256 digest" | awk "{print $NF}" || true)
 echo "signing cert sha256: ${CERT:-unknown}"
 "$AS" verify -v "$APK_PATH" 2>/dev/null | grep -E "v[0-9].*(true|false)" | head -4 || true
-echo '-- gradle / install tasks in this script (ordering proof) --'
-grep -nE "connectedDebugAndroidTest|gradlew |adb (un)?install" "$0" | sed 's/^/  /'
+echo "-- gradle / install tasks in this script (ordering proof) --"
+grep -nE "connectedDebugAndroidTest|gradlew |adb (un)?install" "$0" | sed "s/^/  /"
 echo '-- device --'; adb devices; adb shell getprop ro.build.version.sdk || true
 echo '-- remove whatever gradle left installed (debug build shares the application id) --'
 RC=0; OUT=$(adb uninstall com.nexdrop.ndt1 2>&1) || RC=$?
