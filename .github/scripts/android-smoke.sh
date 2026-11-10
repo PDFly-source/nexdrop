@@ -36,6 +36,20 @@ cd "$GITHUB_WORKSPACE/android"
 cd - >/dev/null
 echo 'PREVIEW INSTRUMENTED TESTS PASS — real bounded previews + honest fallbacks verified'
 
+
+back_to_home() {
+  # The bottom nav exists only on tab screens; engineering subpages (Device
+  # Test) and the scanner have no nav row. Walk back until Home is visible.
+  local i
+  for i in 1 2 3 4 5; do
+    dump_ui
+    if grep -qi 'SEND FILES' ui.xml; then return 0; fi
+    adb shell input keyevent 4 >/dev/null 2>&1 || true
+    sleep 1.5
+  done
+  return 1
+}
+
 tap_nav() {
   # Tap a BOTTOM-NAV tab. Screen content may contain the same word
   # ('Settings' quick-header on Your NexDrop, 'History' rows, ...), and
@@ -555,7 +569,9 @@ if adb shell pm disable-user --user 0 com.google.android.webview >/dev/null 2>&1
 else echo 'SPLASH: webview-failure NOT RUN (could not disable webview package)'; fi
 
 echo '== S7) duplicate-start proof =='
-ACCEPTED=$(grep -c "transition ACCEPTED" screenshots/diag-s2-splash-logcat.txt 2>/dev/null || echo 0)
+ACCEPTED=$(grep -c "transition ACCEPTED" screenshots/diag-s2-post-transition-logcat.txt 2>/dev/null || echo 0)
+REJECTED=$(grep -c "transition REJECTED" screenshots/diag-s2-post-transition-logcat.txt 2>/dev/null || echo 0)
+echo "SPLASH: post-transition window re-read accepted=$ACCEPTED rejected=$REJECTED"
 echo "SPLASH: transitions accepted in splash window = $ACCEPTED (expect 1)"
 if [ "${ACCEPTED:-0}" -ge 2 ]; then echo "SPLASH: duplicate-start re-check FAIL (accepted=$ACCEPTED)"; SPLASH_FAIL=1;
 elif [ "${ACCEPTED:-0}" -eq 1 ]; then echo "SPLASH: duplicate-start re-check PASS (accepted=1)";
@@ -715,9 +731,11 @@ adb shell input keyevent 4 || true
 sleep 1
 
 echo '== U7) FONT-SCALE 1.3: layout robustness with screenshots =='
+if [ -n "$(resumed | grep CaptureActivity || true)" ]; then adb shell input keyevent 4 >/dev/null 2>&1 || true; sleep 2; fi
+back_to_home || { echo 'SMOKE FAIL: could not return to a tab screen before the font-scale pass'; cat ui.xml; exit 1; }
 adb shell settings put system font_scale 1.3
 sleep 4
-if [ -n "$(resumed | grep CaptureActivity || true)" ]; then adb shell input keyevent 4 || true; sleep 2; fi
+back_to_home || { echo 'SMOKE FAIL: bottom nav unreachable at font-scale 1.3'; cat ui.xml; exit 1; }
 tap_nav 'Devices';  sleep 2; assert_layout 'devices-font130' 1;  shot 20-devices-font130
 tap_nav 'History';  sleep 2; assert_layout 'history-font130' 1;  shot 21-history-font130
 tap_nav 'Settings'; sleep 3; assert_layout 'settings-font130' 1; shot 22-settings-font130
