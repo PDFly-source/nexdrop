@@ -279,13 +279,45 @@ wait_activity() { # $1 = expected suffix, $2 = attempts (x0.25s)
   return 1
 }
 
+echo '== S0) install / launcher preflight =='
+APK_PATH=$(find "$GITHUB_WORKSPACE" -maxdepth 3 -name 'NexDrop-release.apk' 2>/dev/null | head -1)
+echo "APK artifact: ${APK_PATH:-NOT FOUND}"
+[ -n "$APK_PATH" ] && { sha256sum "$APK_PATH" || true; ls -l "$APK_PATH" || true; }
+AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort -V | tail -1)
+[ -n "$APK_PATH" ] && [ -n "$AAPT" ] && { "$AAPT" dump badging "$APK_PATH" 2>/dev/null | head -3 || true; }
+echo '-- device state --'; adb devices; adb shell getprop ro.build.version.sdk || true; adb shell wm size || true
+echo '-- installed package? --'; adb shell pm list packages | grep nexdrop || echo '(no nexdrop package)'
+if ! adb shell pm list packages | grep -q '^package:com.nexdrop.ndt1$'; then
+  echo 'package missing - reinstalling the exact test APK'
+  [ -n "$APK_PATH" ] || { echo 'PREFLIGHT FAIL: no APK artifact found'; exit 1; }
+  RC=0; OUT=$(adb install -r -d -t "$APK_PATH" 2>&1) || RC=$?
+  echo "install rc=$RC :: $(printf '%s' "$OUT" | tr '\n' ' ' | cut -c1-160)"
+  [ "$RC" -eq 0 ] || { echo 'PREFLIGHT FAIL: adb install failed'; exit 1; }
+fi
+echo '-- package identity --'
+adb shell dumpsys package com.nexdrop.ndt1 | grep -E "versionCode|versionName|firstInstallTime|lastUpdateTime|codePath" | head -6 || true
+echo '-- SplashActivity declaration --'
+adb shell dumpsys package com.nexdrop.ndt1 | grep -A6 'com.nexdrop.ndt1.SplashActivity' | head -12 || true
+echo '-- launcher resolution --'
+RESOLVE=$(adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER com.nexdrop.ndt1 2>&1 | tail -1 | tr -d '\r' || true)
+echo "resolve-activity: ${RESOLVE:-<empty>}"
+QA=$(adb shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER com.nexdrop.ndt1 2>&1 | tail -3 | tr -d '\r' || true)
+echo "query-activities: ${QA:-<empty>}"
+case "$RESOLVE" in *com.nexdrop.ndt1/.SplashActivity*) echo 'PREFLIGHT: launcher=SplashActivity PASS';;
+  *) case "$QA" in *com.nexdrop.ndt1/.SplashActivity*) echo "PREFLIGHT: resolve-activity failed, query-activities PASS ($QA)";; SPLASH_FAIL=1;;
+     *) echo 'PREFLIGHT: launcher resolution FAIL - stopping before splash tests'; SPLASH_FAIL=1;; esac;; esac
+if [ "$SPLASH_FAIL" -ne 0 ]; then echo 'PREFLIGHT BLOCKED - splash matrix not executed'; diag preflight-blocked; exit 1; fi
+
 echo '== S1) launcher intent resolves to SplashActivity =='
-LAUNCHER=$(adb shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER "$PKG" | tail -1 | tr -d '\r')
+LAUNCHER="$RESOLVE"
 echo "launcher activity: $LAUNCHER"
 case "$LAUNCHER" in *SplashActivity*) echo 'SPLASH: launcher=SplashActivity PASS';; *) echo 'SPLASH: launcher=SplashActivity FAIL'; SPLASH_FAIL=1;; esac
 
 echo '== S2) cold start via launcher: splash renders, then transitions =='
-adb shell am force-stop "$PKG"; adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
+adb shell am force-stop "$PKG"
+RC=0; AMOUT=$(adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" 2>&1) || RC=$?
+echo "am start rc=$RC :: $(printf '%s' "$AMOUT" | tr '\n' ' ' | cut -c1-160)"
+[ "$RC" -eq 0 ] || { echo "SPLASH: am start FAILED rc=$RC"; SPLASH_FAIL=1; diag s2-amstart-failed; }
 sleep 0.7; adb exec-out screencap -p > screenshots/30-splash-cold.png
 TOP=$(resumed); echo "resumed during splash window: $TOP"
 case "$TOP" in *SplashActivity*) echo "SPLASH: rendered PASS (resumed=$TOP, pid=$(pid_now))";; *) echo "SPLASH: rendered FAIL (resumed=$TOP)"; SPLASH_FAIL=1;; esac
