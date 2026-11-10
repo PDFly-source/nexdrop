@@ -17,6 +17,7 @@
 # verify -> populated History/Devices -> clear history), font-scale 1.3
 # robustness pass.
 set -eu
+trap 'rc=$?; echo "ABORT at line $LINENO rc=$rc cmd=$BASH_COMMAND"' ERR
 PKG=com.nexdrop.ndt1
 
 # =========================================================================
@@ -262,20 +263,29 @@ resumed_component() {
 }
 main_records() { adb shell dumpsys activity activities 2>/dev/null | grep -c "ActivityRecord{.*com\.nexdrop\.ndt1/\.MainActivity" || true; }
 # Historical records pile up in dumpsys; only state=RESUMED is a live instance.
-active_main() { adb shell dumpsys activity activities 2>/dev/null | grep "ActivityRecord{.*com\.nexdrop\.ndt1/\.MainActivity" | grep -c "state=RESUMED" || true; }
-main_task_ids() { adb shell dumpsys activity activities 2>/dev/null | grep "ActivityRecord{.*com\.nexdrop\.ndt1/\.MainActivity" | grep -oE "taskId=[0-9]+" | sort -u | tr "\n" " "; }
-splash_live() { adb shell dumpsys activity activities 2>/dev/null | grep "ActivityRecord{.*com\.nexdrop\.ndt1/\.SplashActivity" | grep -c "state=RESUMED" || true; }
-pid_now() { adb shell pidof com.nexdrop.ndt1 2>/dev/null | tr -d '\r' || true; }
-mkdir -p screenshots
-diag() {
-  local t="$1"
-  mkdir -p screenshots
-  mkdir -p screenshots 2>/dev/null || true
-  { echo "# diag $t $(date -u +%FT%TZ)"; echo "# pid=$(pid_now)"; echo "# resumed_component=$(resumed_component)"; echo "# mainRecords=$(main_records)"; } > "screenshots/diag-$t.txt" 2>/dev/null || true
-  adb shell dumpsys activity activities >> "screenshots/diag-$t.txt" 2>&1 || true
-  adb logcat -d -s NexDropSplash:V AndroidRuntime:E ActivityTaskManager:I > "screenshots/diag-$t-logcat.txt" 2>&1 || true
-  tail -40 "screenshots/diag-$t-logcat.txt" || true
+active_main() {
+  # A live instance is Hist #0 of a task. Historical Hist #1..N and finished
+  # records are NOT instances.
+  adb shell dumpsys activity activities 2>/dev/null | awk '
+    /\* Task\{/ { tid="?"; if (match($0, /#[0-9]+/)) tid=substr($0, RSTART+1, RLENGTH-1); hist=-1 }
+    /Hist #[0-9]+/ { if (match($0, /Hist #[0-9]+/)) hist=substr($0, RSTART+6, RLENGTH-6)+0 }
+    /com\.nexdrop\.ndt1\/\.MainActivity/ { if (hist==0) print "LIVE task=" tid; else if (hist>0) print "HIST task=" tid " hist=" hist }
+  ' | grep -c "^LIVE" || true
 }
+main_task_ids() {
+  adb shell dumpsys activity activities 2>/dev/null | awk '
+    /\* Task\{/ { tid="?"; if (match($0, /#[0-9]+/)) tid=substr($0, RSTART+1, RLENGTH-1); hist=-1 }
+    /Hist #[0-9]+/ { if (match($0, /Hist #[0-9]+/)) hist=substr($0, RSTART+6, RLENGTH-6)+0 }
+    /com\.nexdrop\.ndt1\/\.MainActivity/ { if (hist==0) print tid }
+  ' | sort -u | tr "\n" " "
+}
+splash_live() {
+  adb shell dumpsys activity activities 2>/dev/null | awk '
+    /Hist #[0-9]+/ { if (match($0, /Hist #[0-9]+/)) hist=substr($0, RSTART+6, RLENGTH-6)+0 }
+    /com\.nexdrop\.ndt1\/\.SplashActivity/ { if (hist==0) print "LIVE" }
+  ' | grep -c "^LIVE" || true
+}
+focus_component() { adb shell dumpsys window 2>/dev/null | grep -m1 "mCurrentFocus" | grep -oE "com\.nexdrop\.ndt1/[A-Za-z0-9_.$]+" | head -1; }
 wait_activity() { # $1 = expected suffix, $2 = attempts (x0.25s)
   local want="$1" n=0 cur
   while [ $n -lt "${2:-40}" ]; do
@@ -466,3 +476,4 @@ grep -E "NexDropSplash" screenshots/diag-splash-logcat.txt || true
 diag final
 
 [ "$SPLASH_FAIL" -eq 0 ] && echo 'SPLASH COVERAGE PASSED' || { echo 'SPLASH COVERAGE FAILED'; exit 1; }
+echo '== END) script reached the end =='
