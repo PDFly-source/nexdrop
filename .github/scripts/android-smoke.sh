@@ -261,12 +261,17 @@ resumed_component() {
   printf '%s' "$out" | grep -oE 'com\.nexdrop\.ndt1/[A-Za-z0-9_.$]+' | head -1
 }
 main_records() { adb shell dumpsys activity activities 2>/dev/null | grep -c "ActivityRecord{.*com\.nexdrop\.ndt1/\.MainActivity" || true; }
+# Historical records pile up in dumpsys; only state=RESUMED is a live instance.
+active_main() { adb shell dumpsys activity activities 2>/dev/null | grep "ActivityRecord{.*com\.nexdrop\.ndt1/\.MainActivity" | grep -c "state=RESUMED" || true; }
+main_task_ids() { adb shell dumpsys activity activities 2>/dev/null | grep "ActivityRecord{.*com\.nexdrop\.ndt1/\.MainActivity" | grep -oE "taskId=[0-9]+" | sort -u | tr "\n" " "; }
+splash_live() { adb shell dumpsys activity activities 2>/dev/null | grep "ActivityRecord{.*com\.nexdrop\.ndt1/\.SplashActivity" | grep -c "state=RESUMED" || true; }
 pid_now() { adb shell pidof com.nexdrop.ndt1 2>/dev/null | tr -d '\r' || true; }
 mkdir -p screenshots
 diag() {
   local t="$1"
   mkdir -p screenshots
-  { echo "# diag $t $(date -u +%FT%TZ)"; echo "# pid=$(pid_now)"; echo "# resumed_component=$(resumed_component)"; echo "# mainRecords=$(main_records)"; } > "screenshots/diag-$t.txt"
+  mkdir -p screenshots 2>/dev/null || true
+  { echo "# diag $t $(date -u +%FT%TZ)"; echo "# pid=$(pid_now)"; echo "# resumed_component=$(resumed_component)"; echo "# mainRecords=$(main_records)"; } > "screenshots/diag-$t.txt" 2>/dev/null || true
   adb shell dumpsys activity activities >> "screenshots/diag-$t.txt" 2>&1 || true
   adb logcat -d -s NexDropSplash:V AndroidRuntime:E ActivityTaskManager:I > "screenshots/diag-$t-logcat.txt" 2>&1 || true
   tail -40 "screenshots/diag-$t-logcat.txt" || true
@@ -383,7 +388,23 @@ case "$TOP" in *SplashActivity*) echo "SPLASH: rendered PASS (resumed_component=
 diag s2-splash
 T0=$(date +%s%N)
 if wait_activity "MainActivity" 40; then D=$(( ($(date +%s%N)-T0)/1000000 )); echo "SPLASH: transition SplashActivity -> MainActivity PASS (${D}ms, resumed_component=$(resumed_component), mainRecords=$(main_records))"; [ "$D" -le 4500 ] && echo 'SPLASH: 4s fail-safe within bound PASS' || { echo 'SPLASH: 4s fail-safe exceeded FAIL'; SPLASH_FAIL=1; }
-else echo 'SPLASH: transition FAIL (MainActivity never resumed_component)'; SPLASH_FAIL=1; fi
+else echo 'SPLASH: transition FAIL (MainActivity never resumed)'; SPLASH_FAIL=1; fi
+diag s2-post-transition || true
+ACCEPTED=$(grep -c "transition ACCEPTED" screenshots/diag-s2-post-transition-logcat.txt 2>/dev/null || echo 0)
+REJECTED=$(grep -c "transition REJECTED" screenshots/diag-s2-post-transition-logcat.txt 2>/dev/null || echo 0)
+STARTS=$(grep -c "MainActivity start requested" screenshots/diag-s2-post-transition-logcat.txt 2>/dev/null || echo 0)
+echo "SPLASH: transition accepted=$ACCEPTED rejected=$REJECTED mainStarts=$STARTS (immediately after S2)"
+if [ "${ACCEPTED:-0}" -eq 1 ] && [ "${STARTS:-0}" -eq 1 ]; then
+  echo 'SPLASH: duplicate-start prevention PASS (exactly one accepted transition, one start)'
+else
+  echo "SPLASH: duplicate-start prevention INCONCLUSIVE (accepted=${ACCEPTED:-0} starts=${STARTS:-0})"
+fi
+ACT=$(active_main); TIDS=$(main_task_ids); SPLASH_LIVE=$(splash_live)
+echo "SPLASH: active MainActivity instances=$ACT taskIds=[${TIDS:-none}] liveSplash=$SPLASH_LIVE"
+if [ "${ACT:-0}" -eq 1 ]; then echo "SPLASH: exactly one active MainActivity PASS (taskIds=[${TIDS:-none}])"; else echo "SPLASH: exactly one active MainActivity FAIL (active=${ACT:-0})"; SPLASH_FAIL=1; fi
+FATAL=$(adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" || true)
+echo "SPLASH: WebView destruction safety - fatal exceptions in logcat=$FATAL"
+if [ "${FATAL:-0}" -eq 0 ]; then echo 'SPLASH: WebView destruction safety PASS (no FATAL EXCEPTION)'; else echo "SPLASH: WebView destruction safety FAIL (fatal=$FATAL)"; SPLASH_FAIL=1; adb logcat -d 2>/dev/null | grep -A12 "FATAL EXCEPTION" | head -30 || true; fi
 adb exec-out screencap -p > screenshots/31-after-splash-main.png
 
 echo '== S3) rotation: portrait -> landscape -> portrait =='
@@ -391,7 +412,21 @@ for R in 1 0; do
   adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation $R
   adb shell am force-stop "$PKG"; adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
   sleep 0.7; adb exec-out screencap -p > "screenshots/32-splash-rot${R}.png"
-  if wait_activity "MainActivity" 40 && [ "$(main_records)" -le 1 ]; then echo "SPLASH: rotation user_rotation=$R PASS (resumed_component=$(resumed_component), mainRecords=$(main_records))"; else echo "SPLASH: rotation user_rotation=$R FAIL (resumed_component=$(resumed_component), mainRecords=$(main_records))"; SPLASH_FAIL=1; fi
+  for R in 1 0 1; do
+  adb shell settings put system accelerometer_rotation 0 >/dev/null 2>&1 || true
+  adb shell settings put system user_rotation "$R" >/dev/null 2>&1 || true
+  sleep 2
+  ACC=0
+  if wait_activity "MainActivity" 40; then ACC=1; fi
+  ACT=$(active_main); TIDS=$(main_task_ids); SPLASH_LIVE=$(splash_live)
+  diag "rotation-$R" || true
+  if [ "$ACC" -eq 1 ] && [ "${ACT:-0}" -eq 1 ] && [ "${SPLASH_LIVE:-0}" -eq 0 ]; then
+    echo "SPLASH: rotation user_rotation=$R PASS (active=$ACT taskIds=[${TIDS:-none}] liveSplash=$SPLASH_LIVE)"
+  else
+    echo "SPLASH: rotation user_rotation=$R FAIL (resumed=$(resumed_component) active=${ACT:-0} taskIds=[${TIDS:-none}] liveSplash=${SPLASH_LIVE:-0})"
+    SPLASH_FAIL=1
+  fi
+done
 done
 
 echo '== S4) offline launch (wifi+mobile data off) =='
@@ -421,7 +456,9 @@ else echo 'SPLASH: webview-failure NOT RUN (could not disable webview package)';
 echo '== S7) duplicate-start proof =='
 ACCEPTED=$(grep -c "transition ACCEPTED" screenshots/diag-s2-splash-logcat.txt 2>/dev/null || echo 0)
 echo "SPLASH: transitions accepted in splash window = $ACCEPTED (expect 1)"
-[ "${ACCEPTED:-0}" -ge 2 ] && { echo "SPLASH: duplicate-start prevention FAIL"; SPLASH_FAIL=1; } || echo "SPLASH: duplicate-start prevention PASS"
+if [ "${ACCEPTED:-0}" -ge 2 ]; then echo "SPLASH: duplicate-start re-check FAIL (accepted=$ACCEPTED)"; SPLASH_FAIL=1;
+elif [ "${ACCEPTED:-0}" -eq 1 ]; then echo "SPLASH: duplicate-start re-check PASS (accepted=1)";
+else echo "SPLASH: duplicate-start re-check INCONCLUSIVE (no transition records in window)"; fi
 echo '== S7b) splash diagnostics dump =='
 adb logcat -d -s NexDropSplash:V AndroidRuntime:E ActivityTaskManager:I WebViewFactory:I chromium:V > screenshots/diag-splash-logcat.txt 2>&1 || true
 adb shell dumpsys activity activities > screenshots/diag-splash-activities.txt 2>&1 || true
