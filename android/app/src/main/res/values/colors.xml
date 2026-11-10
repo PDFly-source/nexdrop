@@ -19,4 +19,5 @@
   <color name="ndQrDark">#0B1220</color>
   <!-- adaptive launcher icon background (was in the pre-mockup colors.xml) -->
   <color name="ic_launcher_background">#FFFFFF</color> <!-- official artwork background -->
+  <color name="ndSplashBg">#FFFFFF</color>
 </resources>

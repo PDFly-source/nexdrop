@@ -35,14 +35,20 @@
       android:icon="@mipmap/ic_launcher"
       android:theme="@style/AppTheme">
     <activity
-        android:name=".MainActivity"
+        android:name=".SplashActivity"
         android:exported="true"
-        android:configChanges="orientation|screenSize|keyboardHidden|uiMode|fontScale|density"
-        android:launchMode="singleTask">
+        android:theme="@style/SplashTheme">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
+    </activity>
+
+    <activity
+        android:name=".MainActivity"
+        android:exported="true"
+        android:configChanges="orientation|screenSize|keyboardHidden|uiMode|fontScale|density"
+        android:launchMode="singleTask">
       <!-- v1.4: Android Share Sheet — shared files land in the REAL send
            queue (SAF uris, same engine path as hand-picked files). -->
       <intent-filter>

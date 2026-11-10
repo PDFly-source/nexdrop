@@ -8,4 +8,13 @@
     <item name="colorAccent">@color/ndPrimary</item>
     <item name="android:textColorPrimary">@color/ndText</item>
   </style>
+
+  <!-- v1.4.7: cold-start splash window. White matches the supplied artwork so
+       the first frame is the artwork itself, not a dark flash. -->
+  <style name="SplashTheme" parent="Theme.AppCompat.Light.NoActionBar">
+    <item name="android:windowBackground">@color/ndSplashBg</item>
+    <item name="android:statusBarColor">@color/ndSplashBg</item>
+    <item name="android:navigationBarColor">@color/ndSplashBg</item>
+    <item name="android:windowLightStatusBar">true</item>
+  </style>
 </resources>
