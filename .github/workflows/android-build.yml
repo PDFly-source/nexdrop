@@ -51,6 +51,8 @@ jobs:
             echo "sdkmanager not found (runner SDK licenses are pre-accepted); continuing"
           fi
 
+      - name: Release scope guard (:app only, TV excluded)
+        run: node scripts/check-release-scope.mjs
       - name: Gradle wrapper sanity (real wrapper, committed in-repo)
         working-directory: android
         run: ./gradlew --version
@@ -81,10 +83,6 @@ jobs:
       - name: Build :app debug APK (native NDT1)
         working-directory: android
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
-
-      - name: Build :tv debug APK (receive-only)
-        working-directory: android
-        run: ./gradlew --no-daemon --stacktrace :tv:assembleDebug
 
       - name: Verify the APK is real (not a fake/mock shell)
         working-directory: android
@@ -195,7 +193,6 @@ jobs:
       - name: Rename APKs
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk NexDrop-debug.apk
-          cp android/tv/build/outputs/apk/debug/tv-debug.apk NexDropTV-debug.apk
           cp android/app/build/outputs/apk/release/app-release.apk NexDrop-release.apk
           ls -la NexDrop*.apk
 
@@ -208,13 +205,6 @@ jobs:
           # INFRA FIX: explicit max retention so the validation APK stays
           # downloadable for manual testing regardless of org defaults.
           retention-days: 90
-
-      - name: Upload NexDropTV-debug.apk artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: NexDropTV-debug.apk
-          path: NexDropTV-debug.apk
-          if-no-files-found: error
 
       - name: Upload NexDrop-release.apk artifact (SIGNED production)
         uses: actions/upload-artifact@v4
@@ -309,7 +299,7 @@ jobs:
       - name: Download TV APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: NexDropTV-debug.apk
+          name:
       - name: Download release APK artifact
         uses: actions/download-artifact@v4
         with:
@@ -369,9 +359,9 @@ jobs:
               --title "NexDrop Android $GITHUB_SHA" \
               --notes "Built from $GITHUB_SHA by GitHub Actions.
           PRODUCTION: NexDrop-release.apk (v$VNAME, code $VCODE) — SIGNED with the dedicated NexDrop release key (certificate SHA-256 fingerprint in RELEASE-VERIFICATION.md). Installs directly on modern Android (v2+v3 signing schemes verified, API 36 emulator install smoke passed).
-          ENGINEERING: NexDrop-debug.apk (debug-signed). NexDropTV-debug.apk is the optional receive-only TV client.
+          ENGINEERING: NexDrop-debug.apk (debug-signed). is the optional receive-only TV client.
           Contains the verified native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, honest telemetry, production UI, and the PWA (WebRTC) fallback. Benchmarks live under Settings → Device Test." \
               --prerelease
           fi
-          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" NexDrop-release.apk NexDrop-debug.apk NexDropTV-debug.apk RELEASE-VERIFICATION.md --clobber
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" NexDrop-release.apk NexDrop-debug.apk RELEASE-VERIFICATION.md --clobber
           echo "RELEASE_URL=https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
