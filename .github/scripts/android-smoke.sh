@@ -279,39 +279,54 @@ wait_activity() { # $1 = expected suffix, $2 = attempts (x0.25s)
   return 1
 }
 
-echo '== S0) install / launcher preflight =='
+echo '== S0) release artifact install + preflight (F2) =='
 APK_PATH=$(find "$GITHUB_WORKSPACE" -maxdepth 3 -name 'NexDrop-release.apk' 2>/dev/null | head -1)
-echo "APK artifact: ${APK_PATH:-NOT FOUND}"
-[ -n "$APK_PATH" ] && { sha256sum "$APK_PATH" || true; ls -l "$APK_PATH" || true; }
-AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort -V | tail -1)
-[ -n "$APK_PATH" ] && [ -n "$AAPT" ] && { "$AAPT" dump badging "$APK_PATH" 2>/dev/null | head -3 || true; }
-echo '-- device state --'; adb devices; adb shell getprop ro.build.version.sdk || true; adb shell wm size || true
-echo '-- installed package? --'; adb shell pm list packages | grep nexdrop || echo '(no nexdrop package)'
-if ! adb shell pm list packages | grep -q '^package:com.nexdrop.ndt1$'; then
-  echo 'package missing - reinstalling the exact test APK'
-  [ -n "$APK_PATH" ] || { echo 'PREFLIGHT FAIL: no APK artifact found'; exit 1; }
-  RC=0; OUT=$(adb install -r -d -t "$APK_PATH" 2>&1) || RC=$?
-  echo "install rc=$RC :: $(printf '%s' "$OUT" | tr '\n' ' ' | cut -c1-160)"
-  [ "$RC" -eq 0 ] || { echo 'PREFLIGHT FAIL: adb install failed'; exit 1; }
-fi
-echo '-- package identity --'
-adb shell dumpsys package com.nexdrop.ndt1 | grep -E "versionCode|versionName|firstInstallTime|lastUpdateTime|codePath" | head -6 || true
-echo '-- SplashActivity declaration --'
-adb shell dumpsys package com.nexdrop.ndt1 | grep -A6 'com.nexdrop.ndt1.SplashActivity' | head -12 || true
-echo '-- launcher resolution --'
+echo "artifact: ${APK_PATH:-NOT FOUND}"
+[ -n "$APK_PATH" ] || { echo 'PREFLIGHT BLOCKED: release APK artifact missing'; exit 1; }
+ART_SHA=$(sha256sum "$APK_PATH" | cut -d' ' -f1); echo "artifact sha256: $ART_SHA"; ls -l "$APK_PATH" || true
+BT=$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort -V | tail -1)
+AS=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+"$BT" dump badging "$APK_PATH" 2>/dev/null | grep -E "^package:|^sdkVersion|^targetSdkVersion" | head -3 || true
+CERT=$("$AS" verify --print-certs "$APK_PATH" 2>/dev/null | grep -m1 -i "SHA-256 digest" | awk '{print $NF}' || true)
+echo "signing cert sha256: ${CERT:-unknown}"
+"$AS" verify -v "$APK_PATH" 2>/dev/null | grep -E "v[0-9].*(true|false)" | head -4 || true
+echo '-- gradle / install tasks in this script (ordering proof) --'
+grep -nE "connectedDebugAndroidTest|gradlew |adb (un)?install" "$0" | sed 's/^/  /'
+echo '-- device --'; adb devices; adb shell getprop ro.build.version.sdk || true
+echo '-- remove whatever gradle left installed (debug build shares the application id) --'
+RC=0; OUT=$(adb uninstall com.nexdrop.ndt1 2>&1) || RC=$?
+echo "uninstall rc=$RC :: $(printf '%s' "$OUT" | tr '\n' ' ' | cut -c1-100)"
+adb shell pm list packages | grep nexdrop || echo '(package absent, as intended)'
+echo '-- install the exact release artifact --'
+RC=0; OUT=$(adb install -r -d "$APK_PATH" 2>&1) || RC=$?
+echo "install rc=$RC :: $(printf '%s' "$OUT" | tr '\n' ' ' | cut -c1-160)"
+[ "$RC" -eq 0 ] || { echo 'PREFLIGHT BLOCKED: release install failed'; diag preflight-install-failed; exit 1; }
+case "$OUT" in *Success*) : ;; *) echo 'PREFLIGHT BLOCKED: install output is not Success'; exit 1;; esac
+echo '-- installed identity vs artifact --'
+INST=$(adb shell dumpsys package com.nexdrop.ndt1 | grep -E "versionName=|versionCode=" | head -2 || true)
+echo "$INST"
+echo "$INST" | grep -q "versionName=1.4.7" || { echo 'PREFLIGHT BLOCKED: installed versionName != 1.4.7'; diag preflight-version; exit 1; }
+echo "$INST" | grep -q "versionCode=20" || { echo 'PREFLIGHT BLOCKED: installed versionCode != 20'; diag preflight-version; exit 1; }
+echo "installed codePath: $(adb shell pm path com.nexdrop.ndt1 | head -1 | tr -d '\r')"
+echo '-- exactly one MAIN/LAUNCHER activity --'
+QB=$(adb shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER com.nexdrop.ndt1 2>/dev/null | grep "com.nexdrop.ndt1/" | tr -d '\r' || true)
+LAUNCHERS=$(printf '%s' "$QB" | grep -c "com.nexdrop.ndt1/" || true)
+echo "query-activities: ${QB:-<empty>}"; echo "launcher activity count: ${LAUNCHERS:-0}"
 RESOLVE=$(adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER com.nexdrop.ndt1 2>&1 | tail -1 | tr -d '\r' || true)
 echo "resolve-activity: ${RESOLVE:-<empty>}"
-QA=$(adb shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER com.nexdrop.ndt1 2>&1 | tail -3 | tr -d '\r' || true)
-echo "query-activities: ${QA:-<empty>}"
+echo '-- splash declaration --'
+adb shell dumpsys package com.nexdrop.ndt1 | grep -A4 'com.nexdrop.ndt1.SplashActivity' | head -8 || true
 PREFLIGHT_OK=0
-case "$RESOLVE$QA" in *com.nexdrop.ndt1/.SplashActivity*) PREFLIGHT_OK=1;; esac
-if [ "$PREFLIGHT_OK" -eq 1 ]; then
-  echo 'PREFLIGHT: launcher=SplashActivity PASS'
-else
-  echo 'PREFLIGHT: launcher resolution FAIL - stopping before splash tests'
-  SPLASH_FAIL=1
+if [ "${LAUNCHERS:-0}" -eq 1 ]; then
+  case "$RESOLVE$QB" in *com.nexdrop.ndt1/.SplashActivity*) PREFLIGHT_OK=1;; esac
 fi
-if [ "$SPLASH_FAIL" -ne 0 ]; then echo 'PREFLIGHT BLOCKED - splash matrix not executed'; diag preflight-blocked; exit 1; fi
+if [ "$PREFLIGHT_OK" -eq 1 ]; then
+  echo "PREFLIGHT PASS: install rc=0 :: 1.4.7 / 20 :: one MAIN/LAUNCHER -> SplashActivity :: cert ${CERT:-unknown} :: sha256 $ART_SHA"
+  diag preflight-pass
+else
+  echo "PREFLIGHT BLOCKED: launchers=${LAUNCHERS:-0} resolve=${RESOLVE:-<empty>} query=${QB:-<empty>}"
+  SPLASH_FAIL=1; diag preflight-blocked; exit 1
+fi
 
 echo '== S1) launcher intent resolves to SplashActivity =='
 LAUNCHER="$RESOLVE"
