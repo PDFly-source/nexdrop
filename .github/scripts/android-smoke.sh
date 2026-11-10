@@ -262,29 +262,95 @@ resumed_component() {
   printf '%s' "$out" | grep -oE 'com\.nexdrop\.ndt1/[A-Za-z0-9_.$]+' | head -1
 }
 main_records() { adb shell dumpsys activity activities 2>/dev/null | grep -c "ActivityRecord{.*com\.nexdrop\.ndt1/\.MainActivity" || true; }
-# Historical records pile up in dumpsys; only state=RESUMED is a live instance.
-active_main() {
-  # A live instance is Hist #0 of a task. Historical Hist #1..N and finished
-  # records are NOT instances.
-  adb shell dumpsys activity activities 2>/dev/null | awk '
-    /\* Task\{/ { tid="?"; if (match($0, /#[0-9]+/)) tid=substr($0, RSTART+1, RLENGTH-1); hist=-1 }
-    /Hist #[0-9]+/ { if (match($0, /Hist #[0-9]+/)) hist=substr($0, RSTART+6, RLENGTH-6)+0 }
-    /com\.nexdrop\.ndt1\/\.MainActivity/ { if (hist==0) print "LIVE task=" tid; else if (hist>0) print "HIST task=" tid " hist=" hist }
-  ' | grep -c "^LIVE" || true
+# Historical records pile up in dumpsys: a LIVE instance is the TOP (highest
+# Hist index) NON-FINISHED activity of a task. Parsed in Python because API 36
+# prints "Hist  #0" with TWO spaces; the earlier awk pattern required one space
+# and silently matched nothing (false active=0 FAIL, run 42824325127). A
+# finished record ends with "f}}".
+cat > /tmp/parse-activities.py <<'PYA'
+import sys
+suffix = sys.argv[1]
+tasks, cur = {}, None
+for ln in sys.stdin.read().splitlines():
+    if "* Task{" in ln and " #" in ln:
+        try:
+            cur = ln.split("#", 1)[1].split()[0]
+        except IndexError:
+            cur = None
+        if cur is not None:
+            tasks.setdefault(cur, [])
+        continue
+    if "Hist" not in ln or "ActivityRecord{" not in ln:
+        continue
+    try:
+        idx = int(ln.split("Hist", 1)[1].split("#", 1)[1].split(":", 1)[0])
+    except (IndexError, ValueError):
+        continue
+    comp = ""
+    for tok in ln.split():
+        if tok.startswith("com.nexdrop.ndt1/"):
+            comp = tok.split("}", 1)[0]
+            break
+    if cur is None or not comp:
+        continue
+    tasks[cur].append((idx, comp, ln.rstrip().endswith("f}}")))
+live = []
+for tid, entries in tasks.items():
+    if not entries:
+        continue
+    top = max(entries, key=lambda x: x[0])
+    if top[1].endswith(suffix) and not top[2]:
+        live.append(tid)
+live.sort(key=lambda t: int(t) if t.isdigit() else 0)
+print("{0}|{1}".format(len(live), " ".join(live)))
+PYA
+activity_state() { adb shell dumpsys activity activities 2>/dev/null | python3 /tmp/parse-activities.py "$1" || echo "0|"; }
+main_records() { adb shell dumpsys activity activities 2>/dev/null | grep -c "ActivityRecord{.*com\.nexdrop\.ndt1/\.MainActivity" || true; }
+active_main() { activity_state .MainActivity | cut -d'|' -f1; }
+main_task_ids() { activity_state .MainActivity | cut -d'|' -f2 | sed 's/^ *//; s/ *$//'; }
+splash_live() { activity_state .SplashActivity | cut -d'|' -f1; }
+pid_now() { adb shell pidof com.nexdrop.ndt1 2>/dev/null | tr -d '\r' || true; }
+resumed() { resumed_component; }
+shot() {
+  adb shell screencap -p "/sdcard/$1.png" >/dev/null 2>&1
+  adb pull "/sdcard/$1.png" "screenshots/$1.png" >/dev/null 2>&1 && echo "  [shot] screenshots/$1.png"
+  adb shell rm -f "/sdcard/$1.png" >/dev/null 2>&1
 }
-main_task_ids() {
-  adb shell dumpsys activity activities 2>/dev/null | awk '
-    /\* Task\{/ { tid="?"; if (match($0, /#[0-9]+/)) tid=substr($0, RSTART+1, RLENGTH-1); hist=-1 }
-    /Hist #[0-9]+/ { if (match($0, /Hist #[0-9]+/)) hist=substr($0, RSTART+6, RLENGTH-6)+0 }
-    /com\.nexdrop\.ndt1\/\.MainActivity/ { if (hist==0) print tid }
-  ' | sort -u | tr "\n" " "
+
+tap_nav() {
+  # Tap a BOTTOM-NAV tab: pick the bottom-most exact text match (content can
+  # repeat tab words, e.g. a 'Settings' quick-header above the nav).
+  local i
+  rm -f /tmp/navtap.cmd
+  for i in 1 2 3; do
+    dump_ui
+    if python3 - "$1" <<'PYEOF' > /tmp/navtap.cmd
+import sys, re
+label = sys.argv[1].casefold()
+xml = open('ui.xml', encoding='utf-8').read()
+cands = [(m.group(2), m.group(3), m.group(4), m.group(5))
+         for m in re.finditer(r'text="([^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+         if m.group(1).casefold() == label]
+if cands:
+    x1, y1, x2, y2 = max(cands, key=lambda c: int(c[1]))
+    print(f"adb shell input tap {(int(x1)+int(x2))//2} {(int(y1)+int(y2))//2}")
+    sys.exit(0)
+sys.exit(1)
+PYEOF
+    then
+      break
+    fi
+    sleep 1
+  done
+  if [ ! -s /tmp/navtap.cmd ]; then
+    echo "SMOKE FAIL: bottom-nav tab '$1' not found"
+    cat ui.xml
+    exit 1
+  fi
+  cat /tmp/navtap.cmd
+  bash /tmp/navtap.cmd
 }
-splash_live() {
-  adb shell dumpsys activity activities 2>/dev/null | awk '
-    /Hist #[0-9]+/ { if (match($0, /Hist #[0-9]+/)) hist=substr($0, RSTART+6, RLENGTH-6)+0 }
-    /com\.nexdrop\.ndt1\/\.SplashActivity/ { if (hist==0) print "LIVE" }
-  ' | grep -c "^LIVE" || true
-}
+
 focus_component() { adb shell dumpsys window 2>/dev/null | grep -m1 "mCurrentFocus" | grep -oE "com\.nexdrop\.ndt1/[A-Za-z0-9_.$]+" | head -1; }
 diag() {
   local t="${1:-snapshot}"
@@ -425,36 +491,43 @@ if [ "${ACCEPTED:-0}" -eq 1 ] && [ "${STARTS:-0}" -eq 1 ]; then
 else
   echo "SPLASH: duplicate-start prevention INCONCLUSIVE (accepted=${ACCEPTED:-0} starts=${STARTS:-0})"
 fi
-ACT=$(active_main); TIDS=$(main_task_ids); SPLASH_LIVE=$(splash_live)
-echo "SPLASH: active MainActivity instances=$ACT taskIds=[${TIDS:-none}] liveSplash=$SPLASH_LIVE"
-if [ "${ACT:-0}" -eq 1 ]; then echo "SPLASH: exactly one active MainActivity PASS (taskIds=[${TIDS:-none}])"; else echo "SPLASH: exactly one active MainActivity FAIL (active=${ACT:-0})"; SPLASH_FAIL=1; fi
+ACT=$(active_main); TIDS=$(main_task_ids); SPLASH_LIVE=$(splash_live); S2_RES=$(resumed_component); S2_FOC=$(focus_component)
+echo "SPLASH: active MainActivity instances=$ACT taskIds=[${TIDS:-none}] liveSplash=$SPLASH_LIVE resumed=$S2_RES focus=$S2_FOC"
+if [ "${ACT:-0}" -eq 1 ] && [ "${SPLASH_LIVE:-0}" -eq 0 ] && [ "$S2_RES" = "$PKG/.MainActivity" ]; then
+  echo "SPLASH: exactly one active MainActivity PASS (taskIds=[${TIDS:-none}])"
+elif [ "$S2_RES" = "$PKG/.MainActivity" ] && { [ "${ACT:-0}" -ne 1 ] || [ "${SPLASH_LIVE:-0}" -ne 0 ]; }; then
+  echo "SPLASH: exactly one active MainActivity INCONCLUSIVE (resumed=MainActivity but live parse active=${ACT:-0} liveSplash=${SPLASH_LIVE:-0})"; SPLASH_INCONCLUSIVE=1
+else
+  echo "SPLASH: exactly one active MainActivity FAIL (resumed=$S2_RES active=${ACT:-0})"; SPLASH_FAIL=1
+fi
 FATAL=$(adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" || true)
 echo "SPLASH: WebView destruction safety - fatal exceptions in logcat=$FATAL"
 if [ "${FATAL:-0}" -eq 0 ]; then echo 'SPLASH: WebView destruction safety PASS (no FATAL EXCEPTION)'; else echo "SPLASH: WebView destruction safety FAIL (fatal=$FATAL)"; SPLASH_FAIL=1; adb logcat -d 2>/dev/null | grep -A12 "FATAL EXCEPTION" | head -30 || true; fi
 adb exec-out screencap -p > screenshots/31-after-splash-main.png
 
-echo '== S3) rotation: portrait -> landscape -> portrait =='
-for R in 1 0; do
-  adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation $R
-  adb shell am force-stop "$PKG"; adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
-  sleep 0.7; adb exec-out screencap -p > "screenshots/32-splash-rot${R}.png"
-  for R in 1 0 1; do
-  adb shell settings put system accelerometer_rotation 0 >/dev/null 2>&1 || true
+echo '== S3) rotation x3 on the LIVE app: portrait -> landscape -> portrait -> landscape (no relaunch) =='
+adb shell settings put system accelerometer_rotation 0 >/dev/null 2>&1 || true
+adb shell settings put system user_rotation 0 >/dev/null 2>&1 || true
+sleep 2
+BASE_TIDS=$(main_task_ids); BASE_ACT=$(active_main)
+echo "SPLASH: rotation baseline active=$BASE_ACT taskIds=[${BASE_TIDS:-none}]"
+for R in 1 0 1; do
   adb shell settings put system user_rotation "$R" >/dev/null 2>&1 || true
-  sleep 2
-  ACC=0
-  if wait_activity "MainActivity" 40; then ACC=1; fi
-  ACT=$(active_main); TIDS=$(main_task_ids); SPLASH_LIVE=$(splash_live)
+  sleep 3
+  RES=$(resumed_component); FOC=$(focus_component); ACT=$(active_main); TIDS=$(main_task_ids); SPLASH_LIVE=$(splash_live)
   diag "rotation-$R" || true
-  if [ "$ACC" -eq 1 ] && [ "${ACT:-0}" -eq 1 ] && [ "${SPLASH_LIVE:-0}" -eq 0 ]; then
-    echo "SPLASH: rotation user_rotation=$R PASS (active=$ACT taskIds=[${TIDS:-none}] liveSplash=$SPLASH_LIVE)"
+  if [ "$RES" = "$PKG/.MainActivity" ] && [ "${ACT:-0}" -eq 1 ] && [ "${SPLASH_LIVE:-0}" -eq 0 ] && [ "$TIDS" = "$BASE_TIDS" ]; then
+    echo "SPLASH: rotation user_rotation=$R PASS (resumed=MainActivity active=1 taskIds=[${TIDS:-none}] liveSplash=0 noSplashRelaunch)"
+  elif [ "$RES" = "$PKG/.MainActivity" ]; then
+    echo "SPLASH: rotation user_rotation=$R INCONCLUSIVE (resumed=MainActivity active=${ACT:-0} liveSplash=${SPLASH_LIVE:-0} taskIds=[${TIDS:-none}] expected=[${BASE_TIDS:-none}] focus=$FOC)"
+    SPLASH_INCONCLUSIVE=1
   else
-    echo "SPLASH: rotation user_rotation=$R FAIL (resumed=$(resumed_component) active=${ACT:-0} taskIds=[${TIDS:-none}] liveSplash=${SPLASH_LIVE:-0})"
+    echo "SPLASH: rotation user_rotation=$R FAIL (resumed=$RES active=${ACT:-0} liveSplash=${SPLASH_LIVE:-0} taskIds=[${TIDS:-none}])"
     SPLASH_FAIL=1
   fi
 done
-done
-
+adb shell settings put system user_rotation 0 >/dev/null 2>&1 || true
+sleep 2
 echo '== S4) offline launch (wifi+mobile data off) =='
 adb shell svc wifi disable; adb shell svc data disable; adb shell am force-stop "$PKG"
 adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
@@ -467,7 +540,9 @@ for SZ in 320x568 720x1280; do
   adb shell wm size "$SZ" >/dev/null 2>&1; adb shell wm density 320 >/dev/null 2>&1; sleep 1
   adb shell am force-stop "$PKG"; adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
   sleep 0.8; adb exec-out screencap -p > "screenshots/34-splash-${SZ}.png"
-  [ "$SZ" = 320x568 ] && { adb shell wm size reset >/dev/null 2>&1; adb shell wm density reset >/dev/null 2>&1; sleep 1; }
+  adb shell wm size reset >/dev/null 2>&1 || true
+  adb shell wm density reset >/dev/null 2>&1 || true
+  sleep 1
 done
 echo 'SPLASH: viewport screenshots captured (320x568, 720x1280) PASS'
 
@@ -491,5 +566,174 @@ adb shell dumpsys activity activities > screenshots/diag-splash-activities.txt 2
 grep -E "NexDropSplash" screenshots/diag-splash-logcat.txt || true
 diag final
 
-[ "$SPLASH_FAIL" -eq 0 ] && echo 'SPLASH COVERAGE PASSED' || { echo 'SPLASH COVERAGE FAILED'; exit 1; }
+if [ "${SPLASH_FAIL:-0}" -eq 0 ] && [ "${SPLASH_INCONCLUSIVE:-0}" -eq 0 ]; then
+  echo 'SPLASH COVERAGE PASSED'
+else
+  [ "${SPLASH_INCONCLUSIVE:-0}" -ne 0 ] && echo 'SPLASH COVERAGE INCONCLUSIVE (live-instance parse disagreed with the resumed activity)'
+  echo 'SPLASH COVERAGE FAILED'; exit 1
+fi
+
+# =========================================================================
+# UI MATRIX — screens 01-08 on the SAME signed artifact (restored from the
+# verified 3f66b27 harness, adapted to the SplashActivity launcher path).
+# =========================================================================
+echo '== U0) reset to first-launch state (data cleared, launcher start) =='
+mkdir -p screenshots
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
+adb shell pm clear "$PKG" >/dev/null 2>&1 || true
+adb logcat -c || true
+adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
+wait_activity "MainActivity" 60 || { echo 'SMOKE FAIL: UI matrix launch never reached MainActivity'; adb logcat -d > logcat.txt; exit 1; }
+sleep 4
+adb shell pidof "$PKG" > /dev/null || { echo 'SMOKE FAIL: process died on launch'; adb logcat -d > logcat.txt; exit 1; }
+if adb logcat -d | grep -q 'FATAL EXCEPTION'; then echo 'SMOKE FAIL: FATAL EXCEPTION on launch'; adb logcat -d > logcat.txt; exit 1; fi
+
+echo '== U1) case 01 Welcome -> GET STARTED -> case 02 Home =='
+dump_ui
+grep -qi 'GET STARTED' ui.xml || { echo 'SMOKE FAIL: Welcome screen (GET STARTED) missing'; cat ui.xml; exit 1; }
+grep -qi 'Your files' ui.xml || { echo 'SMOKE FAIL: welcome hero copy missing'; cat ui.xml; exit 1; }
+shot 01-welcome
+tap_by_text 'GET STARTED'
+sleep 2
+dump_ui
+grep -qi 'PRIVATE' ui.xml && grep -qi 'DIRECT\.' ui.xml && grep -qi 'FAST' ui.xml \
+  || { echo 'SMOKE FAIL: Home headline missing'; cat ui.xml; exit 1; }
+grep -qi 'SEND FILES' ui.xml || { echo 'SMOKE FAIL: SEND FILES card missing'; cat ui.xml; exit 1; }
+grep -qi 'RECEIVE' ui.xml || { echo 'SMOKE FAIL: RECEIVE card missing'; cat ui.xml; exit 1; }
+grep -qi 'LOCAL DIRECT' ui.xml || { echo 'SMOKE FAIL: LOCAL DIRECT card missing'; cat ui.xml; exit 1; }
+grep -qi 'Local ready' ui.xml || { echo 'SMOKE FAIL: Local ready pill missing'; cat ui.xml; exit 1; }
+grep -qi 'Home' ui.xml && grep -qi 'Transfer' ui.xml && grep -qi 'Devices' ui.xml \
+  && grep -qi 'History' ui.xml && grep -qi 'Settings' ui.xml \
+  || { echo 'SMOKE FAIL: bottom nav tabs missing'; cat ui.xml; exit 1; }
+if grep -qi 'benchmark' ui.xml; then echo 'SMOKE FAIL: benchmark leaked onto Home'; cat ui.xml; exit 1; fi
+echo 'UI: case 01 Welcome -> case 02 Home PASS (no debug controls on Home)'
+assert_layout 'home' 1
+shot 02-home
+
+echo '== U2) case 03 Send files: file-first flow, no scanner before a file =='
+tap_by_text 'SEND FILES'
+sleep 2
+dump_ui
+grep -qi 'Select files' ui.xml || { echo 'SMOKE FAIL: drop zone missing'; cat ui.xml; exit 1; }
+grep -qi 'Images' ui.xml || { echo 'SMOKE FAIL: category chips missing'; cat ui.xml; exit 1; }
+require_text 'CONTINUE'
+if resumed | grep -q CaptureActivity; then echo 'SMOKE FAIL: scanner opened without a file'; exit 1; fi
+tap_by_text 'CONTINUE'
+sleep 1
+if resumed | grep -q CaptureActivity; then echo 'SMOKE FAIL: scanner opened with no file selected'; exit 1; fi
+adb shell input swipe 160 150 160 500 300 || true
+sleep 1
+shot 03-send-files
+echo 'UI: case 03 Send files PASS (no scanner until a real file is picked)'
+
+echo '== U2b) Back affordance: real history, never Home-only, never cancels =='
+dump_ui
+grep -q 'content-desc="Back"' ui.xml || { echo 'SMOKE FAIL: Send files has no top-left Back affordance'; cat ui.xml; exit 1; }
+tap_by_desc 'Back'
+sleep 2
+dump_ui
+grep -qi 'SEND FILES' ui.xml && grep -qi 'LOCAL DIRECT' ui.xml \
+  || { echo 'SMOKE FAIL: on-screen Back did not return to the previous screen (Home)'; cat ui.xml; exit 1; }
+echo 'UI: on-screen Back PASS (returned to Home)'
+tap_nav 'Transfer'; sleep 2
+adb shell input keyevent 4; sleep 2
+dump_ui
+grep -qi 'SEND FILES' ui.xml || { echo 'SMOKE FAIL: system Back from Send files did not pop to Home'; cat ui.xml; exit 1; }
+tap_nav 'Devices'; sleep 2
+adb shell input keyevent 4; sleep 2
+dump_ui
+grep -qi 'SEND FILES' ui.xml || { echo 'SMOKE FAIL: system Back from Devices did not walk history to Home'; cat ui.xml; exit 1; }
+echo 'UI: back-history PASS (system + on-screen back share one stack)'
+
+echo '== U3) case 04 Receive: ONE QR + truthful LOCAL DIRECT + details =='
+adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
+tap_by_text 'RECEIVE'
+sleep 8
+adb shell pidof "$PKG" > /dev/null || { echo 'SMOKE FAIL: died starting receive'; adb logcat -d > logcat.txt; exit 1; }
+dump_ui
+grep -qi 'scan this QR' ui.xml || { echo 'SMOKE FAIL: receive QR copy missing'; cat ui.xml; exit 1; }
+require_text 'LOCAL DIRECT'
+require_text 'Waiting for device'
+require_text 'Expires'
+require_text 'REFRESH QR'
+adb shell input swipe 160 150 160 500 300 || true
+sleep 1
+assert_layout 'receive' 0
+shot 04-receive-qr
+tap_by_text 'Details'
+sleep 2
+dump_ui
+grep -qi 'IP:' ui.xml || { echo 'SMOKE FAIL: local IP missing in details'; cat ui.xml; exit 1; }
+grep -qi 'Route reachable: YES' ui.xml || { echo 'SMOKE FAIL: route reachable not YES'; cat ui.xml; exit 1; }
+grep -qi 'Internet: NOT REQUIRED' ui.xml || { echo 'SMOKE FAIL: Internet NOT REQUIRED missing'; cat ui.xml; exit 1; }
+shot 05-receive-details
+tap_by_text 'Close'
+sleep 1
+adb shell input keyevent 4 || true
+sleep 2
+echo 'UI: case 04 Receive PASS (one QR, truthful transport card + details)'
+
+echo '== U4) cases 06-08 Your NexDrop / History / Settings via bottom nav =='
+tap_nav 'Devices'
+sleep 2
+dump_ui
+grep -qi 'Your NexDrop' ui.xml || { echo 'SMOKE FAIL: Your NexDrop missing'; cat ui.xml; exit 1; }
+grep -qi 'Recent transfers' ui.xml || { echo 'SMOKE FAIL: recent transfers missing'; cat ui.xml; exit 1; }
+grep -qi 'SHA-256 verification' ui.xml || { echo 'SMOKE FAIL: settings list missing'; cat ui.xml; exit 1; }
+assert_layout 'devices' 1
+shot 08-devices
+tap_nav 'History'
+sleep 2
+dump_ui
+grep -qi 'History' ui.xml || { echo 'SMOKE FAIL: History tab missing'; cat ui.xml; exit 1; }
+assert_layout 'history' 1
+shot 06-history
+tap_nav 'Settings'
+sleep 2
+assert_layout 'settings' 1
+shot 07-settings-top
+require_text 'Device Test (Advanced)'
+shot 07-settings
+echo 'UI: cases 06-08 PASS (nav tabs + layouts)'
+
+echo '== U5) Device Test: engineering tools live BEHIND Settings =='
+tap_by_text 'Device Test (Advanced)'
+sleep 2
+dump_ui
+grep -qi 'benchmark' ui.xml || { echo 'SMOKE FAIL: benchmarks missing in Device Test'; cat ui.xml; exit 1; }
+grep -qi '358 MiB' ui.xml || { echo 'SMOKE FAIL: 358 MiB benchmark missing'; cat ui.xml; exit 1; }
+echo 'UI: Device Test PASS (benchmarks hidden behind Settings)'
+shot 09-device-test
+
+echo '== U6) benchmark path: scanner opens once CAMERA is granted =='
+adb shell pm grant "$PKG" android.permission.CAMERA >/dev/null 2>&1 || true
+tap_by_text 'Benchmark NATIVE'
+sleep 3
+resumed | grep -q CaptureActivity || { echo 'SMOKE FAIL: benchmark scan did not open'; adb logcat -d > logcat.txt; exit 1; }
+echo 'UI: benchmark scanner PASS (engineering-only path)'
+adb shell input keyevent 4 || true
+sleep 1
+
+echo '== U7) FONT-SCALE 1.3: layout robustness with screenshots =='
+adb shell settings put system font_scale 1.3
+sleep 4
+if [ -n "$(resumed | grep CaptureActivity || true)" ]; then adb shell input keyevent 4 || true; sleep 2; fi
+tap_nav 'Devices';  sleep 2; assert_layout 'devices-font130' 1;  shot 20-devices-font130
+tap_nav 'History';  sleep 2; assert_layout 'history-font130' 1;  shot 21-history-font130
+tap_nav 'Settings'; sleep 3; assert_layout 'settings-font130' 1; shot 22-settings-font130
+tap_nav 'Home';     sleep 2; assert_layout 'home-font130' 1;     shot 23-home-font130
+adb shell settings put system font_scale 1.0
+sleep 3
+echo 'UI: FONT-SCALE 1.3 PASS (no overflow, no nav overlap)'
+
+echo '== X) artifact integrity: sha256 at start and end of the whole matrix =='
+SHA_END=$(sha256sum "$APK_PATH" | cut -d" " -f1)
+echo "APK sha256 start=$ART_SHA"
+echo "APK sha256 end  =$SHA_END"
+if [ "$SHA_END" != "$ART_SHA" ]; then echo 'SMOKE FAIL: APK sha256 changed during the run (substitution)'; exit 1; fi
+echo 'ARTIFACT INTEGRITY PASS — no APK substitution mid-run'
+if adb logcat -d | grep -q 'FATAL EXCEPTION'; then adb logcat -d > logcat.txt; echo 'SMOKE FAIL: FATAL EXCEPTION during the matrix'; exit 1; fi
+adb logcat -d > logcat.txt || true
+echo 'MATRIX SUMMARY: live-instance=see S2/S3, rotation x3=see S3, ui 01-08=U1-U4, devicetest=U5, scanner=U6, font130=U7, webview=see S6'
+
 echo '== END) script reached the end =='
