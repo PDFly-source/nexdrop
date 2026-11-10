@@ -287,7 +287,9 @@ jobs:
     needs: [apk, startup-smoke]
     # v1.4.1-rc1: internal diagnostic builds (dispatch with internal=true)
     # build + test on any branch but never publish a release or tag.
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.internal }}
+    # v1.4.7 Phase I-B1 (R6-D): a manual dispatch may publish ONLY from main;
+    # push-triggered releases and the internal=true skip are unchanged.
+    if: ${{ github.event_name != 'workflow_dispatch' || (!inputs.internal && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -296,10 +298,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: NexDrop-debug.apk
-      - name: Download TV APK artifact
-        uses: actions/download-artifact@v4
-        with:
-          name:
       - name: Download release APK artifact
         uses: actions/download-artifact@v4
         with:
@@ -359,7 +357,7 @@ jobs:
               --title "NexDrop Android $GITHUB_SHA" \
               --notes "Built from $GITHUB_SHA by GitHub Actions.
           PRODUCTION: NexDrop-release.apk (v$VNAME, code $VCODE) — SIGNED with the dedicated NexDrop release key (certificate SHA-256 fingerprint in RELEASE-VERIFICATION.md). Installs directly on modern Android (v2+v3 signing schemes verified, API 36 emulator install smoke passed).
-          ENGINEERING: NexDrop-debug.apk (debug-signed). is the optional receive-only TV client.
+          ENGINEERING: NexDrop-debug.apk (debug-signed). NexDrop TV (receive-only client) is excluded from this release and is not built or attached.
           Contains the verified native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, honest telemetry, production UI, and the PWA (WebRTC) fallback. Benchmarks live under Settings → Device Test." \
               --prerelease
           fi
