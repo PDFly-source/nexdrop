@@ -726,7 +726,7 @@ if nav:
     bottom = max(n[4] for n in nav)
     if bottom > nt + 4:
         problems.append(f'bottom nav ends at y={bottom}, below the navigation-bar top ({nt})')
-    else:
+    elif os.environ.get('INSETS_VERBOSE'):
         print(f'info: bottom nav ends at y={bottom} <= {nt}')
 if problems:
     for p in problems: print('FAIL: ' + p)
@@ -767,9 +767,12 @@ SW=${SCREEN%x*}; SH=${SCREEN#*x}
 [ -n "$SW" ] || SW=720; [ -n "$SH" ] || SH=1280
 ensure_app_home || { echo 'PREDICTIVE BACK FAIL: no tab screen to start from'; BACK_FAIL=1; }
 sleep 1
-tap_nav 'Settings'; sleep 2
+tap_nav 'Settings'; sleep 3
 dump_ui
-if ! grep -qi 'Device Test' ui.xml; then
+if grep -qi 'SEND FILES' ui.xml; then   # still on Home: retry once by tapping the tab again
+  tap_nav 'Settings'; sleep 3; dump_ui
+fi
+if grep -qi 'SEND FILES' ui.xml; then
   echo 'PREDICTIVE BACK INCONCLUSIVE: Settings screen did not open'
   cp ui.xml screenshots/diag-back-ui.xml 2>/dev/null || true
   BACK_FAIL=1
