@@ -13,11 +13,11 @@ android {
   //   java.lang.ClassNotFoundException: com.nexdrop.ndt1.app.MainActivity
   // (verified in the shipped NexDrop-debug.apk merged manifest).
   namespace = "com.nexdrop.ndt1"
-  compileSdk = 34
+  compileSdk = 36
   defaultConfig {
     applicationId = "com.nexdrop.ndt1"
     minSdk = 26
-    targetSdk = 34
+    targetSdk = 36
     // Production release (mission 2026-10-04 §14): production label/icons,
     // release build in CI. Debug APK stays available for engineering.
     versionCode = 20

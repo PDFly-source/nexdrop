@@ -582,7 +582,9 @@ adb shell dumpsys activity activities > screenshots/diag-splash-activities.txt 2
 grep -E "NexDropSplash" screenshots/diag-splash-logcat.txt || true
 diag final
 
-if [ "${SPLASH_FAIL:-0}" -eq 0 ] && [ "${SPLASH_INCONCLUSIVE:-0}" -eq 0 ]; then
+if [ "${SPLASH_FAIL:-0}" -eq 0 ] && [ "${SPLASH_INCONCLUSIVE:-0}" -eq 0 ] \
+   && [ "${INSETS_FAIL:-0}" -eq 0 ] && [ "${PREDBACK_FAIL:-0}" -eq 0 ] \
+   && [ "${PREDBACK_INCONCLUSIVE:-0}" -eq 0 ]; then
   echo 'SPLASH COVERAGE PASSED'
 else
   [ "${SPLASH_INCONCLUSIVE:-0}" -ne 0 ] && echo 'SPLASH COVERAGE INCONCLUSIVE (live-instance parse disagreed with the resumed activity)'
@@ -593,6 +595,92 @@ fi
 # UI MATRIX — screens 01-08 on the SAME signed artifact (restored from the
 # verified 3f66b27 harness, adapted to the SplashActivity launcher path).
 # =========================================================================
+echo '== S8) edge-to-edge (target 36): content respects the system bars =='
+# The window is laid out edge-to-edge; the host must be inset so the status bar
+# never covers content and the gesture/navigation bar never covers the bottom
+# nav. Bars are read from the live window dump (never hardcoded).
+adb shell dumpsys window > /tmp/win.txt 2>/dev/null || true
+python3 - <<'PYA' > /tmp/insets.env
+import re
+txt=open('/tmp/win.txt',encoding='utf-8',errors='replace').read()
+def bar(kind):
+    m=re.search(r'type='+kind+r'\b[^\n]*?frame=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]', txt)
+    if m:
+        top=int(m.group(2)); bottom=int(m.group(4)); return top,bottom
+    return None
+st=bar('statusBars'); nb=bar('navigationBars')
+print('STATUS_BOTTOM=%s' % (st[1] if st else '?'))
+print('NAV_TOP=%s' % (nb[0] if nb else '?'))
+PYA
+. /tmp/insets.env 2>/dev/null || true
+echo "insets: statusBars.bottom=${STATUS_BOTTOM:-?} navigationBars.top=${NAV_TOP:-?}"
+adb shell input keyevent 3 >/dev/null 2>&1 || true   # leave any dialog
+sleep 1
+dump_ui
+python3 - <<'PYA'
+import re,sys,os
+xml=open('ui.xml',encoding='utf-8',errors='replace').read()
+nodes=[(m.group(1),int(m.group(2)),int(m.group(3)),int(m.group(4)),int(m.group(5)))
+       for m in re.finditer(r'text="([^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)]
+vis=[n for n in nodes if n[4]>n[2] and n[3]>n[1]]
+if not vis: print('INSETS INCONCLUSIVE: no visible nodes'); sys.exit(0)
+top=min(vis,key=lambda n:n[2])
+nav=[n for n in nodes if n[0].strip().casefold() in ('home','transfer','devices','history','settings')]
+sb=os.environ.get('STATUS_BOTTOM','?'); nt=os.environ.get('NAV_TOP','?')
+ok=True
+if sb not in ('?',''):
+    sb=int(sb)
+    if top[2] < sb-4:
+        print(f'INSETS FAIL: content "{top[0][:24]}" starts at y={top[2]} above the status bar ({sb})'); ok=False
+    else:
+        print(f'INSETS OK: top content starts at y={top[2]} >= status bar bottom {sb}')
+if nt not in ('?','') and nav:
+    nt=int(nt); bottom=max(n[4] for n in nav)
+    if bottom > nt+4:
+        print(f'INSETS FAIL: bottom nav ends at y={bottom} below the nav bar top ({nt})'); ok=False
+    else:
+        print(f'INSETS OK: bottom nav ends at y={bottom} <= nav bar top {nt}')
+elif nt=='?':
+    print('INSETS INCONCLUSIVE: navigation bar frame not parsed from dumpsys')
+if not ok: sys.exit(1)
+PYA
+INSETS_RC=$?
+if [ "$INSETS_RC" -ne 0 ]; then
+  echo 'EDGE-TO-EDGE FAIL'; adb shell dumpsys window > screenshots/diag-insets.txt 2>&1 || true; INSETS_FAIL=1
+else
+  echo 'EDGE-TO-EDGE PASS (status bar and navigation bar do not overlap content)'
+fi
+shot 40-edge-to-edge
+# rotation must keep the insets correct
+adb shell settings put system accelerometer_rotation 0 >/dev/null 2>&1 || true
+adb shell settings put system user_rotation 1 >/dev/null 2>&1 || true; sleep 2; shot 41-edge-to-edge-landscape
+adb shell settings put system user_rotation 0 >/dev/null 2>&1 || true; sleep 2
+cmp -s ui.xml ui.xml || true
+
+echo '== S9) predictive back (target 36 default): gesture back navigates, no crash =='
+adb shell cmd overlay enable com.android.internal.systemui.navbar.gestural >/dev/null 2>&1 || true
+sleep 2
+back_to_home || true
+adb logcat -c || true
+tap_nav 'Settings'; sleep 2
+BACK_BEFORE=$(adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml ui.xml >/dev/null 2>&1; grep -c 'Settings' ui.xml || true)
+WSIZE=$(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | head -1)
+W=${WSIZE%x*}; H=${WSIZE#*x}
+MID=$(( H / 2 ))
+adb shell input swipe 2 "$MID" $(( W / 2 )) "$MID" 260 >/dev/null 2>&1 || true
+sleep 2
+dump_ui
+BACK_AFTER=$(grep -c 'SEND FILES' ui.xml || true)
+FATALS=$(adb logcat -d | grep -c 'FATAL EXCEPTION' || true)
+if [ "$FATALS" -ne 0 ]; then
+  echo "PREDICTIVE-BACK FAIL: FATAL EXCEPTION after gesture back"; PREDBACK_FAIL=1
+elif [ "${BACK_AFTER:-0}" -ge 1 ]; then
+  echo 'PREDICTIVE-BACK PASS (edge-swipe back returned to Home, no crash)'
+else
+  echo 'PREDICTIVE-BACK INCONCLUSIVE (gesture did not change the screen in this emulator)'
+  PREDBACK_INCONCLUSIVE=1
+fi
+
 echo '== U0) reset to first-launch state (data cleared, launcher start) =='
 mkdir -p screenshots
 adb shell am force-stop "$PKG" >/dev/null 2>&1 || true

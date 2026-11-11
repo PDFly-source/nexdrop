@@ -30,6 +30,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.journeyapps.barcodescanner.ScanContract
@@ -661,9 +665,22 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
 
   /** Apply the theme before ANY view/token read; also repaint system bars. */
   private fun applyThemeNow() {
-    D.apply(themeIsLight())
-    window.statusBarColor = D.BG
-    window.navigationBarColor = D.BG
+    val light = themeIsLight()
+    D.apply(light)
+    // Pre-35 compatibility only: from target 35 these setters are no-ops and the
+    // bar colour comes from what is drawn behind (BgView). Icon contrast is the
+    // part that still matters, so it is driven explicitly.
+    runCatching {
+      window.statusBarColor = D.BG
+      window.navigationBarColor = D.BG
+    }
+    runCatching {
+      val c = WindowInsetsControllerCompat(window, window.decorView)
+      c.isAppearanceLightStatusBars = light
+      c.isAppearanceLightNavigationBars = light
+    }
+    // A live theme switch must repaint the insets-driven padding.
+    (window.decorView as? View)?.let { ViewCompat.requestApplyInsets(it) }
   }
 
   private fun keepAwakePref(): Boolean =
@@ -774,6 +791,9 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    // Android 15+/target 36: the window is always laid out edge-to-edge.
+    // Backgrounds stay full-bleed; CONTENT and the bottom nav are inset below.
+    WindowCompat.setDecorFitsSystemWindows(window, false)
     applyThemeNow()
     val welcomed = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_WELCOMED, false)
     screen = if (welcomed) Screen.HOME else Screen.WELCOME
@@ -907,6 +927,36 @@ class MainActivity : AppCompatActivity(), TurboReceiver.Listener, SendQueueContr
     } ?: scroll
     root.addView(host, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     setContentView(root)
+    applySystemBarInsets(root, host)
+  }
+
+  /**
+   * R1 edge-to-edge: the background (BgView) stays full-bleed behind the system
+   * bars; only the interactive host gets padding, so the status bar never covers
+   * content and the gesture/navigation bar never covers the bottom nav. The IME
+   * inset is honoured as well so form fields stay visible above the keyboard.
+   */
+  private fun applySystemBarInsets(rootView: View, host: View) {
+    val density = resources.displayMetrics.density
+    val baseLeft = host.paddingLeft
+    val baseTop = host.paddingTop
+    val baseRight = host.paddingRight
+    val baseBottom = host.paddingBottom
+    ViewCompat.setOnApplyWindowInsetsListener(rootView) { _, insets ->
+      val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+      val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+      val left = baseLeft + bars.left
+      val top = baseTop + bars.top
+      val right = baseRight + bars.right
+      val bottom = baseBottom + maxOf(bars.bottom, ime.bottom)
+      if (host.paddingLeft != left || host.paddingTop != top ||
+          host.paddingRight != right || host.paddingBottom != bottom) {
+        host.setPadding(left, top, right, bottom)
+      }
+      // Consume nothing: children may still query the insets themselves.
+      insets
+    }
+    ViewCompat.requestApplyInsets(rootView)
   }
 
   /** PREMIUM SIGNATURE FOOTER (v1.5): the single implementation for Home,

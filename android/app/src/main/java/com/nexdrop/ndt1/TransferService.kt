@@ -30,6 +30,13 @@ class TransferService : Service() {
   override fun onBind(intent: Intent?) = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    // A null intent is a START_STICKY resurrection after the platform killed
+    // us: never re-advertise a transfer we no longer own.
+    if (intent == null) {
+      stopForeground(STOP_FOREGROUND_REMOVE)
+      stopSelf(startId)
+      return START_NOT_STICKY
+    }
     when (intent?.action) {
       ACTION_STOP -> {
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -40,6 +47,15 @@ class TransferService : Service() {
       // next real progress tick (<=1 s) re-renders the truthful state.
       ACTION_PAUSE_RESUME -> engineControl?.invoke("pause")
       ACTION_CANCEL -> engineControl?.invoke("cancel")
+      // Test-only path (debuggable builds only) that runs the SAME code as the
+      // platform timeout, so the real behaviour can be exercised in the matrix.
+      ACTION_SIMULATE_TIMEOUT -> {
+        val debuggable = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (debuggable) {
+          handleDataSyncTimeout("Stopped by Android — the background data-sync limit was reached during this transfer.")
+          return START_NOT_STICKY
+        }
+      }
       else -> refresh(intent)
     }
     return START_STICKY
@@ -87,6 +103,51 @@ class TransferService : Service() {
     PendingIntent.getService(this, rc, Intent(this, TransferService::class.java).setAction(action),
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
+  /**
+   * R4 — Android 15+ (target 35+) stops a dataSync foreground service after a
+   * cumulative 6 h in 24 h. `onTimeout` MUST stop promptly or the process is
+   * killed with ForegroundServiceDidNotStopInTimeException.
+   *
+   * Honest sequence (never a silent stopSelf):
+   *  1. ask the LIVE engine to cancel (real socket teardown, durable flush);
+   *  2. remove the progress surface;
+   *  3. post the truthful failure reason (separate auto-cancel notification);
+   *  4. stop the service. Idempotent: a second call is a no-op.
+   */
+  private fun handleDataSyncTimeout(reason: String) {
+    if (timedOut) return
+    timedOut = true
+    runCatching { engineControl?.invoke("cancel") }
+    runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+    runCatching { postFailureNow(reason) }
+    runCatching { stopSelf() }
+  }
+
+  /** Posts the failure notice from inside the service (no startService round-trip). */
+  private fun postFailureNow(reason: String) {
+    val nm = getSystemService(NotificationManager::class.java)
+    if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(channel())
+    val open = packageManager.getLaunchIntentForPackage(packageName)
+    val pi = open?.let {
+      PendingIntent.getActivity(this, 20, it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+    val n = NotificationCompat.Builder(this, CHANNEL)
+      .setSmallIcon(android.R.drawable.stat_notify_error)
+      .setContentTitle("Transfer stopped")
+      .setContentText(reason)
+      .setStyle(NotificationCompat.BigTextStyle().bigText(reason))
+      .setAutoCancel(true)
+      .setContentIntent(pi)
+      .build()
+    try { nm.notify(FAILED_ID, n) } catch (_: Exception) {}
+  }
+
+  @Volatile private var timedOut = false
+
+  override fun onTimeout(startId: Int, fgsType: Int) {
+    handleDataSyncTimeout("Stopped by Android — the background data-sync limit was reached during this transfer.")
+  }
+
   companion object {
     private const val CHANNEL = "nexdrop_transfers"
     private const val NOTIF_ID = 42
@@ -95,6 +156,8 @@ class TransferService : Service() {
     private const val ACTION_STOP = "com.nexdrop.ndt1.STOP"
     private const val ACTION_PAUSE_RESUME = "com.nexdrop.ndt1.PAUSE_RESUME"
     private const val ACTION_CANCEL = "com.nexdrop.ndt1.CANCEL"
+    /** Debug-only fault injection so the API 35+ timeout path is testable on a real emulator. */
+    const val ACTION_SIMULATE_TIMEOUT = "com.nexdrop.ndt1.SIMULATE_TIMEOUT"
     private const val EXTRA_TEXT = "text"
     private const val EXTRA_TOTAL = "total"
     private const val EXTRA_DURABLE = "durable"
@@ -161,6 +224,11 @@ class TransferService : Service() {
 
     private fun channel(context: Context): NotificationChannel =
       NotificationChannel(CHANNEL, "Transfers", NotificationManager.IMPORTANCE_DEFAULT)
+
+    /** Debug-only: drives the REAL timeout path on a running emulator/service. */
+    fun simulateTimeout(context: Context) {
+      send(context, Intent(context, TransferService::class.java).setAction(ACTION_SIMULATE_TIMEOUT))
+    }
 
     /** Cleanly remove the foreground service after completion/cancel/failure. */
     fun stop(context: Context) {

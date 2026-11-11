@@ -47,6 +47,10 @@ jobs:
             "$SDKM" --version
             yes | "$SDKM" --licenses > /dev/null || true
             echo "licenses accepted via $SDKM"
+            # R1: compileSdk/targetSdk 36 need the platform and build-tools present.
+            "$SDKM" "platforms;android-36" "build-tools;36.0.0" > /dev/null 2>&1 \
+              || echo "sdkmanager install skipped (already present or offline)"
+            ls "$ANDROID_HOME/platforms" | tail -5
           else
             echo "sdkmanager not found (runner SDK licenses are pre-accepted); continuing"
           fi
@@ -158,6 +162,50 @@ jobs:
       - name: Build :app SIGNED release APK (production signing pipeline)
         working-directory: android
         run: ./gradlew --no-daemon --stacktrace :app:assembleRelease
+
+      - name: APK content audit (no TV, no native libs, expected permissions)
+        run: |
+          set -eu
+          python3 - <<'PYA'
+          import zipfile, re, subprocess, sys
+          apk = "android/app/build/outputs/apk/release/app-release.apk"
+          z = zipfile.ZipFile(apk)
+          names = z.namelist()
+          problems = []
+          tv = [n for n in names if re.search(r"(^|/)tv/|NexDrop[T]V", n)]
+          so = [n for n in names if n.endswith(".so")]
+          dex = [n for n in names if re.match(r"classes\d*\.dex$", n)]
+          if tv: problems.append(f"TV content present: {tv[:3]}")
+          if so: problems.append(f"unexpected native libs: {so[:3]}")
+          if len(dex) != 1: problems.append(f"expected 1 dex, found {len(dex)}")
+          allowed = {
+            "android.permission.INTERNET",
+            "android.permission.ACCESS_NETWORK_STATE",
+            "android.permission.ACCESS_WIFI_STATE",
+            "android.permission.ACCESS_COARSE_LOCATION",
+            "android.permission.ACCESS_FINE_LOCATION",
+            "android.permission.CHANGE_WIFI_MULTICAST_STATE",
+            "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.CAMERA",
+            "android.permission.REQUEST_INSTALL_PACKAGES",
+            "android.permission.WAKE_LOCK",
+          }
+          out = subprocess.run(["aapt2", "dump", "permissions", apk], capture_output=True, text=True)
+          if out.returncode != 0:
+              out = subprocess.run(["aapt", "dump", "permissions", apk], capture_output=True, text=True)
+          perms = set(re.findall(r"uses-permission: name='([^']+)'", out.stdout))
+          extra = sorted(p for p in perms if p not in allowed)
+          if extra: problems.append(f"unexpected permissions: {extra}")
+          print("permissions:", sorted(perms))
+          print("dex:", dex, "| native libs:", len(so), "| TV artifacts:", len(tv))
+          if problems:
+              print("APK CONTENT AUDIT FAILED")
+              for p in problems: print(" -", p)
+              sys.exit(1)
+          print("APK CONTENT AUDIT PASS")
+          PYA
 
       - name: Verify the signed release APK cryptographically
         working-directory: android
@@ -358,8 +406,7 @@ jobs:
               --notes "Built from $GITHUB_SHA by GitHub Actions.
           PRODUCTION: NexDrop-release.apk (v$VNAME, code $VCODE) — SIGNED with the dedicated NexDrop release key (certificate SHA-256 fingerprint in RELEASE-VERIFICATION.md). Installs directly on modern Android (v2+v3 signing schemes verified, API 36 emulator install smoke passed).
           ENGINEERING: NexDrop-debug.apk (debug-signed). NexDrop TV (receive-only client) is excluded from this release and is not built or attached.
-          Contains the verified native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, honest telemetry, production UI, and the PWA (WebRTC) fallback. Benchmarks live under Settings → Device Test." \
-              --prerelease
+          Contains the verified native NDT1 TCP transport (TurboSender/TurboReceiver), ONE-QR pairing, Accept/Decline, pause/resume/cancel, streaming SHA-256 verification, honest telemetry, production UI, and the PWA (WebRTC) fallback. Benchmarks live under Settings → Device Test."
           fi
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" NexDrop-release.apk NexDrop-debug.apk RELEASE-VERIFICATION.md --clobber
           echo "RELEASE_URL=https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"

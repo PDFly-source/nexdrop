@@ -14,6 +14,8 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 /**
  * NexDrop v1.4.7 cold-start splash.
@@ -37,6 +39,14 @@ class SplashActivity : AppCompatActivity() {
   @SuppressLint("SetJavaScriptEnabled")
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    // Target 36 lays the window out edge-to-edge: the splash asset is white and
+    // full-bleed, so only the icon contrast needs pinning (dark icons).
+    runCatching {
+      WindowCompat.setDecorFitsSystemWindows(window, false)
+      val c = WindowInsetsControllerCompat(window, window.decorView)
+      c.isAppearanceLightStatusBars = true
+      c.isAppearanceLightNavigationBars = true
+    }
     Log.i(TAG, "onCreate: pid=${android.os.Process.myPid()} transitioned=$transitioned launches=$launches")
 
     if (transitioned) {
