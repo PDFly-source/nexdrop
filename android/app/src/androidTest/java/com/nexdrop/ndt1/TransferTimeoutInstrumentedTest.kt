@@ -98,7 +98,7 @@ class TransferTimeoutInstrumentedTest {
       // Activity must still be alive and resumed: no crash, no kill.
       val resumed = poll(5_000) {
         val d = inst.uiAutomation.executeShellCommand("dumpsys activity activities")
-          .use { s -> java.io.BufferedReader(java.io.InputStreamReader(s.inputStream)).readText() }
+          .use { s -> java.io.BufferedReader(java.io.InputStreamReader(s.inputStream())).readText() }
         d.contains("ResumedActivity") && d.contains("com.nexdrop.ndt1")
       }
       assertTrue("app did not survive the timeout path", resumed)
