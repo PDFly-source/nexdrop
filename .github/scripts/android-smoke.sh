@@ -911,6 +911,49 @@ adb shell settings put system font_scale 1.0
 sleep 3
 echo 'UI: FONT-SCALE 1.3 PASS (no overflow, no nav overlap)'
 
+echo '== S10) upgrade compatibility: 1.4.6/19 -> 1.4.7/20 in place =='
+# A real previous production build exists (release nexdrop-android-v322461e is
+# v1.4.6 / code 19, same signing identity). Installing it and then upgrading
+# proves what a user actually experiences: signature-compatible in-place update,
+# no uninstall, versionCode strictly increasing.
+PREV_URL="https://github.com/PDFly-source/nexdrop/releases/download/nexdrop-android-v322461e/NexDrop-release.apk"
+PREV_APK=/tmp/NexDrop-1.4.6.apk
+BADGE_TOOL=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 2>/dev/null | tail -1)
+SIGN_TOOL=$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | tail -1)
+UPGRADE_RESULT="NOT RUN"
+if curl -sSL --retry 3 --max-time 300 -o "$PREV_APK" "$PREV_URL" 2>/dev/null && [ -s "$PREV_APK" ]; then
+  adb uninstall "$PKG" >/dev/null 2>&1 || true
+  if adb install -r "$PREV_APK" >/tmp/prev-install.txt 2>&1; then
+    PREV_BADGE=$("$BADGE_TOOL" dump badging "$PREV_APK" 2>/dev/null | head -1)
+    PREV_CODE=$(echo "$PREV_BADGE" | grep -oE "versionCode='[0-9]+'" | cut -d"'" -f2)
+    echo "installed previous build: code ${PREV_CODE:-?}"
+    if adb install -r "$APK_PATH" >/tmp/upg-install.txt 2>&1; then
+      NEW_BADGE=$("$BADGE_TOOL" dump badging "$APK_PATH" 2>/dev/null | head -1)
+      NEW_CODE=$(echo "$NEW_BADGE" | grep -oE "versionCode='[0-9]+'" | cut -d"'" -f2)
+      CERT_OK=no
+      if [ -n "$SIGN_TOOL" ] && "$SIGN_TOOL" verify --print-certs "$APK_PATH" 2>/dev/null | grep -qi "11cb2ab82ba751fea04d101bd3a1498b852581f999056a3bc371e47e326a861a"; then
+        CERT_OK=yes
+      fi
+      if [ "${NEW_CODE:-}" = "20" ] && [ "$CERT_OK" = "yes" ]; then
+        UPGRADE_RESULT="PASS (${PREV_CODE:-19} -> 20 in place, approved certificate)"
+        echo "UPGRADE PASS: ${PREV_CODE:-19} -> 20, certificate unchanged, no uninstall"
+      else
+        echo "UPGRADE FAIL: new code=${NEW_CODE:-?} cert_ok=$CERT_OK"
+        cat /tmp/upg-install.txt; UPGRADE_FAIL=1
+      fi
+    else
+      echo 'UPGRADE FAIL: the new APK was rejected over the previous build'
+      cat /tmp/upg-install.txt; UPGRADE_FAIL=1
+    fi
+  else
+    echo 'UPGRADE NOT RUN: previous build could not be installed in this image'
+    cat /tmp/prev-install.txt
+  fi
+else
+  echo 'UPGRADE NOT RUN: previous production APK was not downloadable'
+fi
+echo "UPGRADE TEST: $UPGRADE_RESULT"
+
 echo '== X) artifact integrity: sha256 at start and end of the whole matrix =='
 SHA_END=$(sha256sum "$APK_PATH" | cut -d" " -f1)
 echo "APK sha256 start=$ART_SHA"
@@ -919,7 +962,7 @@ if [ "$SHA_END" != "$ART_SHA" ]; then echo 'SMOKE FAIL: APK sha256 changed durin
 echo 'ARTIFACT INTEGRITY PASS — no APK substitution mid-run'
 if adb logcat -d | grep -q 'FATAL EXCEPTION'; then adb logcat -d > logcat.txt; echo 'SMOKE FAIL: FATAL EXCEPTION during the matrix'; exit 1; fi
 adb logcat -d > logcat.txt || true
-if [ "${INSETS_FAIL:-0}" -ne 0 ] || [ "${BACK_FAIL:-0}" -ne 0 ]; then
+if [ "${INSETS_FAIL:-0}" -ne 0 ] || [ "${BACK_FAIL:-0}" -ne 0 ] || [ "${UPGRADE_FAIL:-0}" -ne 0 ]; then
   echo 'PLATFORM-MATRIX FAILED: edge-to-edge or predictive-back check did not pass'
   exit 1
 fi
