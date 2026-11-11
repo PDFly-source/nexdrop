@@ -627,6 +627,39 @@ fi
 # UI MATRIX — screens 01-08 on the SAME signed artifact (restored from the
 # verified 3f66b27 harness, adapted to the SplashActivity launcher path).
 # =========================================================================
+echo '== U0) reset to first-launch state (data cleared, launcher start) =='
+mkdir -p screenshots
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
+adb shell pm clear "$PKG" >/dev/null 2>&1 || true
+adb logcat -c || true
+adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
+wait_activity "MainActivity" 60 || { echo 'SMOKE FAIL: UI matrix launch never reached MainActivity'; adb logcat -d > logcat.txt; exit 1; }
+sleep 4
+adb shell pidof "$PKG" > /dev/null || { echo 'SMOKE FAIL: process died on launch'; adb logcat -d > logcat.txt; exit 1; }
+if adb logcat -d | grep -q 'FATAL EXCEPTION'; then echo 'SMOKE FAIL: FATAL EXCEPTION on launch'; adb logcat -d > logcat.txt; exit 1; fi
+
+echo '== U1) case 01 Welcome -> GET STARTED -> case 02 Home =='
+dump_ui
+grep -qi 'GET STARTED' ui.xml || { echo 'SMOKE FAIL: Welcome screen (GET STARTED) missing'; cat ui.xml; exit 1; }
+grep -qi 'Your files' ui.xml || { echo 'SMOKE FAIL: welcome hero copy missing'; cat ui.xml; exit 1; }
+shot 01-welcome
+tap_by_text 'GET STARTED'
+sleep 2
+dump_ui
+grep -qi 'PRIVATE' ui.xml && grep -qi 'DIRECT\.' ui.xml && grep -qi 'FAST' ui.xml \
+  || { echo 'SMOKE FAIL: Home headline missing'; cat ui.xml; exit 1; }
+grep -qi 'SEND FILES' ui.xml || { echo 'SMOKE FAIL: SEND FILES card missing'; cat ui.xml; exit 1; }
+grep -qi 'RECEIVE' ui.xml || { echo 'SMOKE FAIL: RECEIVE card missing'; cat ui.xml; exit 1; }
+grep -qi 'LOCAL DIRECT' ui.xml || { echo 'SMOKE FAIL: LOCAL DIRECT card missing'; cat ui.xml; exit 1; }
+grep -qi 'Local ready' ui.xml || { echo 'SMOKE FAIL: Local ready pill missing'; cat ui.xml; exit 1; }
+grep -qi 'Home' ui.xml && grep -qi 'Transfer' ui.xml && grep -qi 'Devices' ui.xml \
+  && grep -qi 'History' ui.xml && grep -qi 'Settings' ui.xml \
+  || { echo 'SMOKE FAIL: bottom nav tabs missing'; cat ui.xml; exit 1; }
+if grep -qi 'benchmark' ui.xml; then echo 'SMOKE FAIL: benchmark leaked onto Home'; cat ui.xml; exit 1; fi
+echo 'UI: case 01 Welcome -> case 02 Home PASS (no debug controls on Home)'
+assert_layout 'home' 1
+shot 02-home
+
 echo '== S8) edge-to-edge (target 36): content respects the system bars =='
 # The window is laid out edge-to-edge; the host must be inset so the status bar never
 # covers content and the gesture bar never covers the bottom nav. Bar geometry is read
@@ -703,7 +736,12 @@ STATUS_BOTTOM="${STATUS_BOTTOM:-}" NAV_TOP="${NAV_TOP:-}" python3 /tmp/insets_ch
 INSETS_VERDICT=$(cat /tmp/insets-verdict.txt 2>/dev/null || echo 'INCONCLUSIVE: no verdict produced')
 echo "insets verdict: $INSETS_VERDICT"
 case "$INSETS_VERDICT" in
-  PASS:*) echo 'EDGE-TO-EDGE PASS (status bar and navigation bar do not overlap content)';;
+  PASS:*)
+     if [ "${INSETS_FAIL:-0}" -ne 0 ]; then
+       echo 'EDGE-TO-EDGE INCONCLUSIVE (geometry looks right but this section already failed)'
+     else
+       echo 'EDGE-TO-EDGE PASS (status bar and navigation bar do not overlap content)'
+     fi;;
   INCONCLUSIVE:*) echo "EDGE-TO-EDGE INCONCLUSIVE ($INSETS_VERDICT)"; INSETS_FAIL=1
                   adb shell dumpsys window > screenshots/diag-insets.txt 2>&1 || true
                   cp ui.xml screenshots/diag-insets-ui.xml 2>/dev/null || true;;
@@ -759,39 +797,6 @@ fi
 echo 'PREDICTIVE BACK PREVIEW ANIMATION: NOT RUN (headless emulator cannot render the preview)'
 ensure_app_home || true   # hand a clean tab screen to the UI matrix
 shot 42-predictive-back
-echo '== U0) reset to first-launch state (data cleared, launcher start) =='
-mkdir -p screenshots
-adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
-adb shell pm clear "$PKG" >/dev/null 2>&1 || true
-adb logcat -c || true
-adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null
-wait_activity "MainActivity" 60 || { echo 'SMOKE FAIL: UI matrix launch never reached MainActivity'; adb logcat -d > logcat.txt; exit 1; }
-sleep 4
-adb shell pidof "$PKG" > /dev/null || { echo 'SMOKE FAIL: process died on launch'; adb logcat -d > logcat.txt; exit 1; }
-if adb logcat -d | grep -q 'FATAL EXCEPTION'; then echo 'SMOKE FAIL: FATAL EXCEPTION on launch'; adb logcat -d > logcat.txt; exit 1; fi
-
-echo '== U1) case 01 Welcome -> GET STARTED -> case 02 Home =='
-dump_ui
-grep -qi 'GET STARTED' ui.xml || { echo 'SMOKE FAIL: Welcome screen (GET STARTED) missing'; cat ui.xml; exit 1; }
-grep -qi 'Your files' ui.xml || { echo 'SMOKE FAIL: welcome hero copy missing'; cat ui.xml; exit 1; }
-shot 01-welcome
-tap_by_text 'GET STARTED'
-sleep 2
-dump_ui
-grep -qi 'PRIVATE' ui.xml && grep -qi 'DIRECT\.' ui.xml && grep -qi 'FAST' ui.xml \
-  || { echo 'SMOKE FAIL: Home headline missing'; cat ui.xml; exit 1; }
-grep -qi 'SEND FILES' ui.xml || { echo 'SMOKE FAIL: SEND FILES card missing'; cat ui.xml; exit 1; }
-grep -qi 'RECEIVE' ui.xml || { echo 'SMOKE FAIL: RECEIVE card missing'; cat ui.xml; exit 1; }
-grep -qi 'LOCAL DIRECT' ui.xml || { echo 'SMOKE FAIL: LOCAL DIRECT card missing'; cat ui.xml; exit 1; }
-grep -qi 'Local ready' ui.xml || { echo 'SMOKE FAIL: Local ready pill missing'; cat ui.xml; exit 1; }
-grep -qi 'Home' ui.xml && grep -qi 'Transfer' ui.xml && grep -qi 'Devices' ui.xml \
-  && grep -qi 'History' ui.xml && grep -qi 'Settings' ui.xml \
-  || { echo 'SMOKE FAIL: bottom nav tabs missing'; cat ui.xml; exit 1; }
-if grep -qi 'benchmark' ui.xml; then echo 'SMOKE FAIL: benchmark leaked onto Home'; cat ui.xml; exit 1; fi
-echo 'UI: case 01 Welcome -> case 02 Home PASS (no debug controls on Home)'
-assert_layout 'home' 1
-shot 02-home
-
 echo '== U2) case 03 Send files: file-first flow, no scanner before a file =='
 tap_by_text 'SEND FILES'
 sleep 2
