@@ -37,6 +37,23 @@ cd - >/dev/null
 echo 'PREVIEW INSTRUMENTED TESTS PASS — real bounded previews + honest fallbacks verified'
 
 
+ensure_app_home() {
+  # Never trust whatever the previous section left on screen: a stray HOME
+  # keyevent backgrounds the app, and dumps would then describe the launcher.
+  local i
+  for i in 1 2 3; do
+    if resumed | grep -q "com.nexdrop.ndt1/.MainActivity"; then
+      back_to_home && return 0
+    fi
+    adb shell am start -n "$PKG/$PKG.SplashActivity" >/dev/null 2>&1 || true
+    wait_activity "MainActivity" 60 || true
+    sleep 3
+    back_to_home && return 0
+    sleep 2
+  done
+  return 1
+}
+
 back_to_home() {
   # The bottom nav exists only on tab screens; engineering subpages (Device
   # Test) and the scanner have no nav row. Walk back until Home is visible.
@@ -643,9 +660,16 @@ PYA
 . /tmp/insets.env 2>/dev/null || true
 echo "insets: statusBars.bottom=${STATUS_BOTTOM:-unparsed} navigationBars.top=${NAV_TOP:-unparsed}"
 grep -c '^# DUMP' /tmp/insets.env 2>/dev/null | xargs -r -I{} echo "dumpsys bar lines captured: {}"
-adb shell input keyevent 3 >/dev/null 2>&1 || true   # dismiss any system dialog
+# Dismiss any system dialog WITHOUT leaving the app (keyevent 3 is HOME, which
+# would put the launcher on screen and make every measurement meaningless).
+adb shell input keyevent 4 >/dev/null 2>&1 || true
+ensure_app_home || { echo 'EDGE-TO-EDGE FAIL: app not on a tab screen before the inset check'; INSETS_FAIL=1; }
 sleep 1
 dump_ui
+if ! grep -q 'com.nexdrop.ndt1' ui.xml; then
+  echo 'EDGE-TO-EDGE FAIL: UI dump is not the NexDrop window'
+  INSETS_FAIL=1
+fi
 cat > /tmp/insets_check.py <<'PYA'
 import re, os, sys
 xml = open('ui.xml', encoding='utf-8', errors='replace').read()
@@ -702,7 +726,7 @@ echo '== S9) predictive back (target 36): back goes through the OnBackInvoked pa
 SCREEN=$(adb shell wm size 2>/dev/null | grep -oE '[0-9]+x[0-9]+' | head -1)
 SW=${SCREEN%x*}; SH=${SCREEN#*x}
 [ -n "$SW" ] || SW=720; [ -n "$SH" ] || SH=1280
-back_to_home || { echo 'PREDICTIVE BACK FAIL: no tab screen to start from'; BACK_FAIL=1; }
+ensure_app_home || { echo 'PREDICTIVE BACK FAIL: no tab screen to start from'; BACK_FAIL=1; }
 sleep 1
 tap_nav 'Settings'; sleep 2
 dump_ui
@@ -733,6 +757,7 @@ else
   fi
 fi
 echo 'PREDICTIVE BACK PREVIEW ANIMATION: NOT RUN (headless emulator cannot render the preview)'
+ensure_app_home || true   # hand a clean tab screen to the UI matrix
 shot 42-predictive-back
 echo '== U0) reset to first-launch state (data cleared, launcher start) =='
 mkdir -p screenshots
@@ -831,6 +856,7 @@ sleep 2
 echo 'UI: case 04 Receive PASS (one QR, truthful transport card + details)'
 
 echo '== U4) cases 06-08 Your NexDrop / History / Settings via bottom nav =='
+ensure_app_home || { echo 'SMOKE FAIL: no tab screen before the nav matrix'; cat ui.xml; exit 1; }
 tap_nav 'Devices'
 sleep 2
 dump_ui
