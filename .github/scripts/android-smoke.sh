@@ -651,6 +651,7 @@ import re, os, sys
 xml = open('ui.xml', encoding='utf-8', errors='replace').read()
 nodes = [(m.group(1), int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5)))
          for m in re.finditer(r'text="([^"]*)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)]
+nodes = [n for n in nodes if n[0].strip()]  # containers carry empty text and start at y=0
 vis = [n for n in nodes if n[4] > n[2] and n[3] > n[1]]
 if not vis:
     print('INCONCLUSIVE: no visible text nodes'); sys.exit(0)
@@ -703,6 +704,8 @@ adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
 adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$PKG/$PKG.SplashActivity" >/dev/null 2>&1 || true
 wait_activity "MainActivity" 60 || true
 sleep 3
+back_to_home || true
+sleep 2
 back_to_home || true
 dump_ui
 if ! grep -qi 'Settings' ui.xml; then
