@@ -646,7 +646,7 @@ grep -c '^# DUMP' /tmp/insets.env 2>/dev/null | xargs -r -I{} echo "dumpsys bar 
 adb shell input keyevent 3 >/dev/null 2>&1 || true   # dismiss any system dialog
 sleep 1
 dump_ui
-STATUS_BOTTOM="${STATUS_BOTTOM:-}" NAV_TOP="${NAV_TOP:-}" python3 - > /tmp/insets-verdict.txt <<'PYA'
+cat > /tmp/insets_check.py <<'PYA'
 import re, os, sys
 xml = open('ui.xml', encoding='utf-8', errors='replace').read()
 nodes = [(m.group(1), int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5)))
@@ -674,6 +674,7 @@ if problems:
     sys.exit(1)
 print(f'PASS: top content y={top[2]} >= {sb}; nav row clear of the navigation bar')
 PYA
+STATUS_BOTTOM="${STATUS_BOTTOM:-}" NAV_TOP="${NAV_TOP:-}" python3 /tmp/insets_check.py > /tmp/insets-verdict.txt 2>/dev/null || true
 INSETS_VERDICT=$(cat /tmp/insets-verdict.txt 2>/dev/null || echo 'INCONCLUSIVE: no verdict produced')
 echo "insets verdict: $INSETS_VERDICT"
 case "$INSETS_VERDICT" in
