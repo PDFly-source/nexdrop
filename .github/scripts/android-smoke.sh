@@ -47,7 +47,8 @@ ensure_app_home() {
     fi
     adb shell am start -n "$PKG/$PKG.SplashActivity" >/dev/null 2>&1 || true
     wait_activity "MainActivity" 60 || true
-    sleep 3
+    sleep 4
+    if dump_ui && grep -qi 'SEND FILES' ui.xml; then return 0; fi
     back_to_home && return 0
     sleep 2
   done
@@ -693,9 +694,9 @@ PYA
 . /tmp/insets.env 2>/dev/null || true
 echo "insets: statusBars.bottom=${STATUS_BOTTOM:-unparsed} navigationBars.top=${NAV_TOP:-unparsed}"
 grep -c '^# DUMP' /tmp/insets.env 2>/dev/null | xargs -r -I{} echo "dumpsys bar lines captured: {}"
-# Dismiss any system dialog WITHOUT leaving the app (keyevent 3 is HOME, which
-# would put the launcher on screen and make every measurement meaningless).
-adb shell input keyevent 4 >/dev/null 2>&1 || true
+# No blind keyevent here: on Home, BACK exits the app and the launcher becomes
+# the measured window. ensure_app_home() foregrounds NexDrop and proves a tab
+# screen is on display before anything is measured.
 ensure_app_home || { echo 'EDGE-TO-EDGE FAIL: app not on a tab screen before the inset check'; INSETS_FAIL=1; }
 sleep 1
 dump_ui
