@@ -212,6 +212,16 @@ jobs:
           # dynamic receivers (DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION): it grants
           # no platform capability, so it is not an unexpected permission.
           extra = sorted(p for p in perms if p not in allowed and not p.startswith("com.nexdrop.ndt1."))
+          # target 36: predictive back is the default and cannot be opted out.
+          # Fail closed if the merged manifest disables it.
+          import subprocess as _sp, os, glob
+          _bt = sorted(glob.glob(os.path.join(os.environ.get("ANDROID_HOME",""), "build-tools", "*", "aapt2")))
+          if _bt:
+              _x = _sp.run([_bt[-1], "dump", "xmltree", "android/app/build/outputs/apk/release/app-release.apk", "--file", "AndroidManifest.xml"],
+                           capture_output=True, text=True)
+              if "enableOnBackInvokedCallback" in (_x.stdout or "") and re.search(r"enableOnBackInvokedCallback.*?=.*?false", _x.stdout or "", re.S):
+                  problems.append("manifest disables predictive back (enableOnBackInvokedCallback=false)")
+              print("predictive-back manifest check:", "ok" if "enableOnBackInvokedCallback" not in (_x.stdout or "") else "attribute present, not false")
           if extra: problems.append(f"unexpected permissions: {extra}")
           print("permissions:", sorted(perms))
           print("dex:", dex, "| native libs:", len(so), "| TV artifacts:", len(tv))
