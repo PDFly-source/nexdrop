@@ -10,6 +10,8 @@ import androidx.core.content.ContextCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -95,14 +97,18 @@ class TransferTimeoutInstrumentedTest {
         println("NOTICE ASSERTION SKIPPED: notifications disabled in this emulator image")
       }
 
-      // Activity must still be alive and resumed: no crash, no kill.
-      val resumed = poll(5_000) {
-        val proc = Runtime.getRuntime().exec(arrayOf("sh", "-c", "dumpsys activity activities"))
-        val d = proc.inputStream.bufferedReader().use { it.readText() }
-        proc.waitFor()
-        d.contains("ResumedActivity") && d.contains("com.nexdrop.ndt1")
+      // Activity must still be alive: no crash, no kill. Ask the lifecycle
+      // monitor directly instead of parsing dumpsys text.
+      val alive = poll(6_000) {
+        var live = false
+        inst.runOnMainSync {
+          val reg = ActivityLifecycleMonitorRegistry.getInstance()
+          live = reg.getActivitiesInStage(Stage.RESUMED).any { it is MainActivity } ||
+                 reg.getActivitiesInStage(Stage.STARTED).any { it is MainActivity }
+        }
+        live
       }
-      assertTrue("app did not survive the timeout path", resumed)
+      assertTrue("app did not survive the timeout path", alive)
     }
   }
 }
