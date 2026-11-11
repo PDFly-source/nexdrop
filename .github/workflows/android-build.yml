@@ -208,7 +208,10 @@ jobs:
           else:
               out = subprocess.run([tool, "dump", "permissions", apk], capture_output=True, text=True)
               perms = set(re.findall(r"uses-permission: name='([^']+)'", out.stdout))
-          extra = sorted(p for p in perms if p not in allowed)
+          # AndroidX adds an app-private signature permission for non-exported
+          # dynamic receivers (DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION): it grants
+          # no platform capability, so it is not an unexpected permission.
+          extra = sorted(p for p in perms if p not in allowed and not p.startswith("com.nexdrop.ndt1."))
           if extra: problems.append(f"unexpected permissions: {extra}")
           print("permissions:", sorted(perms))
           print("dex:", dex, "| native libs:", len(so), "| TV artifacts:", len(tv))
