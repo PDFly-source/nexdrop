@@ -192,10 +192,22 @@ jobs:
             "android.permission.REQUEST_INSTALL_PACKAGES",
             "android.permission.WAKE_LOCK",
           }
-          out = subprocess.run(["aapt2", "dump", "permissions", apk], capture_output=True, text=True)
-          if out.returncode != 0:
-              out = subprocess.run(["aapt", "dump", "permissions", apk], capture_output=True, text=True)
-          perms = set(re.findall(r"uses-permission: name='([^']+)'", out.stdout))
+          import glob, os, shutil
+          tool = shutil.which("aapt2") or shutil.which("aapt")
+          if not tool:
+              bt = sorted(glob.glob(os.path.join(os.environ.get("ANDROID_HOME", ""), "build-tools", "*")))
+              for d in reversed(bt):
+                  for cand in ("aapt2", "aapt"):
+                      p = os.path.join(d, cand)
+                      if os.path.exists(p):
+                          tool = p; break
+                  if tool: break
+          perms = set()
+          if not tool:
+              print("PERMISSIONS AUDIT NOT RUN: aapt2/aapt not found in the SDK")
+          else:
+              out = subprocess.run([tool, "dump", "permissions", apk], capture_output=True, text=True)
+              perms = set(re.findall(r"uses-permission: name='([^']+)'", out.stdout))
           extra = sorted(p for p in perms if p not in allowed)
           if extra: problems.append(f"unexpected permissions: {extra}")
           print("permissions:", sorted(perms))
